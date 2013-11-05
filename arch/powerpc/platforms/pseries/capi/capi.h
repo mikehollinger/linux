@@ -203,15 +203,6 @@ extern struct bus_type capi_bus_type;
 #define CAPI_DEV_MINORS 8   /* 1 control, up to 4 AFUs, 3 reserved for now */
 
 
-#if 0
-/* This may not be the final way I store this...  */
-enum capi_slice_type {
-	CAPI_AFU_TYPE_GRUB,
-	CAPI_AFU_TYPE_FPGA,
-	CAPI_AFU_TYPE_OTHER,
-};
-#endif
-
 struct capi_sste {
 	u64 vsid_data;
 	u64 esid_data;
@@ -227,9 +218,6 @@ struct capi_afu_t {
 	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
 	u64 psn_size;
-#if 0
-	enum capi_slice_type type;
-#endif
 	u32 irq_count;
 	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
 	unsigned int virq[CAPI_SLICE_IRQS];

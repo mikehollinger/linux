@@ -115,36 +115,7 @@ static irqreturn_t capi_irq(int irq, void *data)
 	}
 
 	if (dsisr & CAPI_PSL_DSISR_An_ST) {
-#if 1
-		pr_devel("CAPI interrupt: Segment Table PTE not found\n");
-#elif 0
-		struct pt_regs regs;
-		int result;
-
-		memset(&regs, 0, sizeof(struct pt_regs));
-		//regs.msr = MSR_PR; /* Gross hack to satisfy checks in do_page_fault */
-		regs.nip = 0xCA1A; /* To help recognise any CAPI faults */
-
-		pr_devel("CAPI interrupt: Segment Table PTE not found\n");
-		result = do_page_fault(&regs, afu->sstp, dsisr);
-		pr_devel("do_page_fault: %i\n", result);
-		if (result == 0)
-			capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_R, 0);
-		else
-			capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_AE, 0);
-#elif 0
-		int result;
-		pr_devel("CAPI interrupt: Segment Table PTE not found\n");
-
-		result = map_kernel_page(afu->sstp, virt_to_phys((void*)afu->sstp),
-				_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_KERNEL_RW | HPTE_R_M);
-		if (!result)
-			capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_R, 0);
-		else {
-			pr_devel("map_kernel_page failed with %i\n", result);
-			capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_AE, 0);
-		}
-#endif
+		WARN_ON(1, "CAPI interrupt: Segment Table PTE not found\n");
 	}
 	if (dsisr & CAPI_PSL_DSISR_An_UR)
 		pr_devel("CAPI interrupt: AURP PTE not found\n");

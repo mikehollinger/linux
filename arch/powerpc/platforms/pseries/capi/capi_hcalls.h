@@ -37,8 +37,8 @@
 #endif
 
 /*
- * This is straight out of PAPR. I've put unions in where I've spotted
- * something was clearly just copied from the register layout.
+ * This is straight out of PAPR, but replacing some of the compound fields with
+ * a single field, where they were identical to the register layout.
  */
 /*
  * FIXME: Delete the bitfields - their packing order is undefined, and will
@@ -67,74 +67,11 @@ struct capi_process_element {
 	u8     reserved1[144];
 	__be32 threadId;
 	__be32 processId;
-	union {
-#if 0
-		struct {
-			__be32 csrpUpper;
-			__be32 csrpLower:20,
-			       csrpLimit:12;
-		};
-#else
-		__be64 csrp;
-#endif
-	};
-	union {
-#if 0
-		struct {
-			__be32 aurpB:2,
-			       aurpKs:1,
-			       aurpKp:1,
-			       aurpN:1,
-			       aurpL:1,
-			       aurpC:1,
-			       aurpTA:1,
-			       aurpLP:2,
-			       aurpReserved0:22;
-			__be32 aurpReserved1:18,
-			       aurpVaUpper:14,
-		};
-#endif
-		__be64 aurp0;
-	};
-	union {
-#if 0
-		struct {
-			__be64 aurpVaLower:52,	/* XXX: CAIA has 57 bits here! */
-			       aurpReserved2:11,	/* XXX: ...And only 6 here */
-			       aurpValid:1;
-		};
-#endif
-		__be64 aurp1;
-	};
-	union {
-#if 0
-		struct {
-			__be32 sstpB:2,
-			       sstpKs:1,
-			       sstpKp:1,
-			       sstpN:1,
-			       sstpL:1,
-			       sstpC:1,
-			       sstpTA:1,
-			       sstpLP:2,
-			       sstpReserved0:10,
-			       sstpSegTableSize:12;
-			__be64 sstpReserved1:18,
-			       sstpVaUpper:14,
-		};
-#endif
-		__be64 sstp0;
-	};
-	union {
-#if 0
-		struct {
-			__be64 sstpVaLower:52,	/* XXX: CAIA has 56 bits here! */
-			       sstpReserved2:11,	/* XXX: ... and only 7 here */
-			       sstpValid:1;
-		};
-#endif
-		__be64 sstp1;
-	};
+	__be64 csrp;
+	__be64 aurp0;
+	__be64 aurp1;
+	__be64 sstp0;
+	__be64 sstp1;
 	__be64 amr;
 	u8     reserved3[4];
 	__be64 workElementDescriptor;

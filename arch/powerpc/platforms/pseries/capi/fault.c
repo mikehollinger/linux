@@ -190,23 +190,6 @@ static int capi_load_segment(struct capi_afu_t *afu, u64 esid_data, u64 vsid_dat
 	 *
 	 *	What? You got a problem with my coding style?
 	 * } */
-#if 0
-	/*
-	 * This was just testing my slbfee_mm implementation, and is expected
-	 * to fail for e.g. kernel addresses, so mustn't be enabled in production.
-	 * XXX : and now ea is split apart and not available in this function
-	 */
-	if (current->mm == afu->mm) {
-		u64 rb_cur = (ea & ESID_MASK) | SLB_ESID_V;
-		u64 rt_cur = slbfee(esid_data);
-		if ((rb_cur != esid_data) || (rt_cur != vsid_data)) {
-			pr_crit("WARNING: slbfee_mm != slbfee:");
-			pr_crit("  slbfee. vsid_data: %#llx, esid_data: %#llx\n", rt_cur, rb_cur);
-			pr_crit("slbfee_mm vsid_data: %#llx, esid_data: %#llx\n", vsid_data, esid_data);
-			BUG();
-		}
-	}
-#endif
 
 	/*
 	 * XXX: Mambo doesn't care about the hash (it just searches the entire table),

@@ -162,17 +162,11 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 		elem->isPrivilegedProcess = 1;
 		elem->processId = 0;
 	}
-#if 0
-	/* XXX: Causes program check */
-	if (mfspr(SPRN_LPCR) & LPCR_TC)
-		elem->secondarySegmentTableSearchEnabled = 1;
-#else
 	/*
 	 * FIXME: Set this to match our partition's settings. For now it should
 	 * be safe to just enable it.
 	 */
 	elem->secondarySegmentTableSearchEnabled = 1;
-#endif
 	/* elem->tagsActive - Unsupported in GA1 */
 #endif
 
