@@ -58,6 +58,8 @@ extern char initial_stab[];
 #define SLB_VSID_SHIFT		12
 #define SLB_VSID_SHIFT_1T	24
 #define SLB_VSID_SSIZE_SHIFT	62
+#define SLB_VSID_MASK		ASM_CONST(0x3ffffffffffff000)
+#define SLB_VSID_MASK_1T	ASM_CONST(0x3fffffffff000000)
 #define SLB_VSID_B		ASM_CONST(0xc000000000000000)
 #define SLB_VSID_B_256M		ASM_CONST(0x0000000000000000)
 #define SLB_VSID_B_1T		ASM_CONST(0x4000000000000000)
@@ -66,6 +68,7 @@ extern char initial_stab[];
 #define SLB_VSID_N		ASM_CONST(0x0000000000000200) /* no-execute */
 #define SLB_VSID_L		ASM_CONST(0x0000000000000100)
 #define SLB_VSID_C		ASM_CONST(0x0000000000000080) /* class */
+#define SLB_VSID_TA		ASM_CONST(0x0000000000000040)
 #define SLB_VSID_LP		ASM_CONST(0x0000000000000030)
 #define SLB_VSID_LP_00		ASM_CONST(0x0000000000000000)
 #define SLB_VSID_LP_01		ASM_CONST(0x0000000000000010)
@@ -199,6 +202,8 @@ static inline unsigned int mmu_psize_to_shift(unsigned int mmu_psize)
  * we work in all cases including 4k page size.
  */
 #define VPN_SHIFT	12
+#define slb_vsid_shift(ssize)	\
+	((ssize) == MMU_SEGSIZE_256M ? SLB_VSID_SHIFT : SLB_VSID_SHIFT_1T)
 
 /*
  * HPTE Large Page (LP) details

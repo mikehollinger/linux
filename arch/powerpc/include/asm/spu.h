@@ -27,6 +27,8 @@
 #include <linux/workqueue.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
+#include <asm/reg.h>
+#include <asm/copro.h>
 
 #define LS_SIZE (256 * 1024)
 #define LS_ADDR_MASK (LS_SIZE - 1)
@@ -275,9 +277,6 @@ void spu_remove_dev_attr(struct device_attribute *attr);
 
 int spu_add_dev_attr_group(struct attribute_group *attrs);
 void spu_remove_dev_attr_group(struct attribute_group *attrs);
-
-int spu_handle_mm_fault(struct mm_struct *mm, unsigned long ea,
-		unsigned long dsisr, unsigned *flt);
 
 /*
  * Notifier blocks:
@@ -599,11 +598,11 @@ struct spu_priv1 {
 #define MFC_ACCR_LS_ACCESS_PUT		(1 << 4)
 	u8  pad_0x608_0x610[0x8];				/* 0x608 */
 	u64 mfc_dsisr_RW;					/* 0x610 */
-#define MFC_DSISR_PTE_NOT_FOUND		(1 << 30)
-#define MFC_DSISR_ACCESS_DENIED		(1 << 27)
+#define MFC_DSISR_PTE_NOT_FOUND		(1 << 30) /* DSISR_NOHPTE */
+#define MFC_DSISR_ACCESS_DENIED		(1 << 27) /* DSISR_PROTFAULT */
 #define MFC_DSISR_ATOMIC		(1 << 26)
-#define MFC_DSISR_ACCESS_PUT		(1 << 25)
-#define MFC_DSISR_ADDR_MATCH		(1 << 22)
+#define MFC_DSISR_ACCESS_PUT		(1 << 25) /* DSISR_ISSTORE */
+#define MFC_DSISR_ADDR_MATCH		(1 << 22) /* DSISR_DABRMATCH */
 #define MFC_DSISR_LS			(1 << 17)
 #define MFC_DSISR_L			(1 << 16)
 #define MFC_DSISR_ADDRESS_OVERFLOW	(1 << 0)
