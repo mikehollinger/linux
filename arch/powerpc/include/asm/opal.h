@@ -124,6 +124,7 @@ extern int opal_enter_rtas(struct rtas_args *args,
 #define OPAL_PCI_POLL				62
 #define OPAL_PCI_MSI_EOI			63
 #define OPAL_PCI_GET_PHB_DIAG_DATA2		64
+#define OPAL_PHB_TO_CAPI                        87
 
 #ifndef __ASSEMBLY__
 
@@ -631,6 +632,7 @@ int64_t opal_set_system_attention_led(uint8_t led_action);
 int64_t opal_pci_next_error(uint64_t phb_id, uint64_t *first_frozen_pe,
 			    uint16_t *pci_error_type, uint16_t *severity);
 int64_t opal_pci_poll(uint64_t phb_id);
+int64_t opal_phb_to_capi(uint64_t phb_id);
 
 /* Internal functions */
 extern int early_init_dt_scan_opal(unsigned long node, const char *uname, int depth, void *data);
