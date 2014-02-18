@@ -16,26 +16,49 @@ MODULE_DEVICE_TABLE(pci, capi_pci_tbl);
 
 int switch_to_capi(struct pci_dev *dev)
 {
-	pr_info("switch to capi\n");
+	struct device_node *np;
+	struct property *prop = NULL;
+	u64 phb_id;
+	int rc = -ENODEV;
 
-	return 0;
+	pr_info("capi: switch phb to capi\n");
+
+	np = of_node_get(pci_device_to_OF_node(dev));
+
+	/* Scan up the tree looking for the PHB node */
+	while (np) {
+		if ((prop = of_find_property(np, "ibm,opal-phbid", NULL)))
+			break;
+		np = of_get_next_parent(np);
+	}
+
+	if (!np || !prop)
+		goto out;
+
+	pr_info("capi: device tree name: %s\n", np->name);
+	phb_id = be64_to_cpup(prop->value);
+	pr_info("capi:  PHB-ID  : 0x%016llx\n", phb_id);
+
+	rc = opal_phb_to_capi(phb_id);
+	pr_info("capi: opal_phb_to_capi: %i", rc);
+
+out:
+	of_node_put(np);
+	return rc;
 }
 
 int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	int result;
-	struct device_node *np;
+	int rc;
 
 	pr_info("capi pci probe\n");
 
-	np = pci_device_to_OF_node(dev);
+	switch_to_capi(dev);
 
-	if (np)
-		pr_info("device tree name: %s\n", np->name);
-
-	if ((result = pci_enable_device(dev))) {
-		pr_err("capi-pci: pci_enable_device failed: %i\n", result);
-		return result;
+	/* FIXME: Should wait for PHB to come back in CAPI mode and re-probe */
+	if ((rc = pci_enable_device(dev))) {
+		pr_err("capi-pci: pci_enable_device failed: %i\n", rc);
+		return rc;
 	}
 
 	/* XXX: Do I need any of these?
