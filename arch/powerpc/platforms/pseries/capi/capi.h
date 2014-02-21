@@ -276,6 +276,31 @@ struct capi_ivte_ranges {
 	u32 ranges[4];
 };
 
+struct capi_process_element_common {
+	__be32 threadId;
+	__be32 processId;
+	__be64 csrp;
+	__be64 aurp0;
+	__be64 aurp1;
+	__be64 sstp0;
+	__be64 sstp1;
+	__be64 amr;
+	u8     reserved3[4];
+	__be64 workElementDescriptor;
+	u8     reserved4[4];
+} __packed;
+
+struct capi_process_element {
+	__be64 sr;
+	__be64 SPOffset;
+	__be64 sdr;
+	__be64 haurp;
+	__be32 ctxtime;
+	struct capi_ivte_ranges ivte;
+	__be32 lpid;
+	struct capi_process_element_common common;
+} __packed;
+
 #define _capi_reg_write(addr, val) \
 	out_be64((u64 __iomem *)(addr), val)
 #define _capi_reg_read(addr) \

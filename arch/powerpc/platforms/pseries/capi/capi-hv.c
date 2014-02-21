@@ -120,7 +120,7 @@ static int
 init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 		          u64 wed, u64 amr)
 {
-	struct capi_process_element *elem;
+	struct capi_process_element_hcall *elem;
 	u64 sstp0, sstp1;
 	int rc = 0, result;
 	const struct cred *cred;
@@ -134,7 +134,7 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 	}
 
 	/* Must be 8 byte aligned and cannot cross a 4096 byte boundary */
-	if (!(elem = (struct capi_process_element*)get_zeroed_page(GFP_KERNEL)))
+	if (!(elem = (struct capi_process_element_hcall*)get_zeroed_page(GFP_KERNEL)))
 		return -ENOMEM;
 
 	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1))) {

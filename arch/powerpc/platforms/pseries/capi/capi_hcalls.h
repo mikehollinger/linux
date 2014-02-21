@@ -48,7 +48,7 @@
  * variable, but I'll need to handle the last one specially.
  */
 #define CAPI_PROCESS_ELEMENT_VERSION 1
-struct capi_process_element {
+struct capi_process_element_hcall {
 	__be64 version;
 #if 1 /* FIXME: Replace this bitfield! */
 	__be64 csrpValid:1,
@@ -65,17 +65,8 @@ struct capi_process_element {
 	__be32 pslVirtualIsn;
 	u8     applicationVirtualIsnBitmap[256];
 	u8     reserved1[144];
-	__be32 threadId;
-	__be32 processId;
-	__be64 csrp;
-	__be64 aurp0;
-	__be64 aurp1;
-	__be64 sstp0;
-	__be64 sstp1;
-	__be64 amr;
-	u8     reserved3[4];
-	__be64 workElementDescriptor;
-	u8     reserved4[12];
+	struct capi_process_element_common common;
+	u8     reserved4[8];
 } __packed;
 
 #define CAPI_H_WAIT_UNTIL_DONE(rc, ret, fn, ...)                             \
