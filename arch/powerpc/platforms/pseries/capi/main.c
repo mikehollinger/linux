@@ -123,19 +123,40 @@ void capi_unmap_mmio(void __iomem *addr)
 	iounmap(addr);
 }
 
-/* FIXME: duplication from file.c */
-extern dev_t capi_dev;
-#define CAPI_NUM_MINORS 256 /* Total to reserve */
-#define CAPI_DEV_MINORS 8   /* 1 control, up to 4 AFUs, 3 reserved for now */
+struct capi_t * get_capi_adapter(int num)
+{
+	struct capi_t *adapter;
+	int i = 0;
+
+	list_for_each_entry(adapter, &adapter_list, list) {
+		if (i++ == num)
+			return adapter;
+	}
+
+	return NULL;
+}
+
+int capi_get_num_adapters(void)
+{
+	struct capi_t *adapter;
+	int i = 0;
+
+	list_for_each_entry(adapter, &adapter_list, list)
+		i++;
+
+	return i;
+}
 
 static int __init
-capi_init_adapter(struct capi_t *adapter, struct device_node *np, int adapter_num)
+capi_init_adapter(struct capi_t *adapter, struct device_node *np)
 {
-	struct device_node *afu_np = NULL;
 	struct capi_afu_t *afu;
 	int slice, result;
 
 	pr_devel("---------- capi_init_adapter called ---------\n");
+
+	/* FIXME TODO: Ensure this can't change until the adapter is added to the list! */
+	adapter_num = capi_get_num_adapters();
 
 	adapter->device.parent = NULL; /* FIXME: Set to PHB on Sapphire? */
 	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
@@ -148,25 +169,6 @@ capi_init_adapter(struct capi_t *adapter, struct device_node *np, int adapter_nu
 	if ((result = capi_ops->init_adapter(adapter, np)))
 		return result;
 
-	for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++) {
-		afu = &(adapter->slice[slice]);
-		afu->adapter = adapter;
-
-		afu->device.parent = get_device(&adapter->device);
-		dev_set_name(&afu->device, "capi%c%i", 'a' + adapter_num, slice + 1);
-		afu->device.bus = &capi_bus_type;
-		afu->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS + 1 + slice);
-
-		if (device_register(&afu->device)) {
-			/* FIXME: chardev for this AFU should return errors */
-			continue;
-		}
-
-		if (capi_ops->init_afu(afu, afu_np)) {
-			/* FIXME: chardev for this AFU should return errors */
-			continue;
-		}
-	}
 
 	adapter->slices = slice;
 	pr_devel("%i slices\n", adapter->slices);
@@ -181,18 +183,34 @@ capi_init_adapter(struct capi_t *adapter, struct device_node *np, int adapter_nu
 	return 0;
 }
 
-struct capi_t * get_capi_adapter(int num)
+static int
+capi_alloc_adapter(/* FIXME */)
 {
 	struct capi_t *adapter;
-	int i = 0;
+	int rc;
 
-	list_for_each_entry(adapter, &adapter_list, list) {
-		if (i++ == num)
-			return adapter;
+	if (!(adapter = kmalloc(sizeof(*adapter), GFP_KERNEL)))
+		return 0;
+	memset(adapter, 0, sizeof(*adapter));
+
+	if ((rc = capi_init_adapter(adapter, /*FIXME*/))) {
+		pr_err("Error initialising CAPI adapter\n");
+		kfree(adapter);
+		return rc;
 	}
+	list_add_tail(&adapter->list, &adapter_list);
 
-	return NULL;
+	return 0;
 }
+EXPORT_SYMBOL(capi_alloc_adapter);
+
+#if 0
+static void capi_free_adapter(struct capi_t *adapter)
+{
+	/* TODO */
+}
+EXPORT_SYMBOL(capi_free_adapter);
+#endif
 
 struct bus_type capi_bus_type = {
 	.name = "capi",
@@ -212,7 +230,6 @@ struct bus_type capi_bus_type = {
 
 static int __init init_capi(void)
 {
-	struct device_node *np = NULL;
 	struct capi_t *adapter;
 	int i;
 	int ret = 0;
@@ -232,25 +249,7 @@ static int __init init_capi(void)
 	if (register_capi_dev())
 		return -1;
 
-	for (i = 0; (np = of_find_compatible_node(np, NULL, "ibm,coherent-platform-facility")); i++) {
-		adapter = kmalloc(sizeof(*adapter), GFP_KERNEL);
-		if (!adapter) {
-			pr_err("ERROR: init_capi out of memory allocating CAPI device\n");
-			ret = -ENOMEM;
-			goto out;
-		}
-		memset(adapter, 0, sizeof(*adapter));
-		if (capi_init_adapter(adapter, np, i)) {
-			pr_err("Error initialising CAPI adapter\n");
-			kfree(adapter);
-			continue;
-		}
-		list_add_tail(&adapter->list, &adapter_list);
-	}
-
 out:
-	of_node_put(np);
-
 	pr_devel("---------- init_capi done ---------\n");
 
 	return ret;

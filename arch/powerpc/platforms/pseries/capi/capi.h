@@ -196,6 +196,13 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_SLICE_IRQS 4
 #define MAX_AFU_MMIO_REGS 3
 
+/* CAPI character device info */
+extern dev_t capi_dev;
+extern struct bus_type capi_bus_type;
+#define CAPI_NUM_MINORS 256 /* Total to reserve */
+#define CAPI_DEV_MINORS 8   /* 1 control, up to 4 AFUs, 3 reserved for now */
+
+
 #if 0
 /* This may not be the final way I store this...  */
 enum capi_slice_type {
@@ -276,6 +283,11 @@ struct capi_t {
 	struct list_head list;
 };
 
+struct capi_ivte_ranges {
+	u32 offsets[4];
+	u32 ranges[4];
+};
+
 #define _capi_reg_write(addr, val) \
 	out_be64((u64 __iomem *)(addr), val)
 #define _capi_reg_read(addr) \
@@ -333,6 +345,8 @@ void afu_register_irqs(struct capi_afu_t *afu, struct device_node *np);
 void afu_enable_irqs(struct capi_afu_t *afu);
 void afu_disable_irqs(struct capi_afu_t *afu);
 void afu_release_irqs(struct capi_afu_t *afu);
+int capi_alloc_one_hwirq(void);
+int capi_alloc_hwirqs(int num, struct capi_ivte_ranges *ranges);
 irqreturn_t capi_irq_err(int irq, void *data);
 
 int capi_handle_segment_miss(struct capi_afu_t *afu, u64 ea);
@@ -383,8 +397,6 @@ struct capi_ops {
 	void (*release_afu) (struct capi_afu_t *afu);
 };
 extern const struct capi_ops *capi_ops;
-
-extern struct bus_type capi_bus_type;
 
 /* XXX: LAB DEBUGGING */
 void capi_stop_trace(struct capi_t *capi);

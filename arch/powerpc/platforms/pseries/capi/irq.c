@@ -10,6 +10,7 @@
 #include <linux/wait.h>
 #include <linux/pid.h>
 #include <linux/of.h>
+#include <asm/msi_bitmap.h>
 #include <asm/cputable.h>
 
 #include "capi.h"
@@ -296,4 +297,43 @@ void afu_release_irqs(struct capi_afu_t *afu)
 		if (afu->virq[idx])
 			capi_unmap_irq(afu->virq[idx], (void*)afu);
 	}
+}
+
+int capi_alloc_one_hwirq(void)
+{
+	return msi_bitmap_alloc_hwirqs(phb->msi_bitmap, 1);
+}
+
+/* XXX: This hasn't been tested yet. */
+int capi_alloc_hwirqs(int num, struct capi_ivte_ranges *ranges)
+{
+	int range = 0;
+	int hwirq;
+	int try;
+
+	memset(ranges, 0, sizeof(struct capi_ivte_ranges));
+
+	for (range = 0; range < 4, num; range++) {
+		try = num;
+		while (try) {
+			hwirq = msi_bitmap_alloc_hwirqs(bmp, num);
+			if (hwirq >= 0)
+				break;
+			try /= 2;
+		}
+		if (!try)
+			goto fail;
+
+		ranges->offsets[range] = phb->msi_base + hwirq;
+		ranges->ranges[range] = try;
+		num -= try;
+	}
+	if (num)
+		goto fail;
+
+	return 0;
+fail:
+	for (range--; range >= 0; range--)
+		msi_bitmap_free_hwirqs(bmp, ranges->offsets[range], ranges->ranges[range])
+	return -ENOMEM;
 }

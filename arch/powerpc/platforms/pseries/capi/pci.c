@@ -204,11 +204,8 @@ int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		return rc;
 	}
 
-	/* XXX: Do I need any of these?
-	 * pci_set_master()
-	 * pci_set_mwi()
-	 * etc?
-	 */
+	dev_info(&dev->dev, "p1 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 2), pci_resource_len(dev, 2));
+	dev_info(&dev->dev, "p2 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 0), pci_resource_len(dev, 0));
 
 	return 0;
 }
@@ -222,7 +219,7 @@ void capi_remove(struct pci_dev *dev)
 }
 
 static struct pci_driver capi_pci_driver = {
-	.name = "capi",
+	.name = "capi-pci",
 	.id_table = capi_pci_tbl,
 	.probe = capi_probe,
 	.remove = capi_remove,

@@ -4,6 +4,9 @@
 #undef DEBUG
 #endif
 
+/* TODO: Split this out into a separate module now that we have some CAPI
+ * devices that won't want to use this generic userspace interface */
+
 #include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -20,8 +23,6 @@
 #include "capi.h"
 
 dev_t capi_dev;
-#define CAPI_NUM_MINORS 256 /* Total to reserve */
-#define CAPI_DEV_MINORS 8   /* 1 control, up to 4 AFUs, 3 reserved for now */
 
 static int
 afu_open(struct inode *inode, struct file *file)

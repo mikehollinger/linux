@@ -5,27 +5,9 @@
 #endif
 
 #include <linux/sched.h>
-#include <linux/of.h>
 
 #include "capi.h"
 #include "capi_hcalls.h"
-
-static int read_handle(struct device_node *np, u64 *handle)
-{
-	const __be32 *prop;
-	u64 size;
-
-	prop = of_get_address(np, 0, &size, NULL);
-	if (size)
-		return -EINVAL;
-
-	/* FIXME: Hardcoded 2 cells, should recursively search parents for
-	 * #address-cells like of_translate_address does (in fact, I could
-	 * probably just cheat and use of_translate_address since the
-	 * translation should be 1:1): */
-	*handle = of_read_number(prop, 2);
-	return 0;
-}
 
 static int __init
 init_adapter_hv(struct capi_t *adapter, struct device_node *np)

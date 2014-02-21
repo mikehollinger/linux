@@ -5,7 +5,6 @@
 #endif
 
 #include <linux/sched.h>
-#include <linux/of.h>
 
 #include "capi.h"
 #include "capi_hcalls.h"
@@ -103,7 +102,7 @@ void psl_purge(struct capi_afu_t *afu)
 
 
 static int __init
-init_adapter_native(struct capi_t *adapter, struct device_node *np)
+init_adapter_native(struct capi_t *adapter, u64 p1_base, u64 p2_base, irq_hw_number_t err_hwirq)
 {
 	const __be32 *prop;
 
@@ -111,11 +110,14 @@ init_adapter_native(struct capi_t *adapter, struct device_node *np)
 	if (capi_map_mmio(&adapter->p1_mmio, NULL, NULL, np, 0))
 		return -EFAULT;
 
+	/* TODO XXX FIXME: adapter->err_hwirq = msi_bitmap_alloc_hwirqs(phb->msi_bitmap) */
+#if 0
 	prop = of_get_property(np, "interrupt", NULL); /* FIXME: Use proper dt interrupt parsing */
 	pr_devel("capi_err_ivte: %#x", be32_to_cpu(prop[0]));
 	adapter->err_hwirq = be32_to_cpu(prop[0]);
 	adapter->err_virq = capi_map_irq(adapter->err_hwirq, capi_irq_err, (void*)adapter);
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq);
+#endif
 
 	return 0;
 }
