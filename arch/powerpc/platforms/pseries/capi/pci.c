@@ -115,7 +115,7 @@ static int switch_phb_to_capi(struct pci_dev *dev)
 	u64 phb_id;
 	int rc = -ENODEV;
 
-	pr_info("capi: switch phb to capi\n");
+	dev_info(&dev->dev, "switch phb to capi\n");
 
 	np = of_node_get(pci_device_to_OF_node(dev));
 
@@ -129,12 +129,12 @@ static int switch_phb_to_capi(struct pci_dev *dev)
 	if (!np || !prop)
 		goto out;
 
-	pr_info("capi: device tree name: %s\n", np->name);
+	dev_info(&dev->dev, "device tree name: %s\n", np->name);
 	phb_id = be64_to_cpup(prop->value);
-	pr_info("capi:  PHB-ID  : 0x%016llx\n", phb_id);
+	dev_info(&dev->dev, "PHB-ID  : 0x%016llx\n", phb_id);
 
 	rc = opal_phb_to_capi(phb_id);
-	pr_info("capi: opal_phb_to_capi: %i", rc);
+	dev_info(&dev->dev, "opal_phb_to_capi: %i", rc);
 
 out:
 	of_node_put(np);
@@ -147,26 +147,26 @@ static int switch_card_to_capi(struct pci_dev *dev)
 	u32 val;
 	int rc;
 
-	pr_info("capi: switch card to capi\n");
+	dev_info(&dev->dev, "switch card to capi\n");
 
 	if (!(vsec = find_capi_vsec(dev))) {
-		pr_err("capi: WARNING: CAPI VSEC not found, assuming card is already in CAPI mode!\n");
+		dev_err(&dev->dev, "capi: WARNING: CAPI VSEC not found, assuming card is already in CAPI mode!\n");
 		/* return -ENODEV; */
 		return 0;
 	}
 
-	pr_info("capi vsec found at offset %#x\n", vsec);
+	dev_info(&dev->dev, "vsec found at offset %#x\n", vsec);
 
 	/* FIXME: Can probably just read/write one byte and not worry about the
 	 * number of AFUs and status fields */
 	if ((rc = pci_read_config_dword(dev, vsec + 0x8, &val))) {
-		pr_err("capi: failed to read current mode control: %i", rc);
+		dev_err(&dev->dev, "failed to read current mode control: %i", rc);
 		return rc;
 	}
 	/* FIXME: Clear other protocol size bits */
 	val |= CAPI_PROTOCOL_256TB | CAPI_PROTOCOL_ENABLE;
 	if ((rc = pci_write_config_dword(dev, vsec + 0x8, val))) {
-		pr_err("capi: failed to enable capi protocol: %i", rc);
+		dev_err(&dev->dev, "failed to enable capi protocol: %i", rc);
 		return rc;
 	}
 
@@ -189,18 +189,18 @@ int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
 	int rc;
 
-	pr_info("capi pci probe\n");
+	dev_info(&dev->dev, "pci probe\n");
 
 	dump_capi_config_space(dev);
 
 	if ((rc = enable_capi_protocol(dev))) {
-		pr_err("capi-pci: enable_capi_protocol failed: %i\n", rc);
+		dev_err(&dev->dev, "enable_capi_protocol failed: %i\n", rc);
 		return rc;
 	}
 
 	/* FIXME: Should I wait for PHB to come back in CAPI mode and re-probe? */
 	if ((rc = pci_enable_device(dev))) {
-		pr_err("capi-pci: pci_enable_device failed: %i\n", rc);
+		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
 		return rc;
 	}
 
@@ -215,7 +215,7 @@ int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 void capi_remove(struct pci_dev *dev)
 {
-	pr_warn("capi pci remove\n");
+	dev_warn(&dev->dev, "pci remove\n");
 
 	/* TODO: Implement everything from Documentation/PCI/pci.txt */
 
