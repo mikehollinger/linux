@@ -154,13 +154,13 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 		cred = get_current_cred();
 		elem->isPrivilegedProcess = cred->euid == 0;
 		put_cred(cred);
-		elem->processId = cpu_to_be32(current->pid);
+		elem->common.processId = cpu_to_be32(current->pid);
 	} else { /* Initialise for kernel */
 		WARN(1, "CAPI initialised for kernel under phyp, this is untested and won't work on GA1 hardware!\n");
 		if (mfmsr() & MSR_SF)
 			elem->sixtyFourBit = 1;
 		elem->isPrivilegedProcess = 1;
-		elem->processId = 0;
+		elem->common.processId = 0;
 	}
 	/*
 	 * FIXME: Set this to match our partition's settings. For now it should
@@ -171,16 +171,16 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 #endif
 
 	elem->version               = cpu_to_be64(CAPI_PROCESS_ELEMENT_VERSION);
-	elem->threadId              = cpu_to_be32(0); /* Unused */
-	elem->csrp                  = cpu_to_be64(0); /* Disable */
-	elem->aurp0                 = cpu_to_be64(0); /* Disable */
-	elem->aurp1                 = cpu_to_be64(0); /* Disable */
-	elem->sstp0                 = cpu_to_be64(sstp0);
-	elem->sstp1                 = cpu_to_be64(sstp1);
-	elem->amr                   = cpu_to_be64(amr);
+	elem->common.threadId       = cpu_to_be32(0); /* Unused */
+	elem->common.csrp           = cpu_to_be64(0); /* Disable */
+	elem->common.aurp0          = cpu_to_be64(0); /* Disable */
+	elem->common.aurp1          = cpu_to_be64(0); /* Disable */
+	elem->common.sstp0          = cpu_to_be64(sstp0);
+	elem->common.sstp1          = cpu_to_be64(sstp1);
+	elem->common.amr            = cpu_to_be64(amr);
 	elem->pslVirtualIsn         = cpu_to_be32(afu->hwirq[0]);
 	elem->applicationVirtualIsnBitmap[0] = 0x70; /* Initially use three (after the PSL irq), for compatibility with old CAIA */
-	elem->workElementDescriptor = cpu_to_be64(wed);
+	elem->common.workElementDescriptor = cpu_to_be64(wed);
 
 	if ((rc = capi_h_attach_process(afu->handle, elem, &afu->process_token)))
 		goto out;
