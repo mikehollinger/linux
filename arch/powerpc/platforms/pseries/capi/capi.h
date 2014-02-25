@@ -272,8 +272,8 @@ struct capi_t {
 };
 
 struct capi_ivte_ranges {
-	u32 offsets[4];
-	u32 ranges[4];
+	__be32 offsets[4];
+	__be32 ranges[4];
 };
 
 struct capi_process_element_common {
@@ -398,11 +398,12 @@ struct capi_ops {
 	int (*init_adapter) (struct capi_t *adapter, u64 handle,
 			     u64 p1_base, u64 p1_size,
 			     irq_hw_number_t err_hwirq);
+	/* FIXME: Clean this up */
 	int (*init_afu) (struct capi_afu_t *afu, u64 handle,
 			 u64 p1n_base, u64 p1n_size,
 			 u64 p2n_base, u64 p2n_size,
 			 u64 psn_base, u64 psn_size,
-			 u32 irq_start, u32 irq_count)
+			 u32 irq_start, u32 irq_count);
 
 	int (*init_dedicated_process) (struct capi_afu_t *afu, bool kernel,
 			               u64 wed, u64 amr);

@@ -105,19 +105,16 @@ static int
 init_adapter_native(struct capi_t *adapter, u64 unused, u64 p1_base,
 		    u64 p1_size, irq_hw_number_t err_hwirq)
 {
-	const __be32 *prop;
-
 	pr_devel("capi_mmio_p1:        ");
 	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
 		return -ENOMEM;
 
-	if (err_hwirq == NULL) {
-		adapter->err_hwirq = capi_alloc_one_hwirq();
-	} else {
+	if (err_hwirq) {
 		/* XXX: Only BML passes this in, can drop this for upstream */
 		adapter->err_hwirq = err_hwirq;
-	}
-	pr_devel("capi_err_ivte: %#x", adapter->err_hwirq);
+	} else
+		adapter->err_hwirq = capi_alloc_one_hwirq();
+	pr_devel("capi_err_ivte: %#lx", adapter->err_hwirq);
 	adapter->err_virq = capi_map_irq(adapter->err_hwirq, capi_irq_err, (void*)adapter);
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq);
 
@@ -128,7 +125,7 @@ init_adapter_native(struct capi_t *adapter, u64 unused, u64 p1_base,
 static void release_adapter_native(struct capi_t *adapter)
 {
 	capi_unmap_irq(adapter->err_virq, (void*)adapter);
-	capi_unmap_mmio(adapter->p1_mmio);
+	iounmap(adapter->p1_mmio);
 }
 
 static int
@@ -165,9 +162,9 @@ err:
 
 static void release_afu_native(struct capi_afu_t *afu)
 {
-	capi_unmap_mmio(afu->p1n_mmio);
-	capi_unmap_mmio(afu->p2n_mmio);
-	capi_unmap_mmio(afu->psn_mmio);
+	iounmap(afu->p1n_mmio);
+	iounmap(afu->p2n_mmio);
+	iounmap(afu->psn_mmio);
 }
 
 static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)

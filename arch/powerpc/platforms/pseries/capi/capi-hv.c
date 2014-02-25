@@ -56,9 +56,9 @@ err1:
 
 static void release_afu_hv(struct capi_afu_t *afu)
 {
-	capi_unmap_mmio(afu->p2n_mmio);
+	iounmap(afu->p2n_mmio);
 	if (afu->psn_mmio)
-		capi_unmap_mmio(afu->psn_mmio);
+		iounmap(afu->psn_mmio);
 }
 
 static int get_irq_hv(struct capi_afu_t *afu, struct capi_irq_info *info)

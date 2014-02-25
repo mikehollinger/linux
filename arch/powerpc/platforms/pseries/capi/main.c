@@ -120,8 +120,8 @@ int capi_get_num_adapters(void)
 static int __init
 capi_init_adapter(struct capi_t *adapter, u64 handle, u64 p1_base, u64 p2_base, u64 err_hwirq)
 {
-	struct capi_afu_t *afu;
 	int slice, result;
+	int adapter_num;
 
 	pr_devel("---------- capi_init_adapter called ---------\n");
 
@@ -155,9 +155,8 @@ capi_init_adapter(struct capi_t *adapter, u64 handle, u64 p1_base, u64 p2_base, 
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the proper fill in parts of the struct and call us */
-static int
-capi_alloc_adapter(struct capi_t **adapter, u64 handle, u64 p1_base,
-		   u64 p2_base, u64 err_hwirq)
+int capi_alloc_adapter(struct capi_t **adapter, u64 handle, u64 p1_base,
+		       u64 p2_base, u64 err_hwirq)
 {
 	int rc;
 
@@ -202,8 +201,6 @@ struct bus_type capi_bus_type = {
 
 static int __init init_capi(void)
 {
-	struct capi_t *adapter;
-	int i;
 	int ret = 0;
 
 	pr_devel("---------- init_capi called ---------\n");
@@ -221,7 +218,6 @@ static int __init init_capi(void)
 	if (register_capi_dev())
 		return -1;
 
-out:
 	pr_devel("---------- init_capi done ---------\n");
 
 	return ret;
