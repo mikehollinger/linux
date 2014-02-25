@@ -97,7 +97,7 @@ struct capi_process_element_hcall {
 
 
 static inline long
-_capi_h_attach_process(u64 unit_address, struct capi_process_element *element,
+_capi_h_attach_process(u64 unit_address, struct capi_process_element_hcall *element,
 		       u64 *process_token)
 {
 	long rc;
@@ -142,7 +142,7 @@ _capi_h_attach_process(u64 unit_address, struct capi_process_element *element,
 
 /* NOTE: element must be a logical real address, and must be pinned */
 static inline long
-capi_h_attach_process(u64 unit_address, struct capi_process_element *element,
+capi_h_attach_process(u64 unit_address, struct capi_process_element_hcall *element,
 		      u64 *process_token)
 {
 	long rc;
@@ -153,12 +153,12 @@ capi_h_attach_process(u64 unit_address, struct capi_process_element *element,
 			unit_address, virt_to_phys(element));
 
 	buf = (u32*)element;
-	for (i = 0; i*4 < sizeof(struct capi_process_element); i += 4) {
-		if ((i+3)*4 < sizeof(struct capi_process_element))
+	for (i = 0; i*4 < sizeof(struct capi_process_element_hcall); i += 4) {
+		if ((i+3)*4 < sizeof(struct capi_process_element_hcall))
 			pr_devel("%.8x %.8x %.8x %.8x\n", buf[i], buf[i + 1], buf[i + 2], buf[i + 3]);
-		else if ((i+2)*4 < sizeof(struct capi_process_element))
+		else if ((i+2)*4 < sizeof(struct capi_process_element_hcall))
 			pr_devel("%.8x %.8x %.8x\n", buf[i], buf[i + 1], buf[i + 2]);
-		else if ((i+1)*4 < sizeof(struct capi_process_element))
+		else if ((i+1)*4 < sizeof(struct capi_process_element_hcall))
 			pr_devel("%.8x %.8x\n", buf[i], buf[i + 1]);
 		else
 			pr_devel("%.8x\n", buf[i]);
