@@ -345,6 +345,8 @@ static inline void __iomem * _capi_afu_ps_addr(struct capi_afu_t *afu, int reg)
 #define capi_afu_ps_read(afu, reg) \
 	_capi_reg_read(_capi_afu_ps_addr(afu, reg))
 
+int capi_alloc_adapter(struct capi_t **adapter, u64 handle, u64 p1_base,
+		       u64 p1_size, u64 err_hwirq);
 
 int register_capi_dev(void);
 void unregister_capi_dev(void);
@@ -354,7 +356,7 @@ void del_capi_dev(struct capi_t *capi, int adapter_num);
 unsigned int
 capi_map_irq(irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void capi_unmap_irq(unsigned int virq, void *cookie);
-void afu_register_irqs(struct capi_afu_t *afu, struct device_node *np);
+void afu_register_irqs(struct capi_afu_t *afu, u32 start, u32 count);
 void afu_enable_irqs(struct capi_afu_t *afu);
 void afu_disable_irqs(struct capi_afu_t *afu);
 void afu_release_irqs(struct capi_afu_t *afu);
@@ -368,9 +370,6 @@ void capi_prefault(struct capi_afu_t *afu, u64 wed);
 
 struct capi_t * get_capi_adapter(int num);
 int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1);
-int capi_map_mmio(void __iomem **mmio, phys_addr_t *phys_ret, u64 *size_ret,
-		  struct device_node *np, int index);
-void capi_unmap_mmio(void __iomem *addr);
 
 void init_capi_hv(void);
 void init_capi_native(void);
@@ -396,8 +395,14 @@ struct capi_irq_info {
 };
 
 struct capi_ops {
-	int (*init_adapter) (struct capi_t *adapter, struct device_node *np);
-	int (*init_afu) (struct capi_afu_t *afu, struct device_node *np);
+	int (*init_adapter) (struct capi_t *adapter, u64 handle,
+			     u64 p1_base, u64 p1_size,
+			     irq_hw_number_t err_hwirq);
+	int (*init_afu) (struct capi_afu_t *afu, u64 handle,
+			 u64 p1n_base, u64 p1n_size,
+			 u64 p2n_base, u64 p2n_size,
+			 u64 psn_base, u64 psn_size,
+			 u32 irq_start, u32 irq_count)
 
 	int (*init_dedicated_process) (struct capi_afu_t *afu, bool kernel,
 			               u64 wed, u64 amr);

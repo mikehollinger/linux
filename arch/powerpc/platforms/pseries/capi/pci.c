@@ -179,10 +179,13 @@ int enable_capi_protocol(struct pci_dev *dev)
 
 	/* XXX: Which needs to happen first? */
 
+	if ((rc = switch_card_to_capi(dev)))
+		return rc
+
 	if ((rc = switch_phb_to_capi(dev)))
 		return rc;
 
-	return switch_card_to_capi(dev);
+	return rc;
 }
 
 int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)

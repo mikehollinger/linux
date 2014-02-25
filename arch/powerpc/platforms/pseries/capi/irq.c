@@ -219,16 +219,11 @@ void capi_unmap_irq(unsigned int virq, void *cookie)
 	irq_dispose_mapping(virq);
 }
 
-void afu_register_irqs(struct capi_afu_t *afu, struct device_node *np)
+void afu_register_irqs(struct capi_afu_t *afu, u32 start, u32 count)
 {
-	const __be32 *irq_ranges;
 	int idx, ivt_off;
-	u32 start;
 
-	/* FIXME: Determine IRQ number of start/count cells from device tree */
-	irq_ranges = of_get_property(np, "interrupt-ranges", NULL);
-	start = be32_to_cpu(irq_ranges[0]);
-	afu->irq_count = be32_to_cpu(irq_ranges[1]);
+	afu->irq_count = count;
 	pr_devel("afu_get_dt_irq_ranges: %#x %#x", start, afu->irq_count);
 	BUG_ON(afu->irq_count > CAPI_SLICE_IRQS);
 	for (ivt_off = start, idx = 0; idx < afu->irq_count; ivt_off++, idx++) {

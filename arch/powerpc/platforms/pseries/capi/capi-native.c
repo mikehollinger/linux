@@ -101,23 +101,25 @@ void psl_purge(struct capi_afu_t *afu)
 }
 
 
-static int __init
-init_adapter_native(struct capi_t *adapter, u64 p1_base, u64 p2_base, irq_hw_number_t err_hwirq)
+static int
+init_adapter_native(struct capi_t *adapter, u64 unused, u64 p1_base,
+		    u64 p1_size, irq_hw_number_t err_hwirq)
 {
 	const __be32 *prop;
 
 	pr_devel("capi_mmio_p1:        ");
-	if (capi_map_mmio(&adapter->p1_mmio, NULL, NULL, np, 0))
-		return -EFAULT;
+	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
+		return -ENOMEM;
 
-	/* TODO XXX FIXME: adapter->err_hwirq = msi_bitmap_alloc_hwirqs(phb->msi_bitmap) */
-#if 0
-	prop = of_get_property(np, "interrupt", NULL); /* FIXME: Use proper dt interrupt parsing */
-	pr_devel("capi_err_ivte: %#x", be32_to_cpu(prop[0]));
-	adapter->err_hwirq = be32_to_cpu(prop[0]);
+	if (err_hwirq == NULL) {
+		adapter->err_hwirq = capi_alloc_one_hwirq();
+	} else {
+		/* XXX: Only BML passes this in, can drop this for upstream */
+		adapter->err_hwirq = err_hwirq;
+	}
+	pr_devel("capi_err_ivte: %#x", adapter->err_hwirq);
 	adapter->err_virq = capi_map_irq(adapter->err_hwirq, capi_irq_err, (void*)adapter);
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq);
-#endif
 
 	return 0;
 }
@@ -129,22 +131,33 @@ static void release_adapter_native(struct capi_t *adapter)
 	capi_unmap_mmio(adapter->p1_mmio);
 }
 
-static int __init
-init_afu_native(struct capi_afu_t *afu, struct device_node *np)
+static int
+init_afu_native(struct capi_afu_t *afu, u64 handle,
+		u64 p1n_base, u64 p1n_size,
+		u64 p2n_base, u64 p2n_size,
+		u64 psn_base, u64 psn_size,
+		u32 irq_start, u32 irq_count)
 {
-	if (capi_map_mmio(&(afu->p1n_mmio), NULL, NULL, np, 0))
+	if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
 		goto err;
-	if (capi_map_mmio(&(afu->p2n_mmio), NULL, NULL, np, 1))
-		goto err;
-	if (capi_map_mmio(&(afu->psn_mmio), &afu->psn_phys, &afu->psn_size, np, 2))
-		goto err;
+	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
+		goto err1;
+	if (!(afu->psn_mmio = ioremap(psn_base, psn_size)))
+		goto err2;
+	afu->psn_phys = psn_base;
+	afu->psn_size = psn_size;
 
 	afu_disable(afu);
 	psl_purge(afu);
 
-	afu_register_irqs(afu, np);
+	afu_register_irqs(afu, irq_start, irq_count);
 
 	return 0;
+
+err2:
+	iounmap(afu->p2n_mmio);
+err1:
+	iounmap(afu->p1n_mmio);
 err:
 	WARN(1, "Error mapping AFU MMIO regions\n");
 	return -EFAULT;

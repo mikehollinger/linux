@@ -93,36 +93,6 @@ int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1)
 	return 0;
 }
 
-int capi_map_mmio(void __iomem **mmio, phys_addr_t *phys_ret, u64 *size_ret,
-		  struct device_node *np, int index)
-{
-	const u32 *addr;
-	phys_addr_t phys;
-	u64 size;
-
-	addr = of_get_address(np, index, &size, NULL);
-	if (!addr)
-		return -1;
-
-	phys = of_translate_address(np, addr);
-	*mmio = ioremap(phys, size);
-
-	pr_devel("phys: %#llx, virt: 0x%p, size: %#llx\n",
-		 phys, *mmio, size);
-
-	if (phys_ret)
-		*phys_ret = phys;
-	if (size_ret)
-		*size_ret = size;
-
-	return 0;
-}
-
-void capi_unmap_mmio(void __iomem *addr)
-{
-	iounmap(addr);
-}
-
 struct capi_t * get_capi_adapter(int num)
 {
 	struct capi_t *adapter;
@@ -148,7 +118,7 @@ int capi_get_num_adapters(void)
 }
 
 static int __init
-capi_init_adapter(struct capi_t *adapter, struct device_node *np)
+capi_init_adapter(struct capi_t *adapter, u64 handle, u64 p1_base, u64 p2_base, u64 err_hwirq)
 {
 	struct capi_afu_t *afu;
 	int slice, result;
@@ -166,7 +136,7 @@ capi_init_adapter(struct capi_t *adapter, struct device_node *np)
 	if ((result = device_register(&adapter->device)))
 		return result;
 
-	if ((result = capi_ops->init_adapter(adapter, np)))
+	if ((result = capi_ops->init_adapter(adapter, handle, p1_base, p2_base, err_hwirq)))
 		return result;
 
 
@@ -183,26 +153,28 @@ capi_init_adapter(struct capi_t *adapter, struct device_node *np)
 	return 0;
 }
 
+/* FIXME: The calling convention here is a mess and needs to be cleaned up.
+ * Maybe better to have the proper fill in parts of the struct and call us */
 static int
-capi_alloc_adapter(/* FIXME */)
+capi_alloc_adapter(struct capi_t **adapter, u64 handle, u64 p1_base,
+		   u64 p2_base, u64 err_hwirq)
 {
-	struct capi_t *adapter;
 	int rc;
 
-	if (!(adapter = kmalloc(sizeof(*adapter), GFP_KERNEL)))
-		return 0;
-	memset(adapter, 0, sizeof(*adapter));
+	if (!(*adapter = kmalloc(sizeof(struct capi_t), GFP_KERNEL)))
+		return -ENOMEM;
+	memset(*adapter, 0, sizeof(struct capi_t));
 
-	if ((rc = capi_init_adapter(adapter, /*FIXME*/))) {
+	if ((rc = capi_init_adapter(*adapter, handle, p1_base, p2_base, err_hwirq))) {
 		pr_err("Error initialising CAPI adapter\n");
-		kfree(adapter);
+		kfree(*adapter);
+		*adapter = NULL;
 		return rc;
 	}
-	list_add_tail(&adapter->list, &adapter_list);
+	list_add_tail(&(*adapter)->list, &adapter_list);
 
 	return 0;
 }
-EXPORT_SYMBOL(capi_alloc_adapter);
 
 #if 0
 static void capi_free_adapter(struct capi_t *adapter)
