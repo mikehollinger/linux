@@ -115,7 +115,7 @@ static irqreturn_t capi_irq(int irq, void *data)
 	}
 
 	if (dsisr & CAPI_PSL_DSISR_An_ST) {
-		WARN_ON(1, "CAPI interrupt: Segment Table PTE not found\n");
+		WARN(1, "CAPI interrupt: Segment Table PTE not found\n");
 	}
 	if (dsisr & CAPI_PSL_DSISR_An_UR)
 		pr_devel("CAPI interrupt: AURP PTE not found\n");
