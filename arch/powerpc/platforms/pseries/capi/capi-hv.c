@@ -10,7 +10,9 @@
 #include "capi_hcalls.h"
 
 static int
-init_adapter_hv(struct capi_t *adapter, u64 handle, u64 unused1, u64 unused2,
+init_adapter_hv(struct capi_t *adapter, u64 handle,
+		u64 p1_base, u64 p1_size,
+		u64 p2_base, u64 p2_size,
 		irq_hw_number_t unused3)
 {
 	adapter->handle = handle;

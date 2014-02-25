@@ -1,5 +1,6 @@
 #define DEBUG
 
+#include <linux/pci_regs.h>
 #include <linux/pci_ids.h>
 #include <linux/device.h>
 #include <linux/module.h>
@@ -8,10 +9,18 @@
 #include <linux/of.h>
 #include <asm/opal.h>
 
+#include "capi.h"
+
 #define CAPI_PCI_VSEC_ID	0x1280
 
 #define CAPI_PROTOCOL_256TB	(1ull << 7)
 #define CAPI_PROTOCOL_ENABLE	(1ull << 16)
+
+#define CAPI_VSEC_NAFUS(vsec)		(vsec + 0x8) /* BYTE */
+#define CAPI_VSEC_AFU_DESC_OFF(vsec)	(vsec + 0x20)
+#define CAPI_VSEC_AFU_DESC_SIZE(vsec)	(vsec + 0x24)
+#define CAPI_VSEC_PS_OFF(vsec)		(vsec + 0x28)
+#define CAPI_VSEC_PS_SIZE(vsec)		(vsec + 0x2c)
 
 DEFINE_PCI_DEVICE_TABLE(capi_pci_tbl) = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0477), },
@@ -41,6 +50,23 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	u32 val;
 
 	pr_devel("dump_capi_config_space\n");
+
+	pci_read_config_dword(dev, PCI_BASE_ADDRESS_0, &val);
+	dev_info(&dev->dev, "BAR0: %#.8x\n", val);
+	pci_read_config_dword(dev, PCI_BASE_ADDRESS_1, &val);
+	dev_info(&dev->dev, "BAR1: %#.8x\n", val);
+	pci_read_config_dword(dev, PCI_BASE_ADDRESS_2, &val);
+	dev_info(&dev->dev, "BAR2: %#.8x\n", val);
+	pci_read_config_dword(dev, PCI_BASE_ADDRESS_3, &val);
+	dev_info(&dev->dev, "BAR3: %#.8x\n", val);
+	pci_read_config_dword(dev, PCI_BASE_ADDRESS_4, &val);
+	dev_info(&dev->dev, "BAR4: %#.8x\n", val);
+	pci_read_config_dword(dev, PCI_BASE_ADDRESS_5, &val);
+	dev_info(&dev->dev, "BAR5: %#.8x\n", val);
+
+	dev_info(&dev->dev, "p1 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 2), pci_resource_len(dev, 2));
+	dev_info(&dev->dev, "p2 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 0), pci_resource_len(dev, 0));
+	dev_info(&dev->dev, "BAR 4/5: %#llx, len: %#llx\n", pci_resource_start(dev, 4), pci_resource_len(dev, 4));
 
 	if (!(vsec = find_capi_vsec(dev)))
 		return;
@@ -186,7 +212,58 @@ int enable_capi_protocol(struct pci_dev *dev)
 	return rc;
 }
 
-int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
+int init_capi_pci(struct pci_dev *dev)
+{
+	u64 p1_base = pci_resource_start(dev, 2);
+	u64 p1_size = pci_resource_len(dev, 2);
+	u64 p2_base = pci_resource_start(dev, 0);
+	u64 p2_size = pci_resource_len(dev, 0);
+	int vsec = find_capi_vsec(dev);
+	struct capi_t *adapter;
+	u32 afu_desc_off, afu_desc_size;
+	u32 ps_off, ps_size;
+	u32 nIRQs;
+	u8 nAFUs;
+	int afu;
+	int rc;
+
+	if ((rc = capi_alloc_adapter(&adapter, 0, p1_base, p1_size, p2_base, p2_size, 0)))
+		return rc;
+
+	/* TODO: Upload PSL */
+
+	if (vsec) {
+		dev_info(&dev->dev, "capi vsec found at offset %#x\n", vsec);
+
+		pci_read_config_byte(dev, CAPI_VSEC_NAFUS(vsec), &nAFUs);
+		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
+		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
+		pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
+		pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
+
+	} else { /* XXX Bringup only */
+		dev_warn(&dev->dev, "capi vsec not found! Using bringup values!\n");
+
+		nAFUs = 1;
+		nIRQs = 3;
+		ps_off  = 0x2000000;
+		ps_size = 0x2000000;
+	}
+
+	for (afu = 0; afu < nAFUs; afu++) {
+		u64 afu_desc, psn_base;
+
+		psn_base = (ps_off + (afu * ps_size)) * 64 * 1024;
+
+		if (vsec) {
+			afu_desc = (afu_desc_off + (afu * afu_desc_size)) * 64 * 1024;
+		}
+	}
+
+	return 0;
+}
+
+static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
 	int rc;
 
@@ -199,19 +276,29 @@ int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		return rc;
 	}
 
-	/* FIXME: Should I wait for PHB to come back in CAPI mode and re-probe? */
+	/* FIXME: I should wait for PHB to come back in CAPI mode and re-probe */
 	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
 		return rc;
 	}
 
-	dev_info(&dev->dev, "p1 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 2), pci_resource_len(dev, 2));
-	dev_info(&dev->dev, "p2 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 0), pci_resource_len(dev, 0));
 
 	return 0;
 }
 
-void capi_remove(struct pci_dev *dev)
+static void capi_early_fixup(struct pci_dev *dev)
+{
+	/* Just trying to understand how setting up BARs work in Linux */
+	dump_capi_config_space(dev);
+
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
+
+	dump_capi_config_space(dev);
+}
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_IBM, 0x0477, capi_early_fixup);
+
+static void capi_remove(struct pci_dev *dev)
 {
 	dev_warn(&dev->dev, "pci remove\n");
 

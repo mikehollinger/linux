@@ -255,6 +255,7 @@ struct capi_t {
 	union {
 		struct { /* hv */
 			void __iomem *p1_mmio;
+			void __iomem *p2_mmio;
 			irq_hw_number_t err_hwirq;
 			unsigned int err_virq;
 		};
@@ -345,8 +346,10 @@ static inline void __iomem * _capi_afu_ps_addr(struct capi_afu_t *afu, int reg)
 #define capi_afu_ps_read(afu, reg) \
 	_capi_reg_read(_capi_afu_ps_addr(afu, reg))
 
-int capi_alloc_adapter(struct capi_t **adapter, u64 handle, u64 p1_base,
-		       u64 p1_size, u64 err_hwirq);
+int capi_alloc_adapter(struct capi_t **adapter, u64 handle,
+		       u64 p1_base, u64 p1_size,
+		       u64 p2_base, u64 p2_size,
+		       u64 err_hwirq);
 
 int register_capi_dev(void);
 void unregister_capi_dev(void);
@@ -397,6 +400,7 @@ struct capi_irq_info {
 struct capi_ops {
 	int (*init_adapter) (struct capi_t *adapter, u64 handle,
 			     u64 p1_base, u64 p1_size,
+			     u64 p2_base, u64 p2_size,
 			     irq_hw_number_t err_hwirq);
 	/* FIXME: Clean this up */
 	int (*init_afu) (struct capi_afu_t *afu, u64 handle,

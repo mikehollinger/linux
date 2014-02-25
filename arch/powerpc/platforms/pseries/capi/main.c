@@ -118,7 +118,10 @@ int capi_get_num_adapters(void)
 }
 
 static int __init
-capi_init_adapter(struct capi_t *adapter, u64 handle, u64 p1_base, u64 p2_base, u64 err_hwirq)
+capi_init_adapter(struct capi_t *adapter, u64 handle,
+		u64 p1_base, u64 p1_size,
+		u64 p2_base, u64 p2_size,
+		u64 err_hwirq)
 {
 	int slice, result;
 	int adapter_num;
@@ -136,7 +139,10 @@ capi_init_adapter(struct capi_t *adapter, u64 handle, u64 p1_base, u64 p2_base, 
 	if ((result = device_register(&adapter->device)))
 		return result;
 
-	if ((result = capi_ops->init_adapter(adapter, handle, p1_base, p2_base, err_hwirq)))
+	if ((result = capi_ops->init_adapter(adapter, handle,
+					p1_base, p1_size,
+					p2_base, p2_size,
+					err_hwirq)))
 		return result;
 
 
@@ -155,8 +161,10 @@ capi_init_adapter(struct capi_t *adapter, u64 handle, u64 p1_base, u64 p2_base, 
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the proper fill in parts of the struct and call us */
-int capi_alloc_adapter(struct capi_t **adapter, u64 handle, u64 p1_base,
-		       u64 p2_base, u64 err_hwirq)
+int capi_alloc_adapter(struct capi_t **adapter, u64 handle,
+		       u64 p1_base, u64 p1_size,
+		       u64 p2_base, u64 p2_size,
+		       u64 err_hwirq)
 {
 	int rc;
 
@@ -164,7 +172,10 @@ int capi_alloc_adapter(struct capi_t **adapter, u64 handle, u64 p1_base,
 		return -ENOMEM;
 	memset(*adapter, 0, sizeof(struct capi_t));
 
-	if ((rc = capi_init_adapter(*adapter, handle, p1_base, p2_base, err_hwirq))) {
+	if ((rc = capi_init_adapter(*adapter, handle,
+				    p1_base, p1_size,
+				    p2_base, p2_size,
+				    err_hwirq))) {
 		pr_err("Error initialising CAPI adapter\n");
 		kfree(*adapter);
 		*adapter = NULL;

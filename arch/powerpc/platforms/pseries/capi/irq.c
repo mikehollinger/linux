@@ -267,12 +267,19 @@ void afu_release_irqs(struct capi_afu_t *afu)
 
 int capi_alloc_one_hwirq(void)
 {
+#if 1
+	return 0;
+#else
 	return msi_bitmap_alloc_hwirqs(phb->msi_bitmap, 1);
+#endif
 }
 
 /* XXX: This hasn't been tested yet. */
 int capi_alloc_hwirqs(int num, struct capi_ivte_ranges *ranges)
 {
+#if 1
+	return -ENODEV;
+#else
 	int range = 0;
 	int hwirq;
 	int try;
@@ -302,4 +309,5 @@ fail:
 	for (range--; range >= 0; range--)
 		msi_bitmap_free_hwirqs(bmp, ranges->offsets[range], ranges->ranges[range])
 	return -ENOMEM;
+#endif
 }

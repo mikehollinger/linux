@@ -102,11 +102,16 @@ void psl_purge(struct capi_afu_t *afu)
 
 
 static int
-init_adapter_native(struct capi_t *adapter, u64 unused, u64 p1_base,
-		    u64 p1_size, irq_hw_number_t err_hwirq)
+init_adapter_native(struct capi_t *adapter, u64 unused,
+		    u64 p1_base, u64 p1_size,
+		    u64 p2_base, u64 p2_size,
+		    irq_hw_number_t err_hwirq)
 {
 	pr_devel("capi_mmio_p1:        ");
 	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
+		return -ENOMEM;
+
+	if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
 		return -ENOMEM;
 
 	if (err_hwirq) {

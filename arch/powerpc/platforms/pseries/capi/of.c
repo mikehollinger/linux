@@ -109,7 +109,9 @@ static int __init init_capi_of(void)
 			if (!(ret = read_handle(np, &handle)))
 				goto bail;
 		}
-		if ((ret = capi_alloc_adapter(&adapter, handle, p1_base, p1_size, err_hwirq)))
+		if ((ret = capi_alloc_adapter(&adapter, handle,
+					      p1_base, p1_size,
+					      0, 0, err_hwirq)))
 			goto bail;
 
 		for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++) {
