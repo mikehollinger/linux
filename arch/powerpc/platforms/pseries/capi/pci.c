@@ -132,6 +132,8 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	pr_devel("capi vsec: %30s: %#x\n", "Flash Status/Control Register", val);
 	pci_read_config_dword(dev, vsec + 0x54, &val);
 	pr_devel("capi vsec: %30s: %#x\n", "Flash Data Port", val);
+
+	/* TODO: Dump AFU Descriptor & AFU Configuration Record if present */
 }
 
 static int switch_phb_to_capi(struct pci_dev *dev)
@@ -174,6 +176,11 @@ static int switch_card_to_capi(struct pci_dev *dev)
 	int rc;
 
 	dev_info(&dev->dev, "switch card to capi\n");
+
+#if 1
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
+#endif
 
 	if (!(vsec = find_capi_vsec(dev))) {
 		dev_err(&dev->dev, "capi: WARNING: CAPI VSEC not found, assuming card is already in CAPI mode!\n");
@@ -224,7 +231,7 @@ int init_capi_pci(struct pci_dev *dev)
 	u32 ps_off, ps_size;
 	u32 nIRQs;
 	u8 nAFUs;
-	int afu;
+	int slice;
 	int rc;
 
 	if ((rc = capi_alloc_adapter(&adapter, 0, p1_base, p1_size, p2_base, p2_size, 0)))
@@ -250,14 +257,28 @@ int init_capi_pci(struct pci_dev *dev)
 		ps_size = 0x2000000;
 	}
 
-	for (afu = 0; afu < nAFUs; afu++) {
-		u64 afu_desc, psn_base;
+	for (slice = 0; slice < nAFUs; slice++) {
+		struct capi_afu_t *afu = &(adapter->slice[slice]);
+		u64 afu_desc, p1n_base, p2n_base, psn_base;
 
-		psn_base = (ps_off + (afu * ps_size)) * 64 * 1024;
+		const u64 p1n_size = 0x100;
+		const u64 p2n_size = 0x1000;
+
+		p1n_base = p1_base + 0x10000 + (slice * p1n_size);
+		p2n_base = p2_base + (slice * p2n_size);
+		psn_base = p2_base + (ps_off + (slice * ps_size)) * 64 * 1024;
 
 		if (vsec) {
-			afu_desc = (afu_desc_off + (afu * afu_desc_size)) * 64 * 1024;
+			afu_desc = (afu_desc_off + (slice * afu_desc_size)) * 64 * 1024;
+
+			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		}
+
+		capi_init_afu(adapter, afu, slice, 0,
+			      p1n_base, p1n_size,
+			      p2n_base, p2n_size,
+			      psn_base, ps_size,
+			      0, 0); /* XXX Interrupts - I need to hook into the phb code for these */
 	}
 
 	return 0;
@@ -291,8 +312,10 @@ static void capi_early_fixup(struct pci_dev *dev)
 	/* Just trying to understand how setting up BARs work in Linux */
 	dump_capi_config_space(dev);
 
+#if 0
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
+#endif
 
 	dump_capi_config_space(dev);
 }

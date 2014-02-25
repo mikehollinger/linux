@@ -117,7 +117,7 @@ int capi_get_num_adapters(void)
 	return i;
 }
 
-static int __init
+static int
 capi_init_adapter(struct capi_t *adapter, u64 handle,
 		u64 p1_base, u64 p1_size,
 		u64 p2_base, u64 p2_size,
@@ -157,6 +157,33 @@ capi_init_adapter(struct capi_t *adapter, u64 handle,
 	pr_devel("---------- capi_init_adapter done ---------\n");
 
 	return 0;
+}
+
+int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
+		  int slice, u64 handle,
+		  u64 p1n_base, u64 p1n_size,
+		  u64 p2n_base, u64 p2n_size,
+		  u64 psn_base, u64 psn_size,
+		  u32 irq_start, u32 irq_count)
+{
+	afu->adapter = adapter;
+
+	afu->device.parent = get_device(&adapter->device);
+	dev_set_name(&afu->device, "%s%i", dev_name(&adapter->device), slice + 1);
+	afu->device.bus = &capi_bus_type;
+	afu->device.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + 1 + slice);
+
+	if (device_register(&afu->device)) {
+		/* FIXME: chardev for this AFU should return errors */
+		return -EFAULT;
+	}
+
+	/* FIXME: Do this first, and only then create the char dev */
+	return capi_ops->init_afu(afu, handle,
+			p1n_base, p1n_size,
+			p2n_base, p2n_size,
+			psn_base, psn_size,
+			irq_start, irq_count);
 }
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.

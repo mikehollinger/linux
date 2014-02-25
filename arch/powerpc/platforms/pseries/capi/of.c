@@ -45,7 +45,6 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	u32 irq_start, irq_count;
 
 	afu = &(adapter->slice[slice]);
-	afu->adapter = adapter;
 
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
 		/* XXX: BML Specific, drop for upstream */
@@ -65,18 +64,7 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	irq_start = be32_to_cpu(prop[0]);
 	irq_count = be32_to_cpu(prop[1]);
 
-	/* FIXME: This belongs in the chardev driver */
-	afu->device.parent = get_device(&adapter->device);
-	dev_set_name(&afu->device, "%s%i", dev_name(&adapter->device), slice + 1);
-	afu->device.bus = &capi_bus_type;
-	afu->device.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + 1 + slice);
-
-	if (device_register(&afu->device)) {
-		/* FIXME: chardev for this AFU should return errors */
-		return -EFAULT;
-	}
-
-	return capi_ops->init_afu(afu, handle,
+	return capi_init_afu(adapter, afu, slice, handle,
 			p1n_base, p1n_size,
 			p2n_base, p2n_size,
 			psn_base, psn_size,
