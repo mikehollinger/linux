@@ -115,8 +115,8 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
 		return -ENOMEM;
 
-	if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
-		return -ENOMEM;
+//	if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
+//		return -ENOMEM;
 
 	if (err_hwirq) {
 		/* XXX: Only BML passes this in, can drop this for upstream */
