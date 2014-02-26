@@ -5,6 +5,7 @@
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/sort.h>
 #include <linux/pci.h>
 #include <linux/of.h>
 #include <asm/opal.h>
@@ -136,6 +137,70 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	/* TODO: Dump AFU Descriptor & AFU Configuration Record if present */
 }
 
+static int cmpbar(const void *p1, const void *p2)
+{
+	struct resource *r1 = (struct resource *)p1;
+	struct resource *r2 = (struct resource *)p2;
+	resource_size_t l1 = r1->end - r1->start;
+	resource_size_t l2 = r2->end - r2->start;
+
+	return l1 - l2;
+}
+
+static void reassign_capi_bars(struct pci_dev *dev, struct device_node *np)
+{
+	const u32 *window_prop;
+	LIST_HEAD(head);
+	u64 window, size;
+	u64 off, addr;
+	int idx, i;
+	struct resource * resources[3];
+	resource_size_t len;
+
+	dev_warn(&dev->dev, "Reassign CAPI BARs\n");
+
+	/*
+	 * MASSIVE HACK: CAPI requires the m64 address space for BAR
+	 * assignment. Our PHB code in Linux doesn't use it yet, and Linux will
+	 * have assigned BAR's from the m32 space. For now just reassign the
+	 * BARs from the m64 space.
+	 */
+	window_prop = of_get_property(np, "ibm,opal-m64-window", NULL);
+	if (!window_prop) {
+		dev_warn(&dev->dev, "WARNING: Using BAR assignment from Linux, this probably will break MMIO access.\n");
+	} else {
+
+		window = of_read_number(window_prop, 2);
+		size = of_read_number(&window_prop[4], 2);
+		off = window;
+
+		resources[0] = &dev->resource[0];
+		resources[1] = &dev->resource[2];
+		resources[2] = &dev->resource[4];
+		sort(resources, 3, sizeof(struct resource *), cmpbar, NULL);
+
+		for (i = 0; i < 3; i++) {
+			idx = resources[i] - &dev->resource[0];
+			len = resources[i]->end - resources[i]->start + 1;
+			addr = off;
+
+			if (idx == 4) {
+				/* BAR 4/5 requires bits[48:49] set to 10 */
+				addr = (addr & ~0x0001000000000000) | 0x0002000000000000;
+			}
+
+			dev_warn(&dev->dev, "Reassigning resource %i to %#.16llx\n", idx, addr);
+			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*idx, addr >> 32);
+			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*idx, addr & 0xffffffff);
+			dev->resource[i].start = addr;
+			dev->resource[i].end = addr + len - 1;
+
+			off += len;
+		}
+	}
+
+}
+
 static int switch_phb_to_capi(struct pci_dev *dev)
 {
 	struct device_node *np;
@@ -164,10 +229,17 @@ static int switch_phb_to_capi(struct pci_dev *dev)
 	rc = opal_phb_to_capi(phb_id);
 	dev_info(&dev->dev, "opal_phb_to_capi: %i", rc);
 
+
+	reassign_capi_bars(dev, np);
+
 out:
 	of_node_put(np);
 	return rc;
 }
+
+/*
+ *  pciex node: ibm,opal-m64-window = <0x3d058 0x0 0x3d058 0x0 0x8 0x0>;
+ */
 
 static int switch_card_to_capi(struct pci_dev *dev)
 {
@@ -177,7 +249,7 @@ static int switch_card_to_capi(struct pci_dev *dev)
 
 	dev_info(&dev->dev, "switch card to capi\n");
 
-#if 1
+#if 0
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
 	dev_info(&dev->dev, "wrote BAR4/5\n");
@@ -234,10 +306,12 @@ int init_capi_pci(struct pci_dev *dev)
 	int slice;
 	int rc;
 
+if (0) {
 	if (pci_request_region(dev, 2, "priv 2 regs"))
 		goto err1;
 	if (pci_request_region(dev, 0, "priv 1 regs"))
 		goto err2;
+}
 
 	p1_base = pci_resource_start(dev, 2);
 	p1_size = pci_resource_len(dev, 2);

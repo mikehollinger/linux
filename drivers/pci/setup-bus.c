@@ -121,7 +121,7 @@ static resource_size_t get_res_add_size(struct list_head *head,
 }
 
 /* Sort resources by alignment */
-static void pdev_sort_resources(struct pci_dev *dev, struct list_head *head)
+void pdev_sort_resources(struct pci_dev *dev, struct list_head *head)
 {
 	int i;
 
