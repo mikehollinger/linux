@@ -49,7 +49,7 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	int vsec;
 	u32 val;
 
-	pr_devel("dump_capi_config_space\n");
+	dev_info(&dev->dev, "dump_capi_config_space\n");
 
 	pci_read_config_dword(dev, PCI_BASE_ADDRESS_0, &val);
 	dev_info(&dev->dev, "BAR0: %#.8x\n", val);
@@ -72,66 +72,66 @@ static void dump_capi_config_space(struct pci_dev *dev)
 		return;
 
 	pci_read_config_dword(dev, vsec + 0x0, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Cap ID",		(val >>  0) & 0xffff);
-	pr_devel("capi vsec: %30s: %#x\n", "Cap Ver",		(val >> 16) & 0xf);
-	pr_devel("capi vsec: %30s: %#x\n", "Next Cap Ptr",	(val >> 20) & 0xfff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Cap ID",		(val >>  0) & 0xffff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Cap Ver",	(val >> 16) & 0xf);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Next Cap Ptr",	(val >> 20) & 0xfff);
 	pci_read_config_dword(dev, vsec + 0x4, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "VSEC ID",		(val >>  0) & 0xffff);
-	pr_devel("capi vsec: %30s: %#x\n", "VSEC Rev",		(val >> 16) & 0xf);
-	pr_devel("capi vsec: %30s: %#x\n", "VSEC Length",	(val >> 20) & 0xfff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "VSEC ID",	(val >>  0) & 0xffff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "VSEC Rev",	(val >> 16) & 0xf);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "VSEC Length",	(val >> 20) & 0xfff);
 	pci_read_config_dword(dev, vsec + 0x8, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Num AFUs",		(val >>  0) & 0xff);
-	pr_devel("capi vsec: %30s: %#x\n", "Status",		(val >>  8) & 0xff);
-	pr_devel("capi vsec: %30s: %#x\n", "Mode Control",	(val >> 16) & 0xff);
-	pr_devel("capi vsec: %30s: %#x\n", "PS_area_size",	(val >> 24) & 0xff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Num AFUs",	(val >>  0) & 0xff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Status",		(val >>  8) & 0xff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Mode Control",	(val >> 16) & 0xff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PS_area_size",	(val >> 24) & 0xff);
 	pci_read_config_dword(dev, vsec + 0xc, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "PSL Rev",		(val >>  0) & 0xffff);
-	pr_devel("capi vsec: %30s: %#x\n", "CAIA Ver",		(val >> 16) & 0xffff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Rev",	(val >>  0) & 0xffff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "CAIA Ver",	(val >> 16) & 0xffff);
 	pci_read_config_dword(dev, vsec + 0x10, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Base Image Rev",	(val >>  0) & 0xffff); /* Reserved < 0.11 */
-	pr_devel("capi vsec: %30s: %#x\n", "Reserved",		(val >> 16) & 0xffff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Base Image Rev",	(val >>  0) & 0xffff); /* Reserved < 0.11 */
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	(val >> 16) & 0xffff);
 	pci_read_config_dword(dev, vsec + 0x14, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Reserved",		val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	val);
 
 	pci_read_config_dword(dev, vsec + 0x18, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "PSL Programming Port", val); /* Reserved >= 0.11 */
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Programming Port", val); /* Reserved >= 0.11 */
 	pci_read_config_dword(dev, vsec + 0x1c, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "PSL Programming Control", val); /* Reserved >= 0.11 */
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Programming Control", val); /* Reserved >= 0.11 */
 
-	pr_devel("capi vsec: end of v0.09 defintion");
+	dev_info(&dev->dev, "capi vsec: end of v0.09 defintion");
 
 	pci_read_config_dword(dev, vsec + 0x20, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Address Register (v0.10) / AFU Descriptor Offset (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Address Register (v0.10) / AFU Descriptor Offset (v0.11)", val);
 	pci_read_config_dword(dev, vsec + 0x24, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Size Register (v0.10) / AFU Descriptor Size (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Size Register (v0.10) / AFU Descriptor Size (v0.11)", val);
 	pci_read_config_dword(dev, vsec + 0x28, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Status/Control Register (v0.10) / Problem State Offset (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register (v0.10) / Problem State Offset (v0.11)", val);
 	pci_read_config_dword(dev, vsec + 0x2c, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Data Port (v0.10) / Problem State Size (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port (v0.10) / Problem State Size (v0.11)", val);
 
-	pr_devel("capi vsec: end of v0.10 defintion");
+	dev_info(&dev->dev, "capi vsec: end of v0.10 defintion");
 
 	pci_read_config_dword(dev, vsec + 0x30, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x34, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x38, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x3c, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
 
 	pci_read_config_dword(dev, vsec + 0x40, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "PSL Programming Port", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Programming Port", val);
 	pci_read_config_dword(dev, vsec + 0x44, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "PSL Programming Control", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Programming Control", val);
 	pci_read_config_dword(dev, vsec + 0x48, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Address Register", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Address Register", val);
 	pci_read_config_dword(dev, vsec + 0x4c, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Size Register", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Size Register", val);
 	pci_read_config_dword(dev, vsec + 0x50, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Status/Control Register", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register", val);
 	pci_read_config_dword(dev, vsec + 0x54, &val);
-	pr_devel("capi vsec: %30s: %#x\n", "Flash Data Port", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port", val);
 
 	/* TODO: Dump AFU Descriptor & AFU Configuration Record if present */
 }
@@ -180,6 +180,8 @@ static int switch_card_to_capi(struct pci_dev *dev)
 #if 1
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
+	dev_info(&dev->dev, "wrote BAR4/5\n");
+	dump_capi_config_space(dev);
 #endif
 
 	if (!(vsec = find_capi_vsec(dev))) {
@@ -221,10 +223,8 @@ int enable_capi_protocol(struct pci_dev *dev)
 
 int init_capi_pci(struct pci_dev *dev)
 {
-	u64 p1_base = pci_resource_start(dev, 2);
-	u64 p1_size = pci_resource_len(dev, 2);
-	u64 p2_base = pci_resource_start(dev, 0);
-	u64 p2_size = pci_resource_len(dev, 0);
+	u64 p1_base, p1_size;
+	u64 p2_base, p2_size;
 	int vsec = find_capi_vsec(dev);
 	struct capi_t *adapter;
 	u32 afu_desc_off, afu_desc_size;
@@ -233,6 +233,16 @@ int init_capi_pci(struct pci_dev *dev)
 	u8 nAFUs;
 	int slice;
 	int rc;
+
+	if (pci_request_region(dev, 2, "priv 2 regs"))
+		goto err1;
+	if (pci_request_region(dev, 0, "priv 1 regs"))
+		goto err2;
+
+	p1_base = pci_resource_start(dev, 2);
+	p1_size = pci_resource_len(dev, 2);
+	p2_base = pci_resource_start(dev, 0);
+	p2_size = pci_resource_len(dev, 0);
 
 	/* TODO: Upload PSL */
 
@@ -287,6 +297,10 @@ int init_capi_pci(struct pci_dev *dev)
 	}
 
 	return 0;
+err2:
+	pci_release_region(dev, 2);
+err1:
+	return -EBUSY;
 }
 
 static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
@@ -301,6 +315,9 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		dev_err(&dev->dev, "enable_capi_protocol failed: %i\n", rc);
 		return rc;
 	}
+	dev_info(&dev->dev, "capi protocol enabled\n");
+
+	dump_capi_config_space(dev);
 
 	/* FIXME: I should wait for PHB to come back in CAPI mode and re-probe */
 	if ((rc = pci_enable_device(dev))) {
@@ -318,15 +335,15 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 static void capi_early_fixup(struct pci_dev *dev)
 {
+#if 0
 	/* Just trying to understand how setting up BARs work in Linux */
 	dump_capi_config_space(dev);
 
-#if 0
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
-#endif
 
 	dump_capi_config_space(dev);
+#endif
 }
 DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_IBM, 0x0477, capi_early_fixup);
 
