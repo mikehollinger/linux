@@ -124,7 +124,8 @@ extern int opal_enter_rtas(struct rtas_args *args,
 #define OPAL_PCI_POLL				62
 #define OPAL_PCI_MSI_EOI			63
 #define OPAL_PCI_GET_PHB_DIAG_DATA2		64
-#define OPAL_PHB_TO_CAPI                        87
+#define OPAL_PHB_TO_CAPI                        93
+#define OPAL_CAPI_TO_PHB                        94
 
 #ifndef __ASSEMBLY__
 
