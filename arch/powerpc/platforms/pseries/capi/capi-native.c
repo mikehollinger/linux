@@ -208,7 +208,6 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 	capi_p1n_write(afu, CAPI_PSL_CtxTime_An, 0); /* disable */
 	capi_p1n_write(afu, CAPI_PSL_SPAP_An, 0);    /* disable */
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF); /* XXX: Is 0 or 1 allowed? */
-	capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An, 0); /* XXX: Hypervisor limit interrupts */
 
 	capi_p1n_write(afu, CAPI_PSL_SR_An,
 		       CAPI_PSL_SR_An_SF |
@@ -247,11 +246,30 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 	capi_prefault(afu, wed);
 
 	capi_write_sstp(afu, sstp0, sstp1);
-	capi_p2n_write(afu, CAPI_PSL_IVTE_An,
-			(afu->hwirq[0] & 0xffff) << 48 |
-			(afu->hwirq[1] & 0xffff) << 32 |
-			(afu->hwirq[2] & 0xffff) << 16 |
-			(afu->hwirq[3] & 0xffff));
+	if (CAIA_VERSION < 11)
+		/* handle older versions of CAIA in the lab for now */
+		/* fixme remove this */
+		static const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An_OLD = {0xA8};
+		static const capi_p1n_reg_t CAPI_PSL_IVTE_An_OLD = {0x80};
+		capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An_OLD, 0);
+		capi_p2n_write(afu, CAPI_PSL_IVTE_An_OLD,
+			       ((afu->hwirq[0] & 0xffff) << 48) |
+			       ((afu->hwirq[1] & 0xffff) << 32) |
+			       ((afu->hwirq[2] & 0xffff) << 16) |
+			       (afu->hwirq[3] & 0xffff));
+	} else {
+		capi_p2n_write(afu, CAPI_PSL_IVTE_Limit_An,
+			       (1 << 48) |
+			       (1 << 32) |
+			       (1 << 16) |
+			       1);
+		capi_p2n_write(afu, CAPI_PSL_IVTE_Offset_An,
+			       ((afu->hwirq[0] & 0xffff) << 48) |
+			       ((afu->hwirq[1] & 0xffff) << 32) |
+			       ((afu->hwirq[2] & 0xffff) << 16) |
+			       (afu->hwirq[3] & 0xffff));
+	}
+
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 
 	afu_reset(afu);
