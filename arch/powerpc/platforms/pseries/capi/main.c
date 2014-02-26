@@ -118,12 +118,13 @@ int capi_get_num_adapters(void)
 }
 
 static int
-capi_init_adapter(struct capi_t *adapter, u64 handle,
+capi_init_adapter(struct capi_t *adapter,
+		int slices, u64 handle,
 		u64 p1_base, u64 p1_size,
 		u64 p2_base, u64 p2_size,
 		u64 err_hwirq)
 {
-	int slice, result;
+	int result;
 	int adapter_num;
 
 	pr_devel("---------- capi_init_adapter called ---------\n");
@@ -146,7 +147,7 @@ capi_init_adapter(struct capi_t *adapter, u64 handle,
 		return result;
 
 
-	adapter->slices = slice;
+	adapter->slices = slices;
 	pr_devel("%i slices\n", adapter->slices);
 	if (!adapter->slices)
 		return -1;
@@ -166,6 +167,9 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  u64 psn_base, u64 psn_size,
 		  u32 irq_start, u32 irq_count)
 {
+	pr_devel("capi_init_afu: slice: %i, handle: %#llx, p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx\n",
+			slice, handle, p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size);
+
 	afu->adapter = adapter;
 
 	afu->device.parent = get_device(&adapter->device);
@@ -187,19 +191,24 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 }
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
- * Maybe better to have the proper fill in parts of the struct and call us */
-int capi_alloc_adapter(struct capi_t **adapter, u64 handle,
+ * Maybe better to have the caller alloc the struct, fill it what it need and
+ * call us? */
+int capi_alloc_adapter(struct capi_t **adapter,
+		       int slices, u64 handle,
 		       u64 p1_base, u64 p1_size,
 		       u64 p2_base, u64 p2_size,
 		       u64 err_hwirq)
 {
 	int rc;
 
+	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx",
+			handle, p1_base, p1_size, p2_base, p2_size);
+
 	if (!(*adapter = kmalloc(sizeof(struct capi_t), GFP_KERNEL)))
 		return -ENOMEM;
 	memset(*adapter, 0, sizeof(struct capi_t));
 
-	if ((rc = capi_init_adapter(*adapter, handle,
+	if ((rc = capi_init_adapter(*adapter, slices, handle,
 				    p1_base, p1_size,
 				    p2_base, p2_size,
 				    err_hwirq))) {

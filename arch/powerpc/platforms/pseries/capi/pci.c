@@ -234,9 +234,6 @@ int init_capi_pci(struct pci_dev *dev)
 	int slice;
 	int rc;
 
-	if ((rc = capi_alloc_adapter(&adapter, 0, p1_base, p1_size, p2_base, p2_size, 0)))
-		return rc;
-
 	/* TODO: Upload PSL */
 
 	if (vsec) {
@@ -253,8 +250,13 @@ int init_capi_pci(struct pci_dev *dev)
 
 		nAFUs = 1;
 		nIRQs = 3;
-		ps_off  = 0x2000000;
-		ps_size = 0x2000000;
+		ps_off  = 0x2000000 / 64 / 1024;
+		ps_size = 0x2000000 / 64 / 1024;
+	}
+
+	if ((rc = capi_alloc_adapter(&adapter, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, 0))) {
+		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
+		return rc;
 	}
 
 	for (slice = 0; slice < nAFUs; slice++) {
@@ -274,11 +276,14 @@ int init_capi_pci(struct pci_dev *dev)
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		}
 
-		capi_init_afu(adapter, afu, slice, 0,
+		if ((rc = capi_init_afu(adapter, afu, slice, 0,
 			      p1n_base, p1n_size,
 			      p2n_base, p2n_size,
 			      psn_base, ps_size,
-			      0, 0); /* XXX Interrupts - I need to hook into the phb code for these */
+			      0, 0))) { /* XXX Interrupts - I need to hook into the phb code for these */
+			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
+			return rc;
+		}
 	}
 
 	return 0;
@@ -303,6 +308,10 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		return rc;
 	}
 
+	if ((rc = init_capi_pci(dev))) {
+		dev_err(&dev->dev, "init_capi_pci failed: %i\n", rc);
+		return rc;
+	}
 
 	return 0;
 }

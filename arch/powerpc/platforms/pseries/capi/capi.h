@@ -347,7 +347,8 @@ static inline void __iomem * _capi_afu_ps_addr(struct capi_afu_t *afu, int reg)
 	_capi_reg_read(_capi_afu_ps_addr(afu, reg))
 
 /* TODO: Clean up the alloc/init process */
-int capi_alloc_adapter(struct capi_t **adapter, u64 handle,
+int capi_alloc_adapter(struct capi_t **adapter,
+		       int slices, u64 handle,
 		       u64 p1_base, u64 p1_size,
 		       u64 p2_base, u64 p2_size,
 		       u64 err_hwirq);

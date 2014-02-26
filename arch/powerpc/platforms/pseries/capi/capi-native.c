@@ -77,6 +77,10 @@ void psl_purge(struct capi_afu_t *afu)
 	u64 start, end;
 
 	pr_devel("PSL purge request\n");
+
+	BUG_ON(PSL_CNTL == ~0ULL); /* FIXME: eeh path */
+	BUG_ON(AFU_Cntl == ~0ULL); /* FIXME: eeh path */
+
 	if ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK) != CAPI_AFU_Cntl_An_ES_Disabled) {
 		WARN(1, "psl_purge request while AFU not disabled!\n");
 		afu_disable(afu);
