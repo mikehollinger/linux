@@ -221,11 +221,17 @@ extern struct bus_type capi_bus_type;
 #define CAPI_NUM_MINORS 256 /* Total to reserve */
 #define CAPI_DEV_MINORS 8   /* 1 control, up to 4 AFUs, 3 reserved for now */
 
-
+#if CAIA_VERSION < 11
 struct capi_sste {
 	u64 vsid_data;
 	u64 esid_data;
 };
+#else
+struct capi_sste {
+	u64 esid_data;
+	u64 vsid_data;
+};
+#endif
 
 /* TODO: Pack structure */
 struct capi_afu_t {
