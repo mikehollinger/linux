@@ -246,11 +246,11 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 	capi_prefault(afu, wed);
 
 	capi_write_sstp(afu, sstp0, sstp1);
-	if (CAIA_VERSION < 11)
+	if (CAIA_VERSION < 11) {
 		/* handle older versions of CAIA in the lab for now */
 		/* fixme remove this */
-		static const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An_OLD = {0xA8};
-		static const capi_p1n_reg_t CAPI_PSL_IVTE_An_OLD = {0x80};
+		const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An_OLD = {0xA8};
+		const capi_p2n_reg_t CAPI_PSL_IVTE_An_OLD = {0x80};
 		capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An_OLD, 0);
 		capi_p2n_write(afu, CAPI_PSL_IVTE_An_OLD,
 			       ((afu->hwirq[0] & 0xffff) << 48) |
@@ -258,12 +258,12 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 			       ((afu->hwirq[2] & 0xffff) << 16) |
 			       (afu->hwirq[3] & 0xffff));
 	} else {
-		capi_p2n_write(afu, CAPI_PSL_IVTE_Limit_An,
-			       (1 << 48) |
-			       (1 << 32) |
-			       (1 << 16) |
-			       1);
-		capi_p2n_write(afu, CAPI_PSL_IVTE_Offset_An,
+		capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An,
+			       (1ULL << 48) |
+			       (1ULL << 32) |
+			       (1ULL << 16) |
+			       1ULL);
+		capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An,
 			       ((afu->hwirq[0] & 0xffff) << 48) |
 			       ((afu->hwirq[1] & 0xffff) << 32) |
 			       ((afu->hwirq[2] & 0xffff) << 16) |
