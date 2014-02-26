@@ -42,6 +42,12 @@ typedef struct {
 /* Configuration and Control area */
 static const capi_p1_reg_t CAPI_PSL_CtxTime = {0x0000};
 static const capi_p1_reg_t CAPI_PSL_ErrIVTE = {0x0008};
+static const capi_p1_reg_t CAPI_PSL_KEY1    = {0x0010};
+static const capi_p1_reg_t CAPI_PSL_KEY2    = {0x0018};
+static const capi_p1_reg_t CAPI_PSL_Control = {0x0020};
+/* Downloading */
+static const capi_p1_reg_t CAPI_PSL_DLCNTL  = {0x0060};
+static const capi_p1_reg_t CAPI_PSL_DLADDR  = {0x0068};
 
 /* PSL Lookaside Buffer Management Area */
 static const capi_p1_reg_t CAPI_PSL_LBISEL  = {0x0080};
@@ -49,6 +55,8 @@ static const capi_p1_reg_t CAPI_PSL_SLBIE   = {0x0088};
 static const capi_p1_reg_t CAPI_PSL_SLBIA   = {0x0090};
 static const capi_p1_reg_t CAPI_PSL_TLBIE   = {0x00A0};
 static const capi_p1_reg_t CAPI_PSL_TLBIA   = {0x00A8};
+static const capi_p1_reg_t CAPI_PSL_AFUSEL  = {0x00B0};
+
 /* 0x00C0:7EFF Implementation dependent area */
 static const capi_p1_reg_t CAPI_PSL_FIR1    = {0x0100};
 static const capi_p1_reg_t CAPI_PSL_FIR2    = {0x0108};
@@ -61,16 +69,21 @@ static const capi_p1_reg_t CAPI_PSL_TRACE   = {0x0170};
 /* Configuration Area */
 static const capi_p1n_reg_t CAPI_PSL_SR_An         = {0x00};
 static const capi_p1n_reg_t CAPI_PSL_LPID_An       = {0x08};
+static const capi_p1n_reg_t CAPI_PSL_AMBAR_An      = {0x10};
+static const capi_p1n_reg_t CAPI_PSL_SPOffset_An   = {0x18};
+static const capi_p1n_reg_t CAPI_PSL_PSL_ID_An     = {0x20};
 /* Memory Management and Lookaside Buffer Management */
 static const capi_p1n_reg_t CAPI_PSL_SDR_An        = {0x30};
 static const capi_p1n_reg_t CAPI_PSL_AMOR_An       = {0x38};
 /* Pointer Area */
 static const capi_p1n_reg_t CAPI_HAURP_An          = {0x80};
 static const capi_p1n_reg_t CAPI_PSL_SPAP_An       = {0x88};
+static const capi_p1n_reg_t CAPI_PSL_LLCMD_An      = {0x90};
 /* Control Area */
 static const capi_p1n_reg_t CAPI_PSL_CNTL_An       = {0xA0};
-static const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An = {0xA8};
-static const capi_p1n_reg_t CAPI_PSL_CtxTime_An    = {0xB0};
+static const capi_p1n_reg_t CAPI_PSL_CtxTime_An    = {0xA8};
+static const capi_p1n_reg_t CAPI_PSL_IVTE_Offset_An = {0xB0};
+static const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An = {0xB8};
 /* 0xC0:FF Implementation Dependent Area */
 static const capi_p1n_reg_t CAPI_PSL_FIR_SLICE_An  = {0xC0};
 static const capi_p1n_reg_t CAPI_PSL_R_FIR_SLICE_An= {0xC8};
@@ -88,12 +101,14 @@ static const capi_p2n_reg_t CAPI_PSL_AMR_An     = {0x030};
 /* Segment Lookaside Buffer Management */
 static const capi_p2n_reg_t CAPI_SLBIE_An       = {0x040};
 static const capi_p2n_reg_t CAPI_SLBIA_An       = {0x048};
+static const capi_p2n_reg_t CAPI_SLBI_Select_An = {0x050};
 /* Interrupt Registers */
 static const capi_p2n_reg_t CAPI_PSL_DSISR_An   = {0x060};
 static const capi_p2n_reg_t CAPI_PSL_DAR_An     = {0x068};
 static const capi_p2n_reg_t CAPI_PSL_DSR_An     = {0x070};
 static const capi_p2n_reg_t CAPI_PSL_TFC_An     = {0x078};
-static const capi_p2n_reg_t CAPI_PSL_IVTE_An    = {0x080};
+static const capi_p2n_reg_t CAPI_PSL_PEHandle_An = {0x080};
+static const capi_p2n_reg_t CAPI_PSL_ErrStat_An = {0x088};
 /* AFU Registers */
 static const capi_p2n_reg_t CAPI_AFU_Cntl_An    = {0x090};
 static const capi_p2n_reg_t CAPI_AFU_ERR_An     = {0x098};
