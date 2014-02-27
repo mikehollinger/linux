@@ -358,7 +358,7 @@ if (0) {
 		if ((rc = capi_init_afu(adapter, afu, slice, 0,
 			      p1n_base, p1n_size,
 			      p2n_base, p2n_size,
-			      psn_base, ps_size,
+			      psn_base, ps_size * 64 * 1024,
 			      0, 0))) { /* XXX Interrupts - I need to hook into the phb code for these */
 			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 			return rc;
