@@ -139,10 +139,12 @@ static void dump_capi_config_space(struct pci_dev *dev)
 
 static int cmpbar(const void *p1, const void *p2)
 {
-	struct resource *r1 = (struct resource *)p1;
-	struct resource *r2 = (struct resource *)p2;
+	struct resource *r1 = *(struct resource **)p1;
+	struct resource *r2 = *(struct resource **)p2;
 	resource_size_t l1 = r1->end - r1->start;
 	resource_size_t l2 = r2->end - r2->start;
+
+	pr_warn("capi %#.16llx <> %#.16llx : %#llx\n", l1, l2, l1 - l2);
 
 	return l1 - l2;
 }
@@ -153,8 +155,8 @@ static void reassign_capi_bars(struct pci_dev *dev, struct device_node *np)
 	LIST_HEAD(head);
 	u64 window, size;
 	u64 off, addr;
-	int idx, i;
-	struct resource * resources[3];
+	int bar, i;
+	struct resource * bars[2];
 	resource_size_t len;
 
 	dev_warn(&dev->dev, "Reassign CAPI BARs\n");
@@ -174,30 +176,30 @@ static void reassign_capi_bars(struct pci_dev *dev, struct device_node *np)
 		size = of_read_number(&window_prop[4], 2);
 		off = window;
 
-		resources[0] = &dev->resource[0];
-		resources[1] = &dev->resource[2];
-		resources[2] = &dev->resource[4];
-		sort(resources, 3, sizeof(struct resource *), cmpbar, NULL);
+		bars[0] = &dev->resource[0];
+		bars[1] = &dev->resource[2];
+		sort(bars, 2, sizeof(struct resource *), cmpbar, NULL);
 
-		for (i = 0; i < 3; i++) {
-			idx = resources[i] - &dev->resource[0];
-			len = resources[i]->end - resources[i]->start + 1;
+		for (i = 1; i >= 0; i--) {
+			bar = bars[i] - &dev->resource[0];
+			len = bars[i]->end - bars[i]->start + 1;
 			addr = off;
 
-			if (idx == 4) {
-				/* BAR 4/5 requires bits[48:49] set to 10 */
-				addr = (addr & ~0x0001000000000000) | 0x0002000000000000;
-			}
-
-			dev_warn(&dev->dev, "Reassigning resource %i to %#.16llx\n", idx, addr);
-			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*idx, addr >> 32);
-			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*idx, addr & 0xffffffff);
-			dev->resource[i].start = addr;
-			dev->resource[i].end = addr + len - 1;
+			dev_warn(&dev->dev, "Reassigning resource %i to %#.16llx %#llx\n", bar, addr, len);
+			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*bar, addr & 0xffffffff);
+			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*(bar+1), addr >> 32);
+			dev->resource[bar].start = addr;
+			dev->resource[bar].end = addr + len - 1;
 
 			off += len;
 		}
 	}
+
+	/* BAR 4/5 is for the CAPI protocol. Bits[48:49] must be set to 10 */
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
+	dev_info(&dev->dev, "wrote BAR4/5\n");
+
 
 }
 
@@ -248,13 +250,6 @@ static int switch_card_to_capi(struct pci_dev *dev)
 	int rc;
 
 	dev_info(&dev->dev, "switch card to capi\n");
-
-#if 0
-	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
-	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
-	dev_info(&dev->dev, "wrote BAR4/5\n");
-	dump_capi_config_space(dev);
-#endif
 
 	if (!(vsec = find_capi_vsec(dev))) {
 		dev_err(&dev->dev, "capi: WARNING: CAPI VSEC not found, assuming card is already in CAPI mode!\n");
