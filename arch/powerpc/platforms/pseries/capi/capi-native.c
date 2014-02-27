@@ -115,15 +115,17 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
 		return -ENOMEM;
 
-//	if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
-//		return -ENOMEM;
+	if (p2_base) {
+		if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
+			return -ENOMEM;
+	}
 
 	if (err_hwirq) {
 		/* XXX: Only BML passes this in, can drop this for upstream */
 		adapter->err_hwirq = err_hwirq;
 	} else
 		adapter->err_hwirq = capi_alloc_one_hwirq();
-	pr_devel("capi_err_ivte: %#lx", adapter->err_hwirq);
+	pr_devel("capi_err_ivte: %#lx\n", adapter->err_hwirq);
 	adapter->err_virq = capi_map_irq(adapter->err_hwirq, capi_irq_err, (void*)adapter);
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq);
 

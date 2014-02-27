@@ -77,7 +77,7 @@ static int __init init_capi_of(void)
 	struct device_node *afu_np = NULL;
 	struct capi_t *adapter;
 	const __be32 *prop;
-	int slices, slice;
+	int slice;
 	u64 handle = 0;
 	irq_hw_number_t err_hwirq = 0; /* XXX: Drop for upstream */
 	u64 p1_base = 0, p1_size = 0; /* XXX: BML specific - drop for upstream */
@@ -99,9 +99,9 @@ static int __init init_capi_of(void)
 		}
 
 		/* FIXME: Restructure to avoid needing to iterate over AFUs twice */
-		for (afu_np = NULL, slices = 0; (afu_np = of_get_next_child(np, afu_np)); slice++);
+		for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++);
 
-		if ((ret = capi_alloc_adapter(&adapter, slices, handle,
+		if ((ret = capi_alloc_adapter(&adapter, slice, handle,
 					      p1_base, p1_size,
 					      0, 0, err_hwirq)))
 			goto bail;
