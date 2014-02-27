@@ -120,11 +120,7 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 			return -ENOMEM;
 	}
 
-	if (err_hwirq) {
-		/* XXX: Only BML passes this in, can drop this for upstream */
-		adapter->err_hwirq = err_hwirq;
-	} else
-		adapter->err_hwirq = capi_alloc_one_hwirq();
+	adapter->err_hwirq = err_hwirq;
 	pr_devel("capi_err_ivte: %#lx\n", adapter->err_hwirq);
 	adapter->err_virq = capi_map_irq(adapter->err_hwirq, capi_irq_err, (void*)adapter);
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq);
@@ -144,7 +140,7 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 		u64 p1n_base, u64 p1n_size,
 		u64 p2n_base, u64 p2n_size,
 		u64 psn_base, u64 psn_size,
-		u32 irq_start, u32 irq_count)
+		irq_hw_number_t irq_start, irq_hw_number_t irq_count)
 {
 	if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
 		goto err;

@@ -26,7 +26,7 @@ init_afu_hv(struct capi_afu_t *afu, u64 handle,
 	    u64 p1n_base, u64 p1n_size, /* unused */
 	    u64 p2n_base, u64 p2n_size,
 	    u64 psn_base, u64 psn_size,
-	    u32 irq_start, u32 irq_count)
+	    irq_hw_number_t irq_start, irq_hw_number_t irq_count)
 
 {
 	int result;

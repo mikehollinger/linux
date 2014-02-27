@@ -122,7 +122,7 @@ capi_init_adapter(struct capi_t *adapter,
 		int slices, u64 handle,
 		u64 p1_base, u64 p1_size,
 		u64 p2_base, u64 p2_size,
-		u64 err_hwirq)
+		irq_hw_number_t err_hwirq)
 {
 	int result;
 	int adapter_num;
@@ -165,10 +165,10 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
 		  u64 psn_base, u64 psn_size,
-		  u32 irq_start, u32 irq_count)
+		  irq_hw_number_t irq_start, irq_hw_number_t irq_count)
 {
-	pr_devel("capi_init_afu: slice: %i, handle: %#llx, p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx\n",
-			slice, handle, p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size);
+	pr_devel("capi_init_afu: slice: %i, handle: %#llx, p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx, irqs: %#lx %#lx\n",
+			slice, handle, p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size, irq_start, irq_count);
 
 	afu->adapter = adapter;
 
@@ -197,12 +197,12 @@ int capi_alloc_adapter(struct capi_t **adapter,
 		       int slices, u64 handle,
 		       u64 p1_base, u64 p1_size,
 		       u64 p2_base, u64 p2_size,
-		       u64 err_hwirq)
+		       irq_hw_number_t err_hwirq)
 {
 	int rc;
 
-	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx",
-			handle, p1_base, p1_size, p2_base, p2_size);
+	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx err: %#lx",
+			handle, p1_base, p1_size, p2_base, p2_size, err_hwirq);
 
 	if (!(*adapter = kmalloc(sizeof(struct capi_t), GFP_KERNEL)))
 		return -ENOMEM;

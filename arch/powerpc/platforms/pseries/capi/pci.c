@@ -10,6 +10,10 @@
 #include <linux/of.h>
 #include <asm/opal.h>
 
+#include <asm/msi_bitmap.h>
+#include <asm/pci-bridge.h> /* for struct pci_controller */
+#include "../../powernv/pci.h" /* FIXME - for struct pnv_phb */
+
 #include "capi.h"
 
 #define CAPI_PCI_VSEC_ID	0x1280
@@ -288,6 +292,57 @@ int enable_capi_protocol(struct pci_dev *dev)
 	return rc;
 }
 
+static int alloc_hwirqs(struct pci_dev *dev, int num)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
+	if (hwirq < 0) {
+		dev_warn(&dev->dev, "Failed to find a free MSI\n");
+		return -ENOSPC;
+	}
+
+	return phb->msi_base + hwirq;
+}
+
+#if 0
+/* XXX: This hasn't been tested yet. */
+int capi_alloc_hwirqs(struct pci_dev *dev, int num, struct capi_ivte_ranges *ranges)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int range = 0;
+	int hwirq;
+	int try;
+
+	memset(ranges, 0, sizeof(struct capi_ivte_ranges));
+
+	for (range = 0; range < 4, num; range++) {
+		try = num;
+		while (try) {
+			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
+			if (hwirq >= 0)
+				break;
+			try /= 2;
+		}
+		if (!try)
+			goto fail;
+
+		ranges->offsets[range] = phb->msi_base + hwirq;
+		ranges->ranges[range] = try;
+		num -= try;
+	}
+	if (num)
+		goto fail;
+
+	return 0;
+fail:
+	for (range--; range >= 0; range--)
+		msi_bitmap_free_hwirqs(&phb->msi_bmp, ranges->offsets[range], ranges->ranges[range])
+	return -ENOMEM;
+}
+#endif
+
 int init_capi_pci(struct pci_dev *dev)
 {
 	u64 p1_base, p1_size;
@@ -300,6 +355,7 @@ int init_capi_pci(struct pci_dev *dev)
 	u8 nAFUs;
 	int slice;
 	int rc;
+	int err_hwirq, afu_irq_base;
 
 if (0) {
 	if (pci_request_region(dev, 2, "priv 2 regs"))
@@ -333,7 +389,9 @@ if (0) {
 		ps_size = 0x2000000 / 64 / 1024;
 	}
 
-	if ((rc = capi_alloc_adapter(&adapter, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, 0))) {
+	err_hwirq = alloc_hwirqs(dev, 1);
+
+	if ((rc = capi_alloc_adapter(&adapter, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
 		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
 		return rc;
 	}
@@ -355,11 +413,13 @@ if (0) {
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		}
 
+		afu_irq_base = alloc_hwirqs(dev, nIRQs + 1);
+
 		if ((rc = capi_init_afu(adapter, afu, slice, 0,
 			      p1n_base, p1n_size,
 			      p2n_base, p2n_size,
 			      psn_base, ps_size * 64 * 1024,
-			      0, 0))) { /* XXX Interrupts - I need to hook into the phb code for these */
+			      afu_irq_base, nIRQs + 1))) {
 			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 			return rc;
 		}

@@ -376,13 +376,13 @@ int capi_alloc_adapter(struct capi_t **adapter,
 		       int slices, u64 handle,
 		       u64 p1_base, u64 p1_size,
 		       u64 p2_base, u64 p2_size,
-		       u64 err_hwirq);
+		       irq_hw_number_t err_hwirq);
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
 		  u64 psn_base, u64 psn_size,
-		  u32 irq_start, u32 irq_count);
+		  irq_hw_number_t irq_start, irq_hw_number_t irq_count);
 
 int register_capi_dev(void);
 void unregister_capi_dev(void);
@@ -396,8 +396,6 @@ void afu_register_irqs(struct capi_afu_t *afu, u32 start, u32 count);
 void afu_enable_irqs(struct capi_afu_t *afu);
 void afu_disable_irqs(struct capi_afu_t *afu);
 void afu_release_irqs(struct capi_afu_t *afu);
-int capi_alloc_one_hwirq(void);
-int capi_alloc_hwirqs(int num, struct capi_ivte_ranges *ranges);
 irqreturn_t capi_irq_err(int irq, void *data);
 
 int capi_handle_segment_miss(struct capi_afu_t *afu, u64 ea);
@@ -440,7 +438,7 @@ struct capi_ops {
 			 u64 p1n_base, u64 p1n_size,
 			 u64 p2n_base, u64 p2n_size,
 			 u64 psn_base, u64 psn_size,
-			 u32 irq_start, u32 irq_count);
+			 irq_hw_number_t irq_start, irq_hw_number_t irq_count);
 
 	int (*init_dedicated_process) (struct capi_afu_t *afu, bool kernel,
 			               u64 wed, u64 amr);
