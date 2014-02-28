@@ -5,6 +5,7 @@
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/slab.h>
 #include <linux/sort.h>
 #include <linux/pci.h>
 #include <linux/of.h>
@@ -34,6 +35,11 @@ DEFINE_PCI_DEVICE_TABLE(capi_pci_tbl) = {
 	{ }
 };
 MODULE_DEVICE_TABLE(pci, capi_pci_tbl);
+
+struct capi_pci_t {
+	struct pci_dev *pdev;
+	struct capi_t adapter;
+};
 
 static int find_capi_vsec(struct pci_dev *dev)
 {
@@ -175,6 +181,76 @@ static struct device_node * get_capi_phb_node(struct pci_dev *dev)
 	return np;
 }
 
+static int init_implementation_adapter_regs(struct capi_t *adapter)
+{
+	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
+	struct device_node *np;
+	const __be32 *prop;
+	u64 psl_dsnctl;
+	u64 chipid;
+
+	dev_info(&dev->dev, "capi: **** Setup PSL Implementation Specific Registers ****\n");
+
+	if (!(np = get_capi_phb_node(dev)))
+		return -ENODEV;
+
+	while (np && !(prop = of_get_property(np, "ibm,chip-id", NULL)))
+		np = of_get_next_parent(np);
+	if (!np)
+		return -ENODEV;
+	chipid = be32_to_cpup(prop);
+	of_node_put(np);
+
+	dev_info(&dev->dev, "capi: Found ibm,chip-id: %#llx\n", chipid);
+
+	/* cappid 0:2 nodeid 3:5 chipid */
+	/* psl_dsnctl = 0x02e8100000000000ULL | (node << (63-2)) | (pos << (63-5)); */
+	psl_dsnctl = 0x02e8100000000000ULL | (chipid << (63-5));
+
+	capi_p1_write(adapter, CAPI_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
+	capi_p1_write(adapter, CAPI_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL); /* snoop write mask */
+	capi_p1_write(adapter, CAPI_PSL_FIR_CNTL, 0x0800000000000000ULL); /* set fir_accum */
+
+#if 0
+	capi_p1_write(adapter, CAPI_PSL_TRACERD, 0x0000F0FC00000000ULL); /* for debugging with trace arrays */
+#else
+	/* changes recommended per JT and Yoanna 11/15/2013 */
+	capi_p1_write(adapter, CAPI_PSL_TRACE, 0x0000FF7C00000000ULL); /* for debugging with trace arrays */
+#endif
+
+	dev_info(&dev->dev, "capi: **** Workaround to disable PSL QuickTag to fix miscompares - PSL_SNWRALLOC - HW249157 ****\n");
+	capi_p1_write(adapter, CAPI_PSL_SNWRALLOC, 0x80000000FFFFFFFFULL); /* HW249157 */
+
+	dev_info(&dev->dev, "capi: **** Workaround to gate off PSL sending interrupts for bug in PHB - PSL_DSNDCTL(39) - DD1.3 will be fixed****\n");
+	dev_info(&dev->dev, "capi: **** Workaround to gate off TLBWait on interrupts - PSL_DSNDCTL(41) - DD1.3 will be fixed****\n");
+	capi_p1_write(adapter, CAPI_PSL_DSNDCTL, psl_dsnctl); /* Set to same value again? Is this necessary? */
+
+	return 0;
+}
+
+static int init_implementation_afu_regs(struct capi_afu_t *afu)
+{
+	struct pci_dev *dev = container_of(afu->adapter, struct capi_pci_t, adapter)->pdev;
+
+	capi_p1n_write(afu, CAPI_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL); /* read/write masks for this slice */
+	capi_p1n_write(afu, CAPI_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL); /* APC read/write masks for this slice */
+
+	/* changes recommended per JT and Yoanna 11/15/2013 */
+	capi_p1n_write(afu, CAPI_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
+
+	dev_info(&dev->dev, "capi: **** Workaround to lower croom value to avoid bug in AFX - PSL_RXCTL - HW252777 ****\n");
+	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0x000F000000000000ULL); /* HW252777 */
+
+	return 0;
+}
+
+static struct capi_driver_ops capi_pci_driver_ops = {
+	.init_adapter = init_implementation_adapter_regs,
+	.init_afu = init_implementation_afu_regs,
+};
+
+
+
 static void reassign_capi_bars(struct pci_dev *dev)
 {
 	const u32 *window_prop;
@@ -236,7 +312,7 @@ static void reassign_capi_bars(struct pci_dev *dev)
 static int switch_phb_to_capi(struct pci_dev *dev)
 {
 	struct device_node *np;
-	struct property *prop = NULL;
+	const u64 *prop64;
 	u64 phb_id;
 	int rc;
 
@@ -245,8 +321,10 @@ static int switch_phb_to_capi(struct pci_dev *dev)
 	if (!(np = get_capi_phb_node(dev)))
 		return -ENODEV;
 
+	prop64 = of_get_property(np, "ibm,opal-phbid", NULL);
+
 	dev_info(&dev->dev, "device tree name: %s\n", np->name);
-	phb_id = be64_to_cpup(prop->value);
+	phb_id = be64_to_cpup(prop64);
 	dev_info(&dev->dev, "PHB-ID  : 0x%016llx\n", phb_id);
 
 	rc = opal_pci_set_phb_capi_mode(phb_id, 1);
@@ -361,21 +439,28 @@ int init_capi_pci(struct pci_dev *dev)
 	u64 p1_base, p1_size;
 	u64 p2_base, p2_size;
 	int vsec = find_capi_vsec(dev);
+	struct capi_pci_t *wrap;
 	struct capi_t *adapter;
 	u32 afu_desc_off, afu_desc_size;
 	u32 ps_off, ps_size;
 	u32 nIRQs;
 	u8 nAFUs;
 	int slice;
-	int rc;
+	int rc = -EBUSY;
 	int err_hwirq, afu_irq_base;
 
-if (0) {
+	if (!(wrap = kmalloc(sizeof(struct capi_pci_t), GFP_KERNEL))) {
+		rc = -ENOMEM;
+		goto err1;
+	}
+	memset(wrap, 0, sizeof(struct capi_pci_t));
+	wrap->pdev = dev;
+	adapter = &wrap->adapter;
+
 	if (pci_request_region(dev, 2, "priv 2 regs"))
 		goto err1;
 	if (pci_request_region(dev, 0, "priv 1 regs"))
 		goto err2;
-}
 
 	p1_base = pci_resource_start(dev, 2);
 	p1_size = pci_resource_len(dev, 2);
@@ -404,9 +489,9 @@ if (0) {
 
 	err_hwirq = alloc_hwirqs(dev, 1);
 
-	if ((rc = capi_alloc_adapter(&adapter, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
+	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
 		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
-		return rc;
+		goto err3;
 	}
 
 	for (slice = 0; slice < nAFUs; slice++) {
@@ -434,15 +519,20 @@ if (0) {
 			      psn_base, ps_size * 64 * 1024,
 			      afu_irq_base, nIRQs + 1))) {
 			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
-			return rc;
+			goto err4;
 		}
 	}
 
 	return 0;
+err4:
+	/* FIXME: Cleanup AFUs */
+err3:
+	pci_release_region(dev, 0);
 err2:
 	pci_release_region(dev, 2);
 err1:
-	return -EBUSY;
+	kfree(wrap);
+	return rc;
 }
 
 static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
@@ -494,6 +584,8 @@ DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_IBM, 0x0477, capi_early_fixup);
 static void capi_remove(struct pci_dev *dev)
 {
 	dev_warn(&dev->dev, "pci remove\n");
+
+	/* FIXME: Free allocated adapters */
 
 	/* TODO: Implement everything from Documentation/PCI/pci.txt */
 

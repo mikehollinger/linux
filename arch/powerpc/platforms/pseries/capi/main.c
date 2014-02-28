@@ -9,7 +9,6 @@
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/list.h>
-#include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/of.h>
 #include <asm/cputable.h>
@@ -17,7 +16,7 @@
 #include "capi.h"
 
 static LIST_HEAD(adapter_list);
-const struct capi_ops *capi_ops;
+const struct capi_backend_ops *capi_ops;
 
 int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1)
 {
@@ -117,21 +116,26 @@ int capi_get_num_adapters(void)
 	return i;
 }
 
-static int
-capi_init_adapter(struct capi_t *adapter,
-		int slices, u64 handle,
-		u64 p1_base, u64 p1_size,
-		u64 p2_base, u64 p2_size,
-		irq_hw_number_t err_hwirq)
+/* FIXME: The calling convention here is a mess and needs to be cleaned up.
+ * Maybe better to have the caller fill in the struct and call us? */
+int capi_init_adapter(struct capi_t *adapter,
+		     struct capi_driver_ops *driver,
+		     int slices, u64 handle,
+		     u64 p1_base, u64 p1_size,
+		     u64 p2_base, u64 p2_size,
+		     irq_hw_number_t err_hwirq)
 {
 	int result;
 	int adapter_num;
 
-	pr_devel("---------- capi_init_adapter called ---------\n");
+	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx err: %#lx",
+			handle, p1_base, p1_size, p2_base, p2_size, err_hwirq);
+
 
 	/* FIXME TODO: Ensure this can't change until the adapter is added to the list! */
 	adapter_num = capi_get_num_adapters();
 
+	adapter->driver = driver;
 	adapter->device.parent = NULL; /* FIXME: Set to PHB on Sapphire? */
 	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
 	adapter->device.bus = &capi_bus_type;
@@ -155,7 +159,9 @@ capi_init_adapter(struct capi_t *adapter,
 	if (add_capi_dev(adapter, adapter_num))
 		return -1;
 
-	pr_devel("---------- capi_init_adapter done ---------\n");
+	list_add_tail(&(adapter)->list, &adapter_list);
+
+	pr_devel("capi_init_adapter done\n");
 
 	return 0;
 }
@@ -189,46 +195,6 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 			psn_base, psn_size,
 			irq_start, irq_count);
 }
-
-/* FIXME: The calling convention here is a mess and needs to be cleaned up.
- * Maybe better to have the caller alloc the struct, fill it what it need and
- * call us? */
-int capi_alloc_adapter(struct capi_t **adapter,
-		       int slices, u64 handle,
-		       u64 p1_base, u64 p1_size,
-		       u64 p2_base, u64 p2_size,
-		       irq_hw_number_t err_hwirq)
-{
-	int rc;
-
-	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx err: %#lx",
-			handle, p1_base, p1_size, p2_base, p2_size, err_hwirq);
-
-	if (!(*adapter = kmalloc(sizeof(struct capi_t), GFP_KERNEL)))
-		return -ENOMEM;
-	memset(*adapter, 0, sizeof(struct capi_t));
-
-	if ((rc = capi_init_adapter(*adapter, slices, handle,
-				    p1_base, p1_size,
-				    p2_base, p2_size,
-				    err_hwirq))) {
-		pr_err("Error initialising CAPI adapter\n");
-		kfree(*adapter);
-		*adapter = NULL;
-		return rc;
-	}
-	list_add_tail(&(*adapter)->list, &adapter_list);
-
-	return 0;
-}
-
-#if 0
-static void capi_free_adapter(struct capi_t *adapter)
-{
-	/* TODO */
-}
-EXPORT_SYMBOL(capi_free_adapter);
-#endif
 
 struct bus_type capi_bus_type = {
 	.name = "capi",
@@ -285,7 +251,6 @@ static void exit_capi(void)
 		if (capi_ops->release_adapter)
 			capi_ops->release_adapter(adapter);
 		list_del(&adapter->list);
-		kfree(adapter);
 	}
 
 	unregister_capi_dev();

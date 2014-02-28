@@ -200,7 +200,7 @@ out:
 	return rc;
 }
 
-static const struct capi_ops capi_hv_ops = {
+static const struct capi_backend_ops capi_hv_ops = {
 	.init_adapter = init_adapter_hv,
 	.init_afu = init_afu_hv,
 	.init_dedicated_process = init_dedicated_process_hv,

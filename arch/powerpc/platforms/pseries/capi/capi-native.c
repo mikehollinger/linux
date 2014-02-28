@@ -104,13 +104,14 @@ void psl_purge(struct capi_afu_t *afu)
 		       PSL_CNTL & ~CAPI_PSL_CNTL_An_Pc);
 }
 
-
 static int
 init_adapter_native(struct capi_t *adapter, u64 unused,
 		    u64 p1_base, u64 p1_size,
 		    u64 p2_base, u64 p2_size,
 		    irq_hw_number_t err_hwirq)
 {
+	int rc;
+
 	pr_devel("capi_mmio_p1:        ");
 	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
 		return -ENOMEM;
@@ -118,6 +119,11 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 	if (p2_base) {
 		if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
 			return -ENOMEM;
+	}
+
+	if (adapter->driver && adapter->driver->init_adapter) {
+		if ((rc = adapter->driver->init_adapter(adapter)))
+			return rc;
 	}
 
 	adapter->err_hwirq = err_hwirq;
@@ -142,6 +148,8 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 		u64 psn_base, u64 psn_size,
 		irq_hw_number_t irq_start, irq_hw_number_t irq_count)
 {
+	int rc;
+
 	if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
 		goto err;
 	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
@@ -151,10 +159,15 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 	afu->psn_phys = psn_base;
 	afu->psn_size = psn_size;
 
+	afu_register_irqs(afu, irq_start, irq_count);
+
+	if (afu->adapter->driver && afu->adapter->driver->init_afu) {
+		if ((rc = afu->adapter->driver->init_afu(afu)))
+			return rc;
+	}
+
 	afu_disable(afu);
 	psl_purge(afu);
-
-	afu_register_irqs(afu, irq_start, irq_count);
 
 	return 0;
 
@@ -326,7 +339,7 @@ static int ack_irq_native(struct capi_afu_t *afu, u64 tfc, u64 psl_reset_mask)
 }
 
 
-static const struct capi_ops capi_native_ops = {
+static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
 	.init_dedicated_process = init_dedicated_process_native,

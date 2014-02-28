@@ -62,36 +62,41 @@ static const capi_p1_reg_t CAPI_PSL_TLBIA   = {0x00A8};
 static const capi_p1_reg_t CAPI_PSL_AFUSEL  = {0x00B0};
 
 /* 0x00C0:7EFF Implementation dependent area */
-static const capi_p1_reg_t CAPI_PSL_FIR1    = {0x0100};
-static const capi_p1_reg_t CAPI_PSL_FIR2    = {0x0108};
-static const capi_p1_reg_t CAPI_PSL_FIR_CNTL= {0x0148};
-static const capi_p1_reg_t CAPI_PSL_TRACE   = {0x0170};
+static const capi_p1_reg_t CAPI_PSL_FIR1      = {0x0100};
+static const capi_p1_reg_t CAPI_PSL_FIR2      = {0x0108};
+static const capi_p1_reg_t CAPI_PSL_FIR_CNTL  = {0x0148};
+static const capi_p1_reg_t CAPI_PSL_DSNDCTL   = {0x0150};
+static const capi_p1_reg_t CAPI_PSL_SNWRALLOC = {0x0158};
+static const capi_p1_reg_t CAPI_PSL_TRACE     = {0x0170};
 /* 0x7F00:7FFF Reserved PCIe MSI-X Pending Bit Array area */
 /* 0x8000:FFFF Reserved PCIe MSI-X Table Area */
 
 /* PSL Slice Privilege 1 Memory Map */
 /* Configuration Area */
-static const capi_p1n_reg_t CAPI_PSL_SR_An         = {0x00};
-static const capi_p1n_reg_t CAPI_PSL_LPID_An       = {0x08};
-static const capi_p1n_reg_t CAPI_PSL_AMBAR_An      = {0x10};
-static const capi_p1n_reg_t CAPI_PSL_SPOffset_An   = {0x18};
-static const capi_p1n_reg_t CAPI_PSL_PSL_ID_An     = {0x20};
+static const capi_p1n_reg_t CAPI_PSL_SR_An          = {0x00};
+static const capi_p1n_reg_t CAPI_PSL_LPID_An        = {0x08};
+static const capi_p1n_reg_t CAPI_PSL_AMBAR_An       = {0x10};
+static const capi_p1n_reg_t CAPI_PSL_SPOffset_An    = {0x18};
+static const capi_p1n_reg_t CAPI_PSL_PSL_ID_An      = {0x20};
 /* Memory Management and Lookaside Buffer Management */
-static const capi_p1n_reg_t CAPI_PSL_SDR_An        = {0x30};
-static const capi_p1n_reg_t CAPI_PSL_AMOR_An       = {0x38};
+static const capi_p1n_reg_t CAPI_PSL_SDR_An         = {0x30};
+static const capi_p1n_reg_t CAPI_PSL_AMOR_An        = {0x38};
 /* Pointer Area */
-static const capi_p1n_reg_t CAPI_HAURP_An          = {0x80};
-static const capi_p1n_reg_t CAPI_PSL_SPAP_An       = {0x88};
-static const capi_p1n_reg_t CAPI_PSL_LLCMD_An      = {0x90};
+static const capi_p1n_reg_t CAPI_HAURP_An           = {0x80};
+static const capi_p1n_reg_t CAPI_PSL_SPAP_An        = {0x88};
+static const capi_p1n_reg_t CAPI_PSL_LLCMD_An       = {0x90};
 /* Control Area */
-static const capi_p1n_reg_t CAPI_PSL_CNTL_An       = {0xA0};
-static const capi_p1n_reg_t CAPI_PSL_CtxTime_An    = {0xA8};
+static const capi_p1n_reg_t CAPI_PSL_CNTL_An        = {0xA0};
+static const capi_p1n_reg_t CAPI_PSL_CtxTime_An     = {0xA8};
 static const capi_p1n_reg_t CAPI_PSL_IVTE_Offset_An = {0xB0};
-static const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An = {0xB8};
+static const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An  = {0xB8};
 /* 0xC0:FF Implementation Dependent Area */
-static const capi_p1n_reg_t CAPI_PSL_FIR_SLICE_An  = {0xC0};
-static const capi_p1n_reg_t CAPI_PSL_R_FIR_SLICE_An= {0xC8};
-static const capi_p1n_reg_t CAPI_PSL_SLICE_TRACE   = {0xE8};
+static const capi_p1n_reg_t CAPI_PSL_FIR_SLICE_An   = {0xC0};
+static const capi_p1n_reg_t CAPI_PSL_R_FIR_SLICE_An = {0xC8};
+static const capi_p1n_reg_t CAPI_PSL_APCALLOC_A     = {0xD0};
+static const capi_p1n_reg_t CAPI_PSL_COALLOC_A      = {0xD8};
+static const capi_p1n_reg_t CAPI_PSL_RXCTL_A        = {0xE0};
+static const capi_p1n_reg_t CAPI_PSL_SLICE_TRACE    = {0xE8};
 
 /* PSL Slice Privilege 2 Memory Map */
 /* Configuration and Control Area */
@@ -276,6 +281,9 @@ struct capi_afu_t {
 	u64 process_token;
 };
 
+
+struct capi_driver_ops;
+
 struct capi_t {
 	union {
 		struct { /* hv */
@@ -286,6 +294,7 @@ struct capi_t {
 		};
 		u64 handle;
 	};
+	struct capi_driver_ops *driver;
 	struct capi_afu_t slice[CAPI_MAX_SLICES];
 	struct cdev cdev;
 	struct cdev afu_cdev;
@@ -295,6 +304,11 @@ struct capi_t {
 	struct dentry *psl_err_chk;
 	struct dentry *afx_chk;
 	struct list_head list;
+};
+
+struct capi_driver_ops {
+	int (*init_adapter) (struct capi_t *adapter);
+	int (*init_afu) (struct capi_afu_t *afu);
 };
 
 struct capi_ivte_ranges {
@@ -372,11 +386,12 @@ static inline void __iomem * _capi_afu_ps_addr(struct capi_afu_t *afu, int reg)
 	_capi_reg_read(_capi_afu_ps_addr(afu, reg))
 
 /* TODO: Clean up the alloc/init process */
-int capi_alloc_adapter(struct capi_t **adapter,
-		       int slices, u64 handle,
-		       u64 p1_base, u64 p1_size,
-		       u64 p2_base, u64 p2_size,
-		       irq_hw_number_t err_hwirq);
+int capi_init_adapter(struct capi_t *adapter,
+		      struct capi_driver_ops *driver,
+		      int slices, u64 handle,
+		      u64 p1_base, u64 p1_size,
+		      u64 p2_base, u64 p2_size,
+		      irq_hw_number_t err_hwirq);
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
 		  u64 p1n_base, u64 p1n_size,
@@ -428,7 +443,7 @@ struct capi_irq_info {
 	u64 padding[3]; /* to match the expected retbuf size for plpar_hcall9 */
 };
 
-struct capi_ops {
+struct capi_backend_ops {
 	int (*init_adapter) (struct capi_t *adapter, u64 handle,
 			     u64 p1_base, u64 p1_size,
 			     u64 p2_base, u64 p2_size,
@@ -450,7 +465,7 @@ struct capi_ops {
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);
 };
-extern const struct capi_ops *capi_ops;
+extern const struct capi_backend_ops *capi_ops;
 
 /* XXX: LAB DEBUGGING */
 void capi_stop_trace(struct capi_t *capi);

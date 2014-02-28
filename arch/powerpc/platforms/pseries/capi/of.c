@@ -2,6 +2,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/slab.h>
 #include <linux/of.h>
 
 #include "capi.h"
@@ -85,6 +86,9 @@ static int __init init_capi_of(void)
 
 	pr_devel("init_capi_of\n");
 
+	if (!(adapter = kmalloc(sizeof(struct capi_t), GFP_KERNEL)))
+		return -ENOMEM;
+
 	while ((np = of_find_compatible_node(np, NULL, "ibm,coherent-platform-facility"))) {
 
 		if (cpu_has_feature(CPU_FTR_HVMODE)) {
@@ -101,7 +105,7 @@ static int __init init_capi_of(void)
 		/* FIXME: Restructure to avoid needing to iterate over AFUs twice */
 		for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++);
 
-		if ((ret = capi_alloc_adapter(&adapter, slice, handle,
+		if ((ret = capi_init_adapter(adapter, NULL, slice, handle,
 					      p1_base, p1_size,
 					      0, 0, err_hwirq)))
 			goto bail;
@@ -115,7 +119,7 @@ static int __init init_capi_of(void)
 bail:
 	of_node_put(afu_np);
 	of_node_put(np);
-	return 0;
+	return ret;
 }
 
 static void exit_capi_of(void)
