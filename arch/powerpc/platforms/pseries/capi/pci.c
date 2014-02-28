@@ -153,7 +153,29 @@ static int cmpbar(const void *p1, const void *p2)
 	return l1 - l2;
 }
 
-static void reassign_capi_bars(struct pci_dev *dev, struct device_node *np)
+static struct device_node * get_capi_phb_node(struct pci_dev *dev)
+{
+	struct device_node *np;
+	struct property *prop = NULL;
+
+	np = of_node_get(pci_device_to_OF_node(dev));
+
+	/* Scan up the tree looking for the PHB node */
+	while (np) {
+		if ((prop = of_find_property(np, "ibm,opal-phbid", NULL)))
+			break;
+		np = of_get_next_parent(np);
+	}
+
+	if (!prop) {
+		of_node_put(np);
+		return NULL;
+	}
+
+	return np;
+}
+
+static void reassign_capi_bars(struct pci_dev *dev)
 {
 	const u32 *window_prop;
 	LIST_HEAD(head);
@@ -162,8 +184,14 @@ static void reassign_capi_bars(struct pci_dev *dev, struct device_node *np)
 	int bar, i;
 	struct resource * bars[2];
 	resource_size_t len;
+	struct device_node *np;
 
 	dev_warn(&dev->dev, "Reassign CAPI BARs\n");
+
+	if (!(np = get_capi_phb_node(dev))) {
+		dev_warn(&dev->dev, "WARNING: Unable to get capi phb node, using BAR assignment from Linux\n");
+		return;
+	}
 
 	/*
 	 * MASSIVE HACK: CAPI requires the m64 address space for BAR
@@ -203,8 +231,6 @@ static void reassign_capi_bars(struct pci_dev *dev, struct device_node *np)
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
 	dev_info(&dev->dev, "wrote BAR4/5\n");
-
-
 }
 
 static int switch_phb_to_capi(struct pci_dev *dev)
@@ -212,21 +238,12 @@ static int switch_phb_to_capi(struct pci_dev *dev)
 	struct device_node *np;
 	struct property *prop = NULL;
 	u64 phb_id;
-	int rc = -ENODEV;
+	int rc;
 
 	dev_info(&dev->dev, "switch phb to capi\n");
 
-	np = of_node_get(pci_device_to_OF_node(dev));
-
-	/* Scan up the tree looking for the PHB node */
-	while (np) {
-		if ((prop = of_find_property(np, "ibm,opal-phbid", NULL)))
-			break;
-		np = of_get_next_parent(np);
-	}
-
-	if (!np || !prop)
-		goto out;
+	if (!(np = get_capi_phb_node(dev)))
+		return -ENODEV;
 
 	dev_info(&dev->dev, "device tree name: %s\n", np->name);
 	phb_id = be64_to_cpup(prop->value);
@@ -235,10 +252,6 @@ static int switch_phb_to_capi(struct pci_dev *dev)
 	rc = opal_phb_to_capi(phb_id);
 	dev_info(&dev->dev, "opal_phb_to_capi: %i", rc);
 
-
-	reassign_capi_bars(dev, np);
-
-out:
 	of_node_put(np);
 	return rc;
 }
@@ -439,6 +452,8 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	dev_info(&dev->dev, "pci probe\n");
 
 	dump_capi_config_space(dev);
+
+	reassign_capi_bars(dev);
 
 	if ((rc = enable_capi_protocol(dev))) {
 		dev_err(&dev->dev, "enable_capi_protocol failed: %i\n", rc);

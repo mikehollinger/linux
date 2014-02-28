@@ -191,10 +191,6 @@ static irq_handler_t capi_irq_handlers[] = {
 unsigned int
 capi_map_irq(irq_hw_number_t hwirq, irq_handler_t handler, void *cookie)
 {
-#if 0
-	/* Neuter this - need to hook into phb */
-	return 0;
-#else
 	unsigned int virq;
 	int result;
 
@@ -214,7 +210,6 @@ capi_map_irq(irq_hw_number_t hwirq, irq_handler_t handler, void *cookie)
 	}
 
 	return virq;
-#endif
 }
 
 void capi_unmap_irq(unsigned int virq, void *cookie)
