@@ -88,6 +88,7 @@ static int __init init_capi_of(void)
 
 	if (!(adapter = kmalloc(sizeof(struct capi_t), GFP_KERNEL)))
 		return -ENOMEM;
+	memset(adapter, 0, sizeof(struct capi_t));
 
 	while ((np = of_find_compatible_node(np, NULL, "ibm,coherent-platform-facility"))) {
 
