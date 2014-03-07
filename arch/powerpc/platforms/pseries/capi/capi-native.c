@@ -202,6 +202,79 @@ static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
 	capi_p2n_write(afu, CAPI_SSTP1_An, sstp1);
 }
 
+static int alloc_spa(int max_procs)
+{
+	get_zeroed_page
+}
+
+static int
+init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
+			 u64 wed, u64 amr)
+{
+	struct capi_process_element *elem;
+	u64 sr, sstp0, sstp1;
+	int result;
+	int i;
+
+	/* FIXME: Reject if already enabled in different mode, max processes
+	 * exceeded, etc */
+
+	// capi_p1n_write(afu, CAPI_PSL_SPAP_An, 0); /* XXX FIXME TODO!!!!! */
+	capi_p1n_write(afu, CAPI_PSL_CNTL_An, CAPI_PSL_CNTL_An_PM_AFU);
+	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
+
+	elem->ctxtime = cpu_to_be64(0); /* disable */
+	elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
+	elem->haurp = cpu_to_be64(0); /* disable */
+	elem->sdr = cpu_to_be64(mfspr(SPRN_SDR1));
+
+	sr = CAPI_PSL_SR_An_SC;
+	if (mfspr(SPRN_LPCR) & LPCR_TC)
+		sr |= CAPI_PSL_SR_An_TC;
+	if (!kernel) {
+		/* GA1: HV=0, PR=1, R=1 */
+		sr |= CAPI_PSL_SR_An_PR | CAPI_PSL_SR_An_R;
+		if (!test_tsk_thread_flag(current, TIF_32BIT))
+			sr |= CAPI_PSL_SR_An_SF;
+		capi_p2n_write(afu, CAPI_PSL_PID_TID_An, (u64)current->pid << 32); /* Not using tid field */
+	} else { /* Initialise for kernel */
+		WARN_ONCE(1, "CAPI initialised for kernel, this won't work on GA1 hardware!\n");
+		sr |= (mfmsr() & MSR_SF) | CAPI_PSL_SR_An_HV;
+		capi_p2n_write(afu, CAPI_PSL_PID_TID_An, 0);
+	}
+	elem->sr = cpu_to_be64(sr);
+
+	elem->common->csrp = cpu_to_be64(0); /* disable */
+	elem->common->aurp0 = cpu_to_be64(0); /* disable */
+	elem->common->aurp1 = cpu_to_be64(0); /* disable */
+
+	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1)))
+		return result;
+
+	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
+	capi_prefault(afu, wed);
+
+	elem->common->sstp0 = cpu_to_be64(sstp0);
+	elem->common->sstp1 = cpu_to_be64(sstp1);
+
+	for (i = 0; i < 4; i++) {
+		elem->ivte->offsets[i] = cpu_to_be16(afu->hwirq[i] & 0xffff);
+		elem->ivte->ranges[i] = cpu_to_be16(1);
+	}
+
+	elem->common->amr = cpu_to_be64(amr);
+	elem->common->wed = cpu_to_be64(wed);
+
+	/* XXX TODO FIXME: Set up SPAP and enable AFU */
+#if 0
+	afu_reset(afu);
+
+	afu_enable(afu);
+
+	return 0;
+#endif
+}
+
 static int
 init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 			      u64 wed, u64 amr)
@@ -218,12 +291,7 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 	/* Hypervisor initialise: */
 	capi_p1n_write(afu, CAPI_PSL_CtxTime_An, 0); /* disable */
 	capi_p1n_write(afu, CAPI_PSL_SPAP_An, 0);    /* disable */
-	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF); /* XXX: Is 0 or 1 allowed? */
-
-	capi_p1n_write(afu, CAPI_PSL_SR_An,
-		       CAPI_PSL_SR_An_SF |
-		       CAPI_PSL_SR_An_PR | /* GA1: HV=0,PR=1 */
-		       CAPI_PSL_SR_An_R);  /* GA1: R=1 */
+	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
 
 	capi_p1n_write(afu, CAPI_PSL_LPID_An, mfspr(SPRN_LPID));
 	capi_p1n_write(afu, CAPI_HAURP_An, 0);       /* disable */

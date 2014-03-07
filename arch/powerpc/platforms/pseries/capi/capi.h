@@ -138,11 +138,12 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 
 /****** CAPI_PSL_CNTL_An *****************************************************/
 /* Programming Mode: */
-#define CAPI_PSL_CNTL_An_PM_MASK     (0x3ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_Shared   (0x0ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_OS       (0x1ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_Process  (0x2ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_Address  (0x3ull << (63-31))
+#define CAPI_PSL_CNTL_An_PM_MASK     (0xffffull << (63-31))
+#define CAPI_PSL_CNTL_An_PM_Shared   (0x0000ull << (63-31))
+#define CAPI_PSL_CNTL_An_PM_OS       (0x0001ull << (63-31))
+#define CAPI_PSL_CNTL_An_PM_Process  (0x0002ull << (63-31))
+#define CAPI_PSL_CNTL_An_PM_AFU      (0x0004ull << (63-31))
+#define CAPI_PSL_CNTL_An_PM_AFU_PBT  (0x0104ull << (63-31))
 /* Purge Status (ro) */
 #define CAPI_PSL_CNTL_An_Ps_MASK     (0x3ull << (63-39))
 #define CAPI_PSL_CNTL_An_Ps_Pending  (0x1ull << (63-39))
