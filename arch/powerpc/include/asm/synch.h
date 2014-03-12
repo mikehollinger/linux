@@ -24,6 +24,11 @@ static inline void isync(void)
 {
 	__asm__ __volatile__ ("isync" : : : "memory");
 }
+
+static inline void lwsync(void)
+{
+	__asm__ __volatile__ ("lwsync" : : : "memory");
+}
 #endif /* __ASSEMBLY__ */
 
 #if defined(__powerpc64__)

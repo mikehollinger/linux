@@ -188,7 +188,7 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 	elem->common.amr            = cpu_to_be64(amr);
 	elem->pslVirtualIsn         = cpu_to_be32(afu->hwirq[0]);
 	elem->applicationVirtualIsnBitmap[0] = 0x70; /* Initially use three (after the PSL irq), for compatibility with old CAIA */
-	elem->common.workElementDescriptor = cpu_to_be64(wed);
+	elem->common.wed = cpu_to_be64(wed);
 
 	if ((rc = capi_h_attach_process(afu->handle, elem, &afu->process_token)))
 		goto out;

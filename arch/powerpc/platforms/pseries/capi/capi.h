@@ -125,6 +125,11 @@ static const capi_p2n_reg_t CAPI_AFU_ERR_An     = {0x098};
 static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 /* 0x0C0:FFF Implementation Dependent Area */
 
+#define CAPI_PSL_SPAP_Addr 0x0ffffffffffff000ULL
+#define CAPI_PSL_SPAP_Size 0x0000000000000ff0ULL
+#define CAPI_PSL_SPAP_Size_Shift 4
+#define CAPI_PSL_SPAP_V    0x0000000000000001ULL
+
 /****** CAPI_PSL_SR_An ******************************************************/
 #define CAPI_PSL_SR_An_SF  MSR_SF            /* 64bit */
 #define CAPI_PSL_SR_An_TA  (1ull << (63-1))  /* Tags active,   GA1: 0 */
@@ -135,6 +140,15 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_PSL_SR_An_US  (1ull << (63-56)) /* User state,    GA1: X */
 #define CAPI_PSL_SR_An_SC  (1ull << (63-58)) /* Segment Table secondary hash */
 #define CAPI_PSL_SR_An_R   MSR_DR            /* Relocate,      GA1: 1 */
+
+/****** CAPI_PSL_LLCMD_An ****************************************************/
+#define CAPI_LLCMD_TERMINATE   0x0001000000000000ULL
+#define CAPI_LLCMD_REMOVE      0x0002000000000000ULL
+#define CAPI_LLCMD_SUSPEND     0x0003000000000000ULL
+#define CAPI_LLCMD_RESUME      0x0004000000000000ULL
+#define CAPI_LLCMD_ADD         0x0005000000000000ULL
+#define CAPI_LLCMD_UPDATE      0x0006000000000000ULL
+#define CAPI_LLCMD_HANDLE_MASK 0x000000000000ffffULL
 
 /****** CAPI_PSL_CNTL_An *****************************************************/
 /* Programming Mode: */
@@ -217,6 +231,30 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_PSL_TFC_An_AE (1ull << (63-30)) /* Restart PSL with address error */
 #define CAPI_PSL_TFC_An_R  (1ull << (63-31)) /* Restart PSL transaction */
 
+/* capi_process_element->software_status */
+#define CAPI_PE_SOFTWARE_STATE_V (1ul << (31 -  0)) /* Valid */
+#define CAPI_PE_SOFTWARE_STATE_C (1ul << (31 - 29)) /* Complete */
+#define CAPI_PE_SOFTWARE_STATE_S (1ul << (31 - 30)) /* Suspend */
+#define CAPI_PE_SOFTWARE_STATE_T (1ul << (31 - 31)) /* Terminate */
+
+/* SPA->sw_command_status */
+#define CAPI_SPA_SW_CMD_MASK         0xffff000000000000ULL
+#define CAPI_SPA_SW_CMD_TERMINATE    0x0001000000000000ULL
+#define CAPI_SPA_SW_CMD_REMOVE       0x0002000000000000ULL
+#define CAPI_SPA_SW_CMD_SUSPEND      0x0003000000000000ULL
+#define CAPI_SPA_SW_CMD_RESUME       0x0004000000000000ULL
+#define CAPI_SPA_SW_CMD_ADD          0x0005000000000000ULL
+#define CAPI_SPA_SW_CMD_UPDATE       0x0006000000000000ULL
+#define CAPI_SPA_SW_STATE_MASK       0x0000ffff00000000ULL
+#define CAPI_SPA_SW_STATE_TERMINATED 0x0000000100000000ULL
+#define CAPI_SPA_SW_STATE_REMOVED    0x0000000200000000ULL
+#define CAPI_SPA_SW_STATE_SUSPENDED  0x0000000300000000ULL
+#define CAPI_SPA_SW_STATE_RESUMED    0x0000000400000000ULL
+#define CAPI_SPA_SW_STATE_ADDED      0x0000000500000000ULL
+#define CAPI_SPA_SW_STATE_UPDATED    0x0000000600000000ULL
+#define CAPI_SPA_SW_PSL_ID_MASK      0x00000000ffff0000ULL
+#define CAPI_SPA_SW_LINK_MASK        0x000000000000ffffULL
+
 #define CAPI_MAX_SLICES 4
 #define CAPI_SLICE_IRQS 4
 #define MAX_AFU_MMIO_REGS 3
@@ -259,6 +297,15 @@ struct capi_afu_t {
 
 	struct capi_sste *sstp;
 	unsigned int sst_size, sst_lru;
+
+	/* Only the first part of the SPA is used for the process element
+	 * linked list. The only other part that software needs to worry about
+	 * is sw_command_status, which we store a separate pointer to.
+	 * Everything else in the SPA is only used by hardware */
+	struct capi_process_element *spa;
+	unsigned int spa_size;
+	int max_procs;
+	__be64 *sw_command_status;
 
 	/* XXX: Is it possible to need multiple work items at once? */
 	struct work_struct work;
@@ -313,8 +360,8 @@ struct capi_driver_ops {
 };
 
 struct capi_ivte_ranges {
-	__be32 offsets[4];
-	__be32 ranges[4];
+	__be16 offsets[4];
+	__be16 ranges[4];
 };
 
 struct capi_process_element_common {
@@ -327,8 +374,7 @@ struct capi_process_element_common {
 	__be64 sstp1;
 	__be64 amr;
 	u8     reserved3[4];
-	__be64 workElementDescriptor;
-	u8     reserved4[4];
+	__be64 wed;
 } __packed;
 
 struct capi_process_element {
@@ -340,6 +386,7 @@ struct capi_process_element {
 	struct capi_ivte_ranges ivte;
 	__be32 lpid;
 	struct capi_process_element_common common;
+	__be32 software_state;
 } __packed;
 
 #define _capi_reg_write(addr, val) \
@@ -458,6 +505,8 @@ struct capi_backend_ops {
 
 	int (*init_dedicated_process) (struct capi_afu_t *afu, bool kernel,
 			               u64 wed, u64 amr);
+	int (*init_afu_directed) (struct capi_afu_t *afu, bool kernel,
+			          u64 wed, u64 amr);
 	int (*detach_process) (struct capi_afu_t *afu);
 
 	int (*get_irq) (struct capi_afu_t *afu, struct capi_irq_info *info);

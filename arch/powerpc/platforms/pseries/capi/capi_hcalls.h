@@ -66,7 +66,7 @@ struct capi_process_element_hcall {
 	u8     applicationVirtualIsnBitmap[256];
 	u8     reserved1[144];
 	struct capi_process_element_common common;
-	u8     reserved4[8];
+	u8     reserved4[12];
 } __packed;
 
 #define CAPI_H_WAIT_UNTIL_DONE(rc, ret, fn, ...)                             \

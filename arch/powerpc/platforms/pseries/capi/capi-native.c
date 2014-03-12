@@ -5,6 +5,7 @@
 #endif
 
 #include <linux/sched.h>
+#include <asm/synch.h>
 
 #include "capi.h"
 #include "capi_hcalls.h"
@@ -202,9 +203,77 @@ static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
 	capi_p2n_write(afu, CAPI_SSTP1_An, sstp1);
 }
 
-static int alloc_spa(int max_procs)
+static int alloc_spa(struct capi_afu_t *afu, int max_procs)
 {
-	get_zeroed_page
+	u64 spap;
+
+	/* TODO: Calculate required size to fit that many procs and try to
+	 * allocate enough contiguous pages to support it, but fall back to
+	 * less pages if allocation is not possible.
+	 */
+	if (!(afu->spa = (struct capi_process_element *)get_zeroed_page(GFP_KERNEL))) {
+		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
+		return -ENOMEM;
+	}
+	afu->spa_size = PAGE_SIZE;
+
+	/* From the CAIA:
+	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
+	 * Most of that junk is really just an overly-complicated way of saying
+	 * the last 256 bytes are __aligned(128), so it's really:
+	 *    end_of_SPA_area = end_of_PSL_queue_area + __aligned(128) 255
+	 * and
+	 *    end_of_PSL_queue_area = SPA_Base + ((n+4) * 128) + (n*8) - 1
+	 * so
+	 *    sizeof(SPA) = ((n+4) * 128) + (n*8) + __aligned(128) 256
+	 * Ignore the alignment (which is safe in this case as long as we are
+	 * careful with our rounding) and solve for n:
+	 */
+	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
+
+	afu->sw_command_status = (__be64 *)(afu->spa + (afu->max_procs * 128) + 16);
+
+	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p\n", afu->spa, afu->max_procs, afu->sw_command_status);
+
+	spap = virt_to_phys(afu->spa) & CAPI_PSL_SPAP_Addr;
+	spap |= ((afu->spa_size >> (12 - CAPI_PSL_SPAP_Size_Shift)) - 1) & CAPI_PSL_SPAP_Size;
+	spap |= CAPI_PSL_SPAP_V;
+	capi_p1n_write(afu, CAPI_PSL_SPAP_An, spap);
+
+	return 0;
+}
+
+static inline u64 pe_handle(struct capi_process_element *elem)
+{
+	return ((u64)elem >> 7) & CAPI_LLCMD_HANDLE_MASK;
+}
+
+/* TODO: Make sure all operations on the linked list are serialised to prevent
+ * races on SPA->sw_command_status */
+static int
+add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
+{
+	u64 state;
+
+	elem->software_state = CAPI_PE_SOFTWARE_STATE_V;
+	*afu->sw_command_status = 0; /* XXX: Not listed in CAIA procedure */
+	lwsync();
+	capi_p1n_write(afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | pe_handle(elem));
+
+	while (1) {
+		state = be64_to_cpup(afu->sw_command_status);
+		if (state == ~0ULL) {
+			pr_err("capi: Error adding process element to AFU\n");
+			return -1;
+		}
+		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
+			     (CAPI_SPA_SW_CMD_ADD  | CAPI_SPA_SW_STATE_ADDED | pe_handle(elem))) {
+			break;
+		}
+		cpu_relax();
+	}
+
+	return 0;
 }
 
 static int
@@ -216,10 +285,18 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	int result;
 	int i;
 
-	/* FIXME: Reject if already enabled in different mode, max processes
-	 * exceeded, etc */
+	/* FIXME:
+	 * - Add to exising SPA list if one already exists
+	 * - Reject if already enabled in different mode, max processes
+	 *   exceeded, etc
+	 */
 
-	// capi_p1n_write(afu, CAPI_PSL_SPAP_An, 0); /* XXX FIXME TODO!!!!! */
+	if (alloc_spa(afu, 1))
+		return -ENOMEM;
+
+	/* TODO: Find free entry */
+	elem = &afu->spa[0];
+
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, CAPI_PSL_CNTL_An_PM_AFU);
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
 
@@ -244,9 +321,9 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	}
 	elem->sr = cpu_to_be64(sr);
 
-	elem->common->csrp = cpu_to_be64(0); /* disable */
-	elem->common->aurp0 = cpu_to_be64(0); /* disable */
-	elem->common->aurp1 = cpu_to_be64(0); /* disable */
+	elem->common.csrp = cpu_to_be64(0); /* disable */
+	elem->common.aurp0 = cpu_to_be64(0); /* disable */
+	elem->common.aurp1 = cpu_to_be64(0); /* disable */
 
 	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1)))
 		return result;
@@ -254,25 +331,25 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
 	capi_prefault(afu, wed);
 
-	elem->common->sstp0 = cpu_to_be64(sstp0);
-	elem->common->sstp1 = cpu_to_be64(sstp1);
+	elem->common.sstp0 = cpu_to_be64(sstp0);
+	elem->common.sstp1 = cpu_to_be64(sstp1);
 
 	for (i = 0; i < 4; i++) {
-		elem->ivte->offsets[i] = cpu_to_be16(afu->hwirq[i] & 0xffff);
-		elem->ivte->ranges[i] = cpu_to_be16(1);
+		elem->ivte.offsets[i] = cpu_to_be16(afu->hwirq[i] & 0xffff);
+		elem->ivte.ranges[i] = cpu_to_be16(1);
 	}
 
-	elem->common->amr = cpu_to_be64(amr);
-	elem->common->wed = cpu_to_be64(wed);
+	elem->common.amr = cpu_to_be64(amr);
+	elem->common.wed = cpu_to_be64(wed);
 
-	/* XXX TODO FIXME: Set up SPAP and enable AFU */
-#if 0
+
+	add_process_element(afu, elem);
+#if 0	/* Not clear if I still need to enable the AFU in directed mode */
 	afu_reset(afu);
-
 	afu_enable(afu);
+#endif
 
 	return 0;
-#endif
 }
 
 static int
@@ -411,6 +488,7 @@ static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
 	.init_dedicated_process = init_dedicated_process_native,
+	.init_afu_directed = init_afu_directed_native,
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
 	.ack_irq = ack_irq_native,
