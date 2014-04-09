@@ -327,7 +327,7 @@ static int switch_phb_to_capi(struct pci_dev *dev)
 	phb_id = be64_to_cpup(prop64);
 	dev_info(&dev->dev, "PHB-ID  : 0x%016llx\n", phb_id);
 
-	rc = opal_pci_set_phb_capi_mode(phb_id, 1);
+	rc = opal_pci_set_phb_capi_mode(phb_id, 1, 0);
 	dev_info(&dev->dev, "opal_pci_set_phb_capi_mode: %i", rc);
 
 	of_node_put(np);

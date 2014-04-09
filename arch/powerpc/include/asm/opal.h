@@ -632,7 +632,7 @@ int64_t opal_set_system_attention_led(uint8_t led_action);
 int64_t opal_pci_next_error(uint64_t phb_id, uint64_t *first_frozen_pe,
 			    uint16_t *pci_error_type, uint16_t *severity);
 int64_t opal_pci_poll(uint64_t phb_id);
-int64_t opal_pci_set_phb_capi_mode(uint64_t phb_id, uint64_t mode);
+int64_t opal_pci_set_phb_capi_mode(uint64_t phb_id, uint64_t mode, uint64_t pe_number);
 
 /* Internal functions */
 extern int early_init_dt_scan_opal(unsigned long node, const char *uname, int depth, void *data);
