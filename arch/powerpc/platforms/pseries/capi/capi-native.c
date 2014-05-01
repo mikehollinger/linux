@@ -517,6 +517,7 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 	{
 		block_length = min((u64)PAGE_SIZE, length);
 		if (copy_from_user(tmp_pagealign, (void*)vaddress, block_length)) {
+			kfree(tmp_allocation);
 			return -EFAULT;
 		}
 		block_length = (block_length + 127) & (~127ull);
@@ -535,6 +536,7 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 		
 		if( (capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & (0x3ull << (63-30))) != 0)
 		{
+			kfree(tmp_allocation);
 			return -EIO;
 		}
 		
@@ -543,6 +545,7 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 		vaddress += block_length;
 		length -= block_length;
 	}
+	kfree(tmp_allocation);
 	return 0;
 }
 
