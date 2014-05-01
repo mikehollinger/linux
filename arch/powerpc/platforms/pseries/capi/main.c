@@ -219,8 +219,6 @@ static int __init init_capi(void)
 
 	pr_devel("---------- init_capi called ---------\n");
         
-        printk("init_capi2\n");
-
 	if ((ret = bus_register(&capi_bus_type))) {
 		pr_err("ERRPR: Unable to register CAPI bus type\n");
 		return ret;
