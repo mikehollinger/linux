@@ -9,9 +9,10 @@
 
 /* Argument *is* WED (DEPRECATED: 32bit applications cannot set full 64bit WED) */
 #define CAPI_OPEN_AND_RUN 0
-#define CAPI_IOCTL_OPEN_AND_RUN 0
+#define CAPI_IOCTL_OPEN_AND_RUN    0
 /* Argument is a pointer to a struct capi_ioctl_start_work */
-#define CAPI_IOCTL_START_WORK   1
+#define CAPI_IOCTL_START_WORK      1
+#define CAPI_IOCTL_LOAD_AFU_IMAGE  2
 
 struct capi_ioctl_start_work {
 	__u64 wed;
@@ -20,6 +21,11 @@ struct capi_ioctl_start_work {
 	__u32 ctx_save_size; /* In bytes */
 	__u32 reserved1;
 	__u64 reserved2;
+};
+
+struct capi_ioctl_load_afu_image {
+	__u64 vaddress;
+	__u64 length;
 };
 
 /* events from read() */

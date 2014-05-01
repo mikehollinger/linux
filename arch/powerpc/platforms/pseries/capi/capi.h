@@ -151,6 +151,7 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_LLCMD_HANDLE_MASK 0x000000000000ffffULL
 
 /****** CAPI_PSL_CNTL_An *****************************************************/
+#define CAPI_PSL_CNTL_An_CR          (0x1ull << (63-15))
 /* Programming Mode: */
 #define CAPI_PSL_CNTL_An_PM_MASK     (0xffffull << (63-31))
 #define CAPI_PSL_CNTL_An_PM_Shared   (0x0000ull << (63-31))
@@ -514,6 +515,7 @@ struct capi_backend_ops {
 
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);
+	int (*load_afu_image) (struct capi_afu_t *afu, u64 vaddress, u64 length);
 };
 extern const struct capi_backend_ops *capi_ops;
 

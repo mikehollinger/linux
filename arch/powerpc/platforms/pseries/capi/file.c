@@ -125,6 +125,20 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			afu->enabled = true;
 			return 0;
 		}
+		case CAPI_IOCTL_LOAD_AFU_IMAGE:
+		{
+			struct capi_ioctl_load_afu_image __user *uwork =
+				(struct capi_ioctl_load_afu_image __user *)arg;
+			struct capi_ioctl_load_afu_image work;
+			
+                        if (copy_from_user(&work, uwork, sizeof(struct capi_ioctl_load_afu_image)))
+                                return -EFAULT;
+			
+			result = capi_ops->load_afu_image(afu, work.vaddress, work.length);
+			if(result)
+				afu->enabled = false;
+			return result;
+		}
 	}
 	return -EINVAL;
 }
