@@ -506,13 +506,14 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_Pc);
 	while((capi_p1n_read(afu, CAPI_PSL_CNTL_An) & CAPI_PSL_CNTL_An_Ps_MASK) != CAPI_PSL_CNTL_An_Ps_Complete)
 	{
-		// delay
+		cpu_relax();
 	}
 
 	/* 3. Set PSL_CNTL_AN[CR] bit */
 	reg = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_CR);
 
+	/* Write the AFU image a page at a time. */
 	while(length)
 	{
 		block_length = min((u64)PAGE_SIZE, length);
@@ -520,6 +521,7 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 			kfree(tmp_allocation);
 			return -EFAULT;
 		}
+		/* round upto cacheline */
 		block_length = (block_length + 127) & (~127ull);
 
 		/* 4. Write address of image block to AFU_DLADDR */
@@ -531,7 +533,7 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 		/* 6. Poll for AFU download errors or completion. */
 		while( (capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & (0x7ull << (63-30))) == 0)
 		{
-			// wait
+			cpu_relax();
 		}
 
 		if( (capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & (0x3ull << (63-30))) != 0)
