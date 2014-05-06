@@ -11,7 +11,6 @@
 #include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/of.h>
-#include <linux/slab.h>
 #include <asm/cputable.h>
 
 #include "capi.h"
@@ -218,7 +217,7 @@ static int __init init_capi(void)
 	int ret = 0;
 
 	pr_devel("---------- init_capi called ---------\n");
-        
+
 	if ((ret = bus_register(&capi_bus_type))) {
 		pr_err("ERRPR: Unable to register CAPI bus type\n");
 		return ret;

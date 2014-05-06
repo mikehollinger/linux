@@ -492,27 +492,27 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 	void* tmp_pagealign;
 	u64   block_length;
 	u64   reg;
-	
+
 	tmp_allocation = (char*)kmalloc(2 * PAGE_SIZE, GFP_KERNEL);
 	tmp_pagealign = (void*)((((u64)tmp_allocation) + PAGE_SIZE - 1) & (~PAGE_SIZE));
-	
+
 	/* 1a Write AFU_CNTL_An(R)='1' */
 	/* 1b Wait for AFU_CNTL_An[RS] = '10' */
 	afu_reset(afu);
-	
+
 	/* 2a Write PSL_CNTL_An[Pc]='1' */
 	/* 2b Wait for PSL_CNTL_An[Ps]='11' */
-        reg = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
+	reg = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_Pc);
 	while((capi_p1n_read(afu, CAPI_PSL_CNTL_An) & CAPI_PSL_CNTL_An_Ps_MASK) != CAPI_PSL_CNTL_An_Ps_Complete)
 	{
 		// delay
 	}
-	
+
 	/* 3. Set PSL_CNTL_AN[CR] bit */
 	reg = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_CR);
-	
+
 	while(length)
 	{
 		block_length = min((u64)PAGE_SIZE, length);
@@ -521,27 +521,27 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 			return -EFAULT;
 		}
 		block_length = (block_length + 127) & (~127ull);
-		
+
 		/* 4. Write address of image block to AFU_DLADDR */
 		capi_p1_write(afu->adapter, CAPI_PSL_DLADDR, (u64)tmp_pagealign);
-		
+
 		/* 5. Write block size and set start download bit to AFU_DLCNTL */
 		capi_p1_write(afu->adapter, CAPI_PSL_DLCNTL, (0x1ull << (63-31)) | block_length/128);
-		
+
 		/* 6. Poll for AFU download errors or completion. */
 		while( (capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & (0x7ull << (63-30))) == 0)
 		{
 			// wait
 		}
-		
+
 		if( (capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & (0x3ull << (63-30))) != 0)
 		{
 			kfree(tmp_allocation);
 			return -EIO;
 		}
-		
+
 		/* 7. repeat steps 4-6 until complete. */
-		
+
 		vaddress += block_length;
 		length -= block_length;
 	}
