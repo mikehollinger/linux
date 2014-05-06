@@ -488,13 +488,12 @@ static int ack_irq_native(struct capi_afu_t *afu, u64 tfc, u64 psl_reset_mask)
 
 static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 length)
 {
-	void* tmp_allocation;
-	void* tmp_pagealign;
+	unsigned long tmp_allocation;
 	u64   block_length;
 	u64   reg;
+	int   rc = 0;
 
-	tmp_allocation = (char*)kmalloc(2 * PAGE_SIZE, GFP_KERNEL);
-	tmp_pagealign = (void*)((((u64)tmp_allocation) + PAGE_SIZE - 1) & (~PAGE_SIZE));
+	tmp_allocation = get_zeroed_page(GFP_KERNEL);
 
 	/* 1a Write AFU_CNTL_An(R)='1' */
 	/* 1b Wait for AFU_CNTL_An[RS] = '10' */
@@ -504,8 +503,7 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 	/* 2b Wait for PSL_CNTL_An[Ps]='11' */
 	reg = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_Pc);
-	while((capi_p1n_read(afu, CAPI_PSL_CNTL_An) & CAPI_PSL_CNTL_An_Ps_MASK) != CAPI_PSL_CNTL_An_Ps_Complete)
-	{
+	while((capi_p1n_read(afu, CAPI_PSL_CNTL_An) & CAPI_PSL_CNTL_An_Ps_MASK) != CAPI_PSL_CNTL_An_Ps_Complete) {
 		cpu_relax();
 	}
 
@@ -514,41 +512,46 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_CR);
 
 	/* Write the AFU image a page at a time. */
-	while(length)
-	{
+	while(length) {
 		block_length = min((u64)PAGE_SIZE, length);
-		if (copy_from_user(tmp_pagealign, (void*)vaddress, block_length)) {
-			kfree(tmp_allocation);
-			return -EFAULT;
+		if (copy_from_user((void*)tmp_allocation, (void*)vaddress, block_length)) {
+			rc = -EFAULT;
+			goto out;
 		}
+		memset((char*)tmp_allocation + block_length, 0, PAGE_SIZE - block_length);
+
 		/* round upto cacheline */
 		block_length = (block_length + 127) & (~127ull);
 
 		/* 4. Write address of image block to AFU_DLADDR */
-		capi_p1_write(afu->adapter, CAPI_PSL_DLADDR, (u64)tmp_pagealign);
+		capi_p1_write(afu->adapter, CAPI_PSL_DLADDR, (u64)tmp_allocation);
 
 		/* 5. Write block size and set start download bit to AFU_DLCNTL */
-		capi_p1_write(afu->adapter, CAPI_PSL_DLCNTL, (0x1ull << (63-31)) | block_length/128);
+		capi_p1_write(afu->adapter, CAPI_PSL_DLCNTL, CAPI_PSL_DLCNTL_S | (block_length/128));
 
 		/* 6. Poll for AFU download errors or completion. */
-		while( (capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & (0x7ull << (63-30))) == 0)
-		{
+		while ((reg = capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & CAPI_PSL_DLCNTL_DCES) == CAPI_PSL_DLCNTL_S) {
 			cpu_relax();
 		}
 
-		if( (capi_p1_read(afu->adapter, CAPI_PSL_DLCNTL) & (0x3ull << (63-30))) != 0)
-		{
-			kfree(tmp_allocation);
-			return -EIO;
+		if ((reg & CAPI_PSL_DLCNTL_CE) != 0) {
+			rc = -EIO;
+			goto out;
 		}
 
 		/* 7. repeat steps 4-6 until complete. */
 
 		vaddress += block_length;
 		length -= block_length;
+
+		if (length && ((reg & CAPI_PSL_DLCNTL_D) != 0)) {
+			WARN(1, "AFU download completed earlier than expected with %llu bytes remaining\n", length);
+			goto out;
+		}
 	}
-	kfree(tmp_allocation);
-	return 0;
+out:
+	free_page(tmp_allocation);
+	return rc;
 }
 
 static const struct capi_backend_ops capi_native_ops = {

@@ -130,6 +130,14 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_PSL_SPAP_Size_Shift 4
 #define CAPI_PSL_SPAP_V    0x0000000000000001ULL
 
+/****** CAPI_PSL_DLCNTL *****************************************************/
+#define CAPI_PSL_DLCNTL_D (0x1ull << (63-28))
+#define CAPI_PSL_DLCNTL_C (0x1ull << (63-29))
+#define CAPI_PSL_DLCNTL_E (0x1ull << (63-30))
+#define CAPI_PSL_DLCNTL_S (0x1ull << (63-31))
+#define CAPI_PSL_DLCNTL_CE ( CAPI_PSL_DLCNTL_C | CAPI_PSL_DLCNTL_E )
+#define CAPI_PSL_DLCNTL_DCES ( CAPI_PSL_DLCNTL_D | CAPI_PSL_DLCNTL_CE | CAPI_PSL_DLCNTL_S)
+
 /****** CAPI_PSL_SR_An ******************************************************/
 #define CAPI_PSL_SR_An_SF  MSR_SF            /* 64bit */
 #define CAPI_PSL_SR_An_TA  (1ull << (63-1))  /* Tags active,   GA1: 0 */
