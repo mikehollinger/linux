@@ -1,0 +1,11 @@
+#
+# Coherent Accelerator Processor Interface compatible devices
+#
+
+config CAPI
+	tristate "Support for CAIA compliant accelerators"
+	depends on PPC_POWERNV || PPC_PSERIES
+	default m
+	help
+	  Select this option to enable support for adapters that follow the
+	  Coherent Accelerator Interface Architecture (CAIA).

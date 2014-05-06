@@ -128,10 +128,3 @@ config PSERIES_IDLE
 	help
 	  Select this option to enable processor idle state management
 	  through cpuidle subsystem.
-
-config CAPI
-	tristate "Support for CAIA compliant accelerators"
-	default m
-	help
-	  Select this option to enable support for adapters that follow the
-	  Coherent Accelerator Interface Architecture (CAIA).
