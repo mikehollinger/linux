@@ -19,7 +19,7 @@
 
 #include "capi.h"
 
-#include "../../../mm/mmu_decl.h" /* FIXME (for hash_preload) */
+#include "../../../arch/powerpc/mm/mmu_decl.h" /* FIXME (for hash_preload) */
 
 void capi_handle_page_fault(struct work_struct *work)
 {
