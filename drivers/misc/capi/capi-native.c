@@ -6,6 +6,7 @@
 
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/sched.h>
 #include <asm/synch.h>
 #include <linux/mm.h>
 #include <asm/uaccess.h>
@@ -13,15 +14,20 @@
 #include "capi.h"
 #include "capi_hcalls.h"
 
-static void afu_reset(struct capi_afu_t *afu)
+static int afu_reset(struct capi_afu_t *afu)
 {
 	u64 AFU_Cntl;
+	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
 	pr_devel("AFU reset request\n");
 	capi_p2n_write(afu, CAPI_AFU_Cntl_An, CAPI_AFU_Cntl_An_RA);
 	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
 			!= CAPI_AFU_Cntl_An_RS_Complete) {
+		if (time_after_eq(jiffies, timeout)) {
+			pr_warn("WARNING: AFU reset timed out!\n");
+			return -EBUSY;
+		}
 		pr_devel_ratelimited("AFU resetting... (0x%.16llx)\n", AFU_Cntl);
 		cpu_relax();
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
@@ -31,11 +37,13 @@ static void afu_reset(struct capi_afu_t *afu)
 	     != CAPI_AFU_Cntl_An_ES_Disabled,
 	     "AFU not disabled after reset!\n");
 	pr_devel("AFU reset\n");
+	return 0;
 }
 
-static void afu_enable(struct capi_afu_t *afu)
+static int afu_enable(struct capi_afu_t *afu)
 {
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
+	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
 	pr_devel("AFU enable request\n");
 	WARN((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
@@ -46,39 +54,51 @@ static void afu_enable(struct capi_afu_t *afu)
 	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	while ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
 			!= CAPI_AFU_Cntl_An_ES_Enabled) {
+		if (time_after_eq(jiffies, timeout)) {
+			pr_warn("WARNING: PSL Purge timed out!\n");
+			return -EBUSY;
+		}
 		pr_devel_ratelimited("AFU enabling... (0x%.16llx)\n", AFU_Cntl);
 		cpu_relax();
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
 	pr_devel("AFU enabled\n");
+	return 0;
 }
 
-void afu_disable(struct capi_afu_t *afu)
+static int afu_disable(struct capi_afu_t *afu)
 {
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
+	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
 	pr_devel("AFU disable request\n");
 	if ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK) != CAPI_AFU_Cntl_An_ES_Enabled) {
 		pr_devel("Attempted to disable already disabled AFU\n");
-		return;
+		return 0;
 	}
 
 	capi_p2n_write(afu, CAPI_AFU_Cntl_An, AFU_Cntl | CAPI_AFU_Cntl_An_RA);
 	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
 			!= CAPI_AFU_Cntl_An_RS_Complete) {
+		if (time_after_eq(jiffies, timeout)) {
+			pr_warn("WARNING: PSL Purge timed out!\n");
+			return -EBUSY;
+		}
 		pr_devel_ratelimited("AFU disabling... (0x%.16llx)\n", AFU_Cntl);
 		cpu_relax();
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
 	pr_devel("AFU disabled\n");
+	return 0;
 }
 
-void psl_purge(struct capi_afu_t *afu)
+static int psl_purge(struct capi_afu_t *afu)
 {
 	u64 PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	u64 start, end;
+	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
 	pr_devel("PSL purge request\n");
 
@@ -96,6 +116,10 @@ void psl_purge(struct capi_afu_t *afu)
 	PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
 	while ((PSL_CNTL &  CAPI_PSL_CNTL_An_Ps_MASK)
 			== CAPI_PSL_CNTL_An_Ps_Pending) {
+		if (time_after_eq(jiffies, timeout)) {
+			pr_warn("WARNING: PSL Purge timed out!\n");
+			return -EBUSY;
+		}
 		pr_devel_ratelimited("PSL purging... (0x%.16llx)\n", PSL_CNTL);
 		cpu_relax();
 		PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
@@ -106,6 +130,7 @@ void psl_purge(struct capi_afu_t *afu)
 	/* FIXME: Should this be re-enabled here, or after resetting the AFU? */
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An,
 		       PSL_CNTL & ~CAPI_PSL_CNTL_An_Pc);
+	return 0;
 }
 
 static int
@@ -152,7 +177,7 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 		u64 psn_base, u64 psn_size,
 		irq_hw_number_t irq_start, irq_hw_number_t irq_count)
 {
-	int rc;
+	int rc = 0;
 
 	if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
 		goto err;
@@ -171,9 +196,9 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 	}
 
 	afu_disable(afu);
-	psl_purge(afu);
+	rc = psl_purge(afu);
 
-	return 0;
+	return rc;
 
 err2:
 	iounmap(afu->p2n_mmio);
@@ -348,8 +373,10 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 
 	add_process_element(afu, elem);
 #if 0	/* Not clear if I still need to enable the AFU in directed mode */
-	afu_reset(afu);
-	afu_enable(afu);
+	if ((result = afu_reset(afu)))
+		return result;
+	if ((result = afu_enable(afu)))
+		return result;
 #endif
 
 	return 0;
@@ -364,7 +391,8 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 
 	/* Ensure AFU is disabled */
 	afu_disable(afu);
-	psl_purge(afu);
+	if ((result = psl_purge(afu)))
+		return result;
 
 	capi_p1n_write(afu, CAPI_PSL_CNTL_An, CAPI_PSL_CNTL_An_PM_Process);
 
@@ -431,12 +459,14 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 
-	afu_reset(afu);
+	if ((result = afu_reset(afu)))
+		return result;
 
 	/* XXX: Might want the WED & enable in a separate fn? */
 	capi_p2n_write(afu, CAPI_PSL_WED_An, wed);
 
-	afu_enable(afu);
+	if ((result = afu_enable(afu)))
+		return result;
 
 	return 0;
 }
