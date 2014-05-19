@@ -3,7 +3,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/of.h>
+#include <linux/of_address.h>
 
 #include "capi.h"
 
