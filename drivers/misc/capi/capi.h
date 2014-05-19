@@ -19,6 +19,8 @@
 /* FIXME do this dynamically, or just only support 11 and above */
 #define CAIA_VERSION 7
 
+#define CAPI_TIMEOUT 5
+
 /* Opaque types to avoid accidentally passing registers for the wrong MMIO
  *
  * At the end of the day, I'm not married to using typedef here, but it might
