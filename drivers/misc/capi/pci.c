@@ -315,8 +315,8 @@ static void reassign_capi_bars(struct pci_dev *dev)
 	}
 
 	/* BAR 4/5 is for the CAPI protocol. Bits[48:49] must be set to 10 */
-	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
-	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00000000);
+	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00020000);
 	dev_info(&dev->dev, "wrote BAR4/5\n");
 }
 
