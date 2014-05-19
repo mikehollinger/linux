@@ -369,6 +369,7 @@ struct capi_t {
 struct capi_driver_ops {
 	int (*init_adapter) (struct capi_t *adapter);
 	int (*init_afu) (struct capi_afu_t *afu);
+	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
 };
 
 struct capi_ivte_ranges {
@@ -466,7 +467,7 @@ int add_capi_dev(struct capi_t *capi, int adapter_num);
 void del_capi_dev(struct capi_t *capi, int adapter_num);
 
 unsigned int
-capi_map_irq(irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
+capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void capi_unmap_irq(unsigned int virq, void *cookie);
 void afu_register_irqs(struct capi_afu_t *afu, u32 start, u32 count);
 void afu_enable_irqs(struct capi_afu_t *afu);
