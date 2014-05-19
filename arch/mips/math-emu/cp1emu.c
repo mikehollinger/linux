@@ -417,14 +417,20 @@ static int microMIPS32_to_MIPS32(union mips_instruction *insn_ptr)
 			case mm_mtc1_op:
 			case mm_cfc1_op:
 			case mm_ctc1_op:
+			case mm_mfhc1_op:
+			case mm_mthc1_op:
 				if (insn.mm_fp1_format.op == mm_mfc1_op)
 					op = mfc_op;
 				else if (insn.mm_fp1_format.op == mm_mtc1_op)
 					op = mtc_op;
 				else if (insn.mm_fp1_format.op == mm_cfc1_op)
 					op = cfc_op;
-				else
+				else if (insn.mm_fp1_format.op == mm_ctc1_op)
 					op = ctc_op;
+				else if (insn.mm_fp1_format.op == mm_mfhc1_op)
+					op = mfhc_op;
+				else
+					op = mthc_op;
 				mips32_insn.fp1_format.opcode = cop1_op;
 				mips32_insn.fp1_format.op = op;
 				mips32_insn.fp1_format.rt =
@@ -436,7 +442,6 @@ static int microMIPS32_to_MIPS32(union mips_instruction *insn_ptr)
 				break;
 			default:
 				return SIGILL;
-				break;
 			}
 			break;
 		case mm_32f_74_op:	/* c.cond.fmt */
@@ -451,12 +456,10 @@ static int microMIPS32_to_MIPS32(union mips_instruction *insn_ptr)
 			break;
 		default:
 			return SIGILL;
-			break;
 		}
 		break;
 	default:
 		return SIGILL;
-		break;
 	}
 
 	*insn_ptr = mips32_insn;
@@ -491,7 +494,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 						dec_insn.next_pc_inc;
 				*contpc = regs->regs[insn.mm_i_format.rs];
 				return 1;
-				break;
 			}
 		}
 		break;
@@ -513,7 +515,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 					dec_insn.pc_inc +
 					dec_insn.next_pc_inc;
 			return 1;
-			break;
 		case mm_bgezals_op:
 		case mm_bgezal_op:
 			regs->regs[31] = regs->cp0_epc +
@@ -530,7 +531,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 					dec_insn.pc_inc +
 					dec_insn.next_pc_inc;
 			return 1;
-			break;
 		case mm_blez_op:
 			if ((long)regs->regs[insn.mm_i_format.rs] <= 0)
 				*contpc = regs->cp0_epc +
@@ -541,7 +541,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 					dec_insn.pc_inc +
 					dec_insn.next_pc_inc;
 			return 1;
-			break;
 		case mm_bgtz_op:
 			if ((long)regs->regs[insn.mm_i_format.rs] <= 0)
 				*contpc = regs->cp0_epc +
@@ -552,7 +551,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 					dec_insn.pc_inc +
 					dec_insn.next_pc_inc;
 			return 1;
-			break;
 		case mm_bc2f_op:
 		case mm_bc1f_op:
 			bc_false = 1;
@@ -580,7 +578,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 				*contpc = regs->cp0_epc +
 					dec_insn.pc_inc + dec_insn.next_pc_inc;
 			return 1;
-			break;
 		}
 		break;
 	case mm_pool16c_op:
@@ -593,7 +590,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 		case mm_jr16_op:
 			*contpc = regs->regs[insn.mm_i_format.rs];
 			return 1;
-			break;
 		}
 		break;
 	case mm_beqz16_op:
@@ -605,7 +601,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 			*contpc = regs->cp0_epc +
 				dec_insn.pc_inc + dec_insn.next_pc_inc;
 		return 1;
-		break;
 	case mm_bnez16_op:
 		if ((long)regs->regs[reg16to32map[insn.mm_b1_format.rs]] != 0)
 			*contpc = regs->cp0_epc +
@@ -615,12 +610,10 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 			*contpc = regs->cp0_epc +
 				dec_insn.pc_inc + dec_insn.next_pc_inc;
 		return 1;
-		break;
 	case mm_b16_op:
 		*contpc = regs->cp0_epc + dec_insn.pc_inc +
 			 (insn.mm_b0_format.simmediate << 1);
 		return 1;
-		break;
 	case mm_beq32_op:
 		if (regs->regs[insn.mm_i_format.rs] ==
 		    regs->regs[insn.mm_i_format.rt])
@@ -632,7 +625,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 				dec_insn.pc_inc +
 				dec_insn.next_pc_inc;
 		return 1;
-		break;
 	case mm_bne32_op:
 		if (regs->regs[insn.mm_i_format.rs] !=
 		    regs->regs[insn.mm_i_format.rt])
@@ -643,7 +635,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 			*contpc = regs->cp0_epc +
 				dec_insn.pc_inc + dec_insn.next_pc_inc;
 		return 1;
-		break;
 	case mm_jalx32_op:
 		regs->regs[31] = regs->cp0_epc +
 			dec_insn.pc_inc + dec_insn.next_pc_inc;
@@ -652,7 +643,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 		*contpc <<= 28;
 		*contpc |= (insn.j_format.target << 2);
 		return 1;
-		break;
 	case mm_jals32_op:
 	case mm_jal32_op:
 		regs->regs[31] = regs->cp0_epc +
@@ -665,7 +655,6 @@ int mm_isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 		*contpc |= (insn.j_format.target << 1);
 		set_isa16_mode(*contpc);
 		return 1;
-		break;
 	}
 	return 0;
 }
@@ -694,7 +683,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 		case jr_op:
 			*contpc = regs->regs[insn.r_format.rs];
 			return 1;
-			break;
 		}
 		break;
 	case bcond_op:
@@ -716,7 +704,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 					dec_insn.pc_inc +
 					dec_insn.next_pc_inc;
 			return 1;
-			break;
 		case bgezal_op:
 		case bgezall_op:
 			regs->regs[31] = regs->cp0_epc +
@@ -734,7 +721,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 					dec_insn.pc_inc +
 					dec_insn.next_pc_inc;
 			return 1;
-			break;
 		}
 		break;
 	case jalx_op:
@@ -752,7 +738,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 		/* Set microMIPS mode bit: XOR for jalx. */
 		*contpc ^= bit;
 		return 1;
-		break;
 	case beq_op:
 	case beql_op:
 		if (regs->regs[insn.i_format.rs] ==
@@ -765,7 +750,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 				dec_insn.pc_inc +
 				dec_insn.next_pc_inc;
 		return 1;
-		break;
 	case bne_op:
 	case bnel_op:
 		if (regs->regs[insn.i_format.rs] !=
@@ -778,7 +762,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 				dec_insn.pc_inc +
 				dec_insn.next_pc_inc;
 		return 1;
-		break;
 	case blez_op:
 	case blezl_op:
 		if ((long)regs->regs[insn.i_format.rs] <= 0)
@@ -790,7 +773,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 				dec_insn.pc_inc +
 				dec_insn.next_pc_inc;
 		return 1;
-		break;
 	case bgtz_op:
 	case bgtzl_op:
 		if ((long)regs->regs[insn.i_format.rs] > 0)
@@ -802,7 +784,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 				dec_insn.pc_inc +
 				dec_insn.next_pc_inc;
 		return 1;
-		break;
 #ifdef CONFIG_CPU_CAVIUM_OCTEON
 	case lwc2_op: /* This is bbit0 on Octeon */
 		if ((regs->regs[insn.i_format.rs] & (1ull<<insn.i_format.rt)) == 0)
@@ -856,7 +837,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 						dec_insn.pc_inc +
 						dec_insn.next_pc_inc;
 				return 1;
-				break;
 			case 1:	/* bc1t */
 			case 3:	/* bc1tl */
 				if (fcr31 & (1 << bit))
@@ -868,7 +848,6 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
 						dec_insn.pc_inc +
 						dec_insn.next_pc_inc;
 				return 1;
-				break;
 			}
 		}
 		break;
@@ -880,33 +859,60 @@ static int isBranchInstr(struct pt_regs *regs, struct mm_decoded_insn dec_insn,
  * In the Linux kernel, we support selection of FPR format on the
  * basis of the Status.FR bit.	If an FPU is not present, the FR bit
  * is hardwired to zero, which would imply a 32-bit FPU even for
- * 64-bit CPUs so we rather look at TIF_32BIT_REGS.
+ * 64-bit CPUs so we rather look at TIF_32BIT_FPREGS.
  * FPU emu is slow and bulky and optimizing this function offers fairly
  * sizeable benefits so we try to be clever and make this function return
  * a constant whenever possible, that is on 64-bit kernels without O32
- * compatibility enabled and on 32-bit kernels.
+ * compatibility enabled and on 32-bit without 64-bit FPU support.
  */
 static inline int cop1_64bit(struct pt_regs *xcp)
 {
 #if defined(CONFIG_64BIT) && !defined(CONFIG_MIPS32_O32)
 	return 1;
-#elif defined(CONFIG_64BIT) && defined(CONFIG_MIPS32_O32)
-	return !test_thread_flag(TIF_32BIT_REGS);
-#else
+#elif defined(CONFIG_32BIT) && !defined(CONFIG_MIPS_O32_FP64_SUPPORT)
 	return 0;
+#else
+	return !test_thread_flag(TIF_32BIT_FPREGS);
 #endif
 }
 
-#define SIFROMREG(si, x) ((si) = cop1_64bit(xcp) || !(x & 1) ? \
-			(int)ctx->fpr[x] : (int)(ctx->fpr[x & ~1] >> 32))
+#define SIFROMREG(si, x) do {						\
+	if (cop1_64bit(xcp))						\
+		(si) = get_fpr32(&ctx->fpr[x], 0);			\
+	else								\
+		(si) = get_fpr32(&ctx->fpr[(x) & ~1], (x) & 1);		\
+} while (0)
 
-#define SITOREG(si, x)	(ctx->fpr[x & ~(cop1_64bit(xcp) == 0)] = \
-			cop1_64bit(xcp) || !(x & 1) ? \
-			ctx->fpr[x & ~1] >> 32 << 32 | (u32)(si) : \
-			ctx->fpr[x & ~1] << 32 >> 32 | (u64)(si) << 32)
+#define SITOREG(si, x) do {						\
+	if (cop1_64bit(xcp)) {						\
+		unsigned i;						\
+		set_fpr32(&ctx->fpr[x], 0, si);				\
+		for (i = 1; i < ARRAY_SIZE(ctx->fpr[x].val32); i++)	\
+			set_fpr32(&ctx->fpr[x], i, 0);			\
+	} else {							\
+		set_fpr32(&ctx->fpr[(x) & ~1], (x) & 1, si);		\
+	}								\
+} while (0)
 
-#define DIFROMREG(di, x) ((di) = ctx->fpr[x & ~(cop1_64bit(xcp) == 0)])
-#define DITOREG(di, x)	(ctx->fpr[x & ~(cop1_64bit(xcp) == 0)] = (di))
+#define SIFROMHREG(si, x)	((si) = get_fpr32(&ctx->fpr[x], 1))
+
+#define SITOHREG(si, x) do {						\
+	unsigned i;							\
+	set_fpr32(&ctx->fpr[x], 1, si);					\
+	for (i = 2; i < ARRAY_SIZE(ctx->fpr[x].val32); i++)		\
+		set_fpr32(&ctx->fpr[x], i, 0);				\
+} while (0)
+
+#define DIFROMREG(di, x) \
+	((di) = get_fpr64(&ctx->fpr[(x) & ~(cop1_64bit(xcp) == 0)], 0))
+
+#define DITOREG(di, x) do {						\
+	unsigned fpr, i;						\
+	fpr = (x) & ~(cop1_64bit(xcp) == 0);				\
+	set_fpr64(&ctx->fpr[fpr], 0, di);				\
+	for (i = 1; i < ARRAY_SIZE(ctx->fpr[x].val64); i++)		\
+		set_fpr64(&ctx->fpr[fpr], i, 0);			\
+} while (0)
 
 #define SPFROMREG(sp, x) SIFROMREG((sp).bits, x)
 #define SPTOREG(sp, x)	SITOREG((sp).bits, x)
@@ -1081,6 +1087,25 @@ static int cop1Emulate(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
 			DITOREG(xcp->regs[MIPSInst_RT(ir)], MIPSInst_RD(ir));
 			break;
 #endif
+
+		case mfhc_op:
+			if (!cpu_has_mips_r2)
+				goto sigill;
+
+			/* copregister rd -> gpr[rt] */
+			if (MIPSInst_RT(ir) != 0) {
+				SIFROMHREG(xcp->regs[MIPSInst_RT(ir)],
+					MIPSInst_RD(ir));
+			}
+			break;
+
+		case mthc_op:
+			if (!cpu_has_mips_r2)
+				goto sigill;
+
+			/* copregister rd <- gpr[rt] */
+			SITOHREG(xcp->regs[MIPSInst_RT(ir)], MIPSInst_RD(ir));
+			break;
 
 		case mfc_op:
 			/* copregister rd -> gpr[rt] */
@@ -1290,6 +1315,7 @@ static int cop1Emulate(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
 #endif
 
 	default:
+sigill:
 		return SIGILL;
 	}
 
@@ -1535,10 +1561,10 @@ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
 		break;
 	}
 
-	case 0x7:		/* 7 */
-		if (MIPSInst_FUNC(ir) != pfetch_op) {
+	case 0x3:
+		if (MIPSInst_FUNC(ir) != pfetch_op)
 			return SIGILL;
-		}
+
 		/* ignore prefx operation */
 		break;
 
@@ -1957,15 +1983,18 @@ static int fpu_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
 
 #if defined(__mips64)
 	case l_fmt:{
+		u64 bits;
+		DIFROMREG(bits, MIPSInst_FS(ir));
+
 		switch (MIPSInst_FUNC(ir)) {
 		case fcvts_op:
 			/* convert long to single precision real */
-			rv.s = ieee754sp_flong(ctx->fpr[MIPSInst_FS(ir)]);
+			rv.s = ieee754sp_flong(bits);
 			rfmt = s_fmt;
 			goto copcsr;
 		case fcvtd_op:
 			/* convert long to double precision real */
-			rv.d = ieee754dp_flong(ctx->fpr[MIPSInst_FS(ir)]);
+			rv.d = ieee754dp_flong(bits);
 			rfmt = d_fmt;
 			goto copcsr;
 		default:

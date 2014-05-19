@@ -21,6 +21,7 @@
 #include <linux/device.h>
 #include <linux/syscore_ops.h>
 #include <linux/serial_core.h>
+#include <linux/serial_s3c.h>
 #include <linux/platform_device.h>
 #include <linux/reboot.h>
 #include <linux/io.h>
@@ -30,13 +31,13 @@
 #include <asm/mach/irq.h>
 
 #include <mach/hardware.h>
+#include <mach/gpio-samsung.h>
 #include <asm/irq.h>
 #include <asm/system_misc.h>
 
 #include <plat/cpu-freq.h>
 
 #include <mach/regs-clock.h>
-#include <plat/regs-serial.h>
 
 #include <plat/cpu.h>
 #include <plat/devs.h>

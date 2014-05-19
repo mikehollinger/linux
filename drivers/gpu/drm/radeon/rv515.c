@@ -209,19 +209,27 @@ static void rv515_mc_init(struct radeon_device *rdev)
 
 uint32_t rv515_mc_rreg(struct radeon_device *rdev, uint32_t reg)
 {
+	unsigned long flags;
 	uint32_t r;
 
+	spin_lock_irqsave(&rdev->mc_idx_lock, flags);
 	WREG32(MC_IND_INDEX, 0x7f0000 | (reg & 0xffff));
 	r = RREG32(MC_IND_DATA);
 	WREG32(MC_IND_INDEX, 0);
+	spin_unlock_irqrestore(&rdev->mc_idx_lock, flags);
+
 	return r;
 }
 
 void rv515_mc_wreg(struct radeon_device *rdev, uint32_t reg, uint32_t v)
 {
+	unsigned long flags;
+
+	spin_lock_irqsave(&rdev->mc_idx_lock, flags);
 	WREG32(MC_IND_INDEX, 0xff0000 | ((reg) & 0xffff));
 	WREG32(MC_IND_DATA, (v));
 	WREG32(MC_IND_INDEX, 0);
+	spin_unlock_irqrestore(&rdev->mc_idx_lock, flags);
 }
 
 #if defined(CONFIG_DEBUG_FS)
@@ -588,6 +596,7 @@ int rv515_resume(struct radeon_device *rdev)
 
 int rv515_suspend(struct radeon_device *rdev)
 {
+	radeon_pm_suspend(rdev);
 	r100_cp_disable(rdev);
 	radeon_wb_disable(rdev);
 	rs600_irq_disable(rdev);
@@ -604,6 +613,7 @@ void rv515_set_safe_registers(struct radeon_device *rdev)
 
 void rv515_fini(struct radeon_device *rdev)
 {
+	radeon_pm_fini(rdev);
 	r100_cp_fini(rdev);
 	radeon_wb_fini(rdev);
 	radeon_ib_pool_fini(rdev);
@@ -676,6 +686,9 @@ int rv515_init(struct radeon_device *rdev)
 	if (r)
 		return r;
 	rv515_set_safe_registers(rdev);
+
+	/* Initialize power management */
+	radeon_pm_init(rdev);
 
 	rdev->accel_working = true;
 	r = rv515_startup(rdev);
@@ -1147,14 +1160,10 @@ static void rv515_compute_mode_priority(struct radeon_device *rdev,
 		}
 		if (wm0->priority_mark.full > priority_mark02.full)
 			priority_mark02.full = wm0->priority_mark.full;
-		if (dfixed_trunc(priority_mark02) < 0)
-			priority_mark02.full = 0;
 		if (wm0->priority_mark_max.full > priority_mark02.full)
 			priority_mark02.full = wm0->priority_mark_max.full;
 		if (wm1->priority_mark.full > priority_mark12.full)
 			priority_mark12.full = wm1->priority_mark.full;
-		if (dfixed_trunc(priority_mark12) < 0)
-			priority_mark12.full = 0;
 		if (wm1->priority_mark_max.full > priority_mark12.full)
 			priority_mark12.full = wm1->priority_mark_max.full;
 		*d1mode_priority_a_cnt = dfixed_trunc(priority_mark02);
@@ -1185,8 +1194,6 @@ static void rv515_compute_mode_priority(struct radeon_device *rdev,
 		}
 		if (wm0->priority_mark.full > priority_mark02.full)
 			priority_mark02.full = wm0->priority_mark.full;
-		if (dfixed_trunc(priority_mark02) < 0)
-			priority_mark02.full = 0;
 		if (wm0->priority_mark_max.full > priority_mark02.full)
 			priority_mark02.full = wm0->priority_mark_max.full;
 		*d1mode_priority_a_cnt = dfixed_trunc(priority_mark02);
@@ -1214,8 +1221,6 @@ static void rv515_compute_mode_priority(struct radeon_device *rdev,
 		}
 		if (wm1->priority_mark.full > priority_mark12.full)
 			priority_mark12.full = wm1->priority_mark.full;
-		if (dfixed_trunc(priority_mark12) < 0)
-			priority_mark12.full = 0;
 		if (wm1->priority_mark_max.full > priority_mark12.full)
 			priority_mark12.full = wm1->priority_mark_max.full;
 		*d2mode_priority_a_cnt = dfixed_trunc(priority_mark12);

@@ -102,7 +102,7 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 		len++;
 
 		if ((len & (BITS_PER_LONG/8-1)) == 0)
-			hash = cfs_hash_long(hash^l, BITS_PER_LONG);
+			hash = hash_long(hash^l, BITS_PER_LONG);
 	} while (len);
 
 	return hash >> (BITS_PER_LONG - bits);
@@ -259,8 +259,6 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 	struct rsi      rsii, *rsip = NULL;
 	time_t	  expiry;
 	int	     status = -EINVAL;
-	ENTRY;
-
 
 	memset(&rsii, 0, sizeof(rsii));
 
@@ -341,7 +339,7 @@ out:
 
 	if (status)
 		CERROR("rsi parse error %d\n", status);
-	RETURN(status);
+	return status;
 }
 
 static struct cache_detail rsi_cache = {
@@ -588,7 +586,7 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
 			goto out;
 
 		/* currently the expiry time passed down from user-space
-		 * is invalid, here we retrive it from mech. */
+		 * is invalid, here we retrieve it from mech. */
 		if (lgss_inquire_context(rsci.ctx.gsc_mechctx, &ctx_expiry)) {
 			CERROR("unable to get expire time, drop it\n");
 			goto out;
@@ -662,7 +660,6 @@ static void rsc_flush(rsc_entry_match *match, long data)
 	struct cache_head **ch;
 	struct rsc *rscp;
 	int n;
-	ENTRY;
 
 	write_lock(&rsc_cache.hash_lock);
 	for (n = 0; n < RSC_HASHMAX; n++) {
@@ -684,7 +681,6 @@ static void rsc_flush(rsc_entry_match *match, long data)
 		}
 	}
 	write_unlock(&rsc_cache.hash_lock);
-	EXIT;
 }
 
 static int match_uid(struct rsc *rscp, long uid)
@@ -744,7 +740,6 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
 	unsigned long   ctx_expiry;
 	__u32	   major;
 	int	     rc;
-	ENTRY;
 
 	memset(&rsci, 0, sizeof(rsci));
 
@@ -792,7 +787,7 @@ out:
 	if (rc)
 		CERROR("create reverse svc ctx: idx "LPX64", rc %d\n",
 		       gsec->gs_rvs_hdl, rc);
-	RETURN(rc);
+	return rc;
 }
 
 int gss_svc_upcall_expire_rvs_ctx(rawobj_t *handle)
@@ -855,7 +850,6 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	struct gss_rep_header     *rephdr;
 	int			first_check = 1;
 	int			rc = SECSVC_DROP;
-	ENTRY;
 
 	memset(&rsikey, 0, sizeof(rsikey));
 	rsikey.lustre_svc = lustre_svc;
@@ -886,7 +880,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 
 	cache_get(&rsip->h); /* take an extra ref */
 	init_waitqueue_head(&rsip->waitq);
-	init_waitqueue_entry_current(&wait);
+	init_waitqueue_entry(&wait, current);
 	add_wait_queue(&rsip->waitq, &wait);
 
 cache_check:
@@ -1016,7 +1010,7 @@ out:
 
 		COMPAT_RSC_PUT(&rsci->h, &rsc_cache);
 	}
-	RETURN(rc);
+	return rc;
 }
 
 struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
@@ -1073,7 +1067,7 @@ int __init gss_init_svc_upcall(void)
 	 * the init upcall channel, otherwise there's big chance that the first
 	 * upcall issued before the channel be opened thus nfsv4 cache code will
 	 * drop the request direclty, thus lead to unnecessary recovery time.
-	 * here we wait at miximum 1.5 seconds. */
+	 * here we wait at maximum 1.5 seconds. */
 	for (i = 0; i < 6; i++) {
 		if (atomic_read(&rsi_cache.readers) > 0)
 			break;

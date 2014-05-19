@@ -159,7 +159,7 @@ static struct hwreg_cfg hwreg_cfg = {
 
 static struct ab8500_prcmu_ranges *debug_ranges;
 
-struct ab8500_prcmu_ranges ab8500_debug_ranges[AB8500_NUM_BANKS] = {
+static struct ab8500_prcmu_ranges ab8500_debug_ranges[AB8500_NUM_BANKS] = {
 	[0x0] = {
 		.num_ranges = 0,
 		.range = NULL,
@@ -488,7 +488,7 @@ struct ab8500_prcmu_ranges ab8500_debug_ranges[AB8500_NUM_BANKS] = {
 	},
 };
 
-struct ab8500_prcmu_ranges ab8505_debug_ranges[AB8500_NUM_BANKS] = {
+static struct ab8500_prcmu_ranges ab8505_debug_ranges[AB8500_NUM_BANKS] = {
 	[0x0] = {
 		.num_ranges = 0,
 		.range = NULL,
@@ -847,7 +847,7 @@ struct ab8500_prcmu_ranges ab8505_debug_ranges[AB8500_NUM_BANKS] = {
 	},
 };
 
-struct ab8500_prcmu_ranges ab8540_debug_ranges[AB8500_NUM_BANKS] = {
+static struct ab8500_prcmu_ranges ab8540_debug_ranges[AB8500_NUM_BANKS] = {
 	[AB8500_M_FSM_RANK] = {
 		.num_ranges = 1,
 		.range = (struct ab8500_reg_range[]) {
@@ -1377,7 +1377,7 @@ void ab8500_dump_all_banks(struct device *dev)
 
 /* Space for 500 registers. */
 #define DUMP_MAX_REGS 700
-struct ab8500_register_dump
+static struct ab8500_register_dump
 {
 	u8 bank;
 	u8 reg;
@@ -1600,7 +1600,6 @@ static int ab8500_interrupts_print(struct seq_file *s, void *p)
 
 	for (line = 0; line < num_interrupt_lines; line++) {
 		struct irq_desc *desc = irq_to_desc(line + irq_first);
-		struct irqaction *action = desc->action;
 
 		seq_printf(s, "%3i:  %6i %4i", line,
 			   num_interrupts[line],
@@ -1608,7 +1607,9 @@ static int ab8500_interrupts_print(struct seq_file *s, void *p)
 
 		if (desc && desc->name)
 			seq_printf(s, "-%-8s", desc->name);
-		if (action) {
+		if (desc && desc->action) {
+			struct irqaction *action = desc->action;
+
 			seq_printf(s, "  %s", action->name);
 			while ((action = action->next) != NULL)
 				seq_printf(s, ", %s", action->name);
@@ -2800,7 +2801,13 @@ static ssize_t ab8500_subscribe_write(struct file *file,
 	 */
 	dev_attr[irq_index] = kmalloc(sizeof(struct device_attribute),
 		GFP_KERNEL);
+	if (!dev_attr[irq_index])
+		return -ENOMEM;
+
 	event_name[irq_index] = kmalloc(count, GFP_KERNEL);
+	if (!event_name[irq_index])
+		return -ENOMEM;
+
 	sprintf(event_name[irq_index], "%lu", user_val);
 	dev_attr[irq_index]->show = show_irq;
 	dev_attr[irq_index]->store = NULL;

@@ -36,16 +36,11 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/version.h>
 #include <linux/seq_file.h>
 #include <asm/statfs.h>
 #include <lprocfs_status.h>
 #include <obd_class.h>
 
-#ifndef LPROCFS
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-#else
 static int lmv_numobd_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device       *dev = (struct obd_device *)m->private;
@@ -92,8 +87,9 @@ static int lmv_placement_seq_show(struct seq_file *m, void *v)
 
 #define MAX_POLICY_STRING_SIZE 64
 
-static ssize_t lmv_placement_seq_write(struct file *file, const char *buffer,
-				   size_t count, loff_t *off)
+static ssize_t lmv_placement_seq_write(struct file *file,
+					const char __user *buffer,
+					size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	char		     dummy[MAX_POLICY_STRING_SIZE + 1];
@@ -227,7 +223,6 @@ struct file_operations lmv_proc_target_fops = {
 	.release	      = seq_release,
 };
 
-#endif /* LPROCFS */
 void lprocfs_lmv_init_vars(struct lprocfs_static_vars *lvars)
 {
 	lvars->module_vars    = lprocfs_lmv_module_vars;

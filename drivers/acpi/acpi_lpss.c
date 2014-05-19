@@ -30,8 +30,16 @@ ACPI_MODULE_NAME("acpi_lpss");
 /* Offsets relative to LPSS_PRIVATE_OFFSET */
 #define LPSS_GENERAL			0x08
 #define LPSS_GENERAL_LTR_MODE_SW	BIT(2)
+#define LPSS_GENERAL_UART_RTS_OVRD	BIT(3)
 #define LPSS_SW_LTR			0x10
 #define LPSS_AUTO_LTR			0x14
+#define LPSS_LTR_SNOOP_REQ		BIT(15)
+#define LPSS_LTR_SNOOP_MASK		0x0000FFFF
+#define LPSS_LTR_SNOOP_LAT_1US		0x800
+#define LPSS_LTR_SNOOP_LAT_32US		0xC00
+#define LPSS_LTR_SNOOP_LAT_SHIFT	5
+#define LPSS_LTR_SNOOP_LAT_CUTOFF	3000
+#define LPSS_LTR_MAX_VAL		0x3FF
 #define LPSS_TX_INT			0x20
 #define LPSS_TX_INT_MASK		BIT(1)
 
@@ -68,11 +76,16 @@ struct lpss_private_data {
 
 static void lpss_uart_setup(struct lpss_private_data *pdata)
 {
-	unsigned int tx_int_offset = pdata->dev_desc->prv_offset + LPSS_TX_INT;
+	unsigned int offset;
 	u32 reg;
 
-	reg = readl(pdata->mmio_base + tx_int_offset);
-	writel(reg | LPSS_TX_INT_MASK, pdata->mmio_base + tx_int_offset);
+	offset = pdata->dev_desc->prv_offset + LPSS_TX_INT;
+	reg = readl(pdata->mmio_base + offset);
+	writel(reg | LPSS_TX_INT_MASK, pdata->mmio_base + offset);
+
+	offset = pdata->dev_desc->prv_offset + LPSS_GENERAL;
+	reg = readl(pdata->mmio_base + offset);
+	writel(reg | LPSS_GENERAL_UART_RTS_OVRD, pdata->mmio_base + offset);
 }
 
 static struct lpss_device_desc lpt_dev_desc = {
@@ -94,6 +107,16 @@ static struct lpss_device_desc lpt_sdio_dev_desc = {
 	.prv_offset = 0x1000,
 	.prv_size_override = 0x1018,
 	.ltr_required = true,
+};
+
+static struct lpss_shared_clock pwm_clock = {
+	.name = "pwm_clk",
+	.rate = 25000000,
+};
+
+static struct lpss_device_desc byt_pwm_dev_desc = {
+	.clk_required = true,
+	.shared_clock = &pwm_clock,
 };
 
 static struct lpss_shared_clock uart_clock = {
@@ -151,11 +174,21 @@ static const struct acpi_device_id acpi_lpss_device_ids[] = {
 	{ "INT33C7", },
 
 	/* BayTrail LPSS devices */
+	{ "80860F09", (unsigned long)&byt_pwm_dev_desc },
 	{ "80860F0A", (unsigned long)&byt_uart_dev_desc },
 	{ "80860F0E", (unsigned long)&byt_spi_dev_desc },
 	{ "80860F14", (unsigned long)&byt_sdio_dev_desc },
 	{ "80860F41", (unsigned long)&byt_i2c_dev_desc },
 	{ "INT33B2", },
+
+	{ "INT3430", (unsigned long)&lpt_dev_desc },
+	{ "INT3431", (unsigned long)&lpt_dev_desc },
+	{ "INT3432", (unsigned long)&lpt_dev_desc },
+	{ "INT3433", (unsigned long)&lpt_dev_desc },
+	{ "INT3434", (unsigned long)&lpt_uart_dev_desc },
+	{ "INT3435", (unsigned long)&lpt_uart_dev_desc },
+	{ "INT3436", (unsigned long)&lpt_sdio_dev_desc },
+	{ "INT3437", },
 
 	{ }
 };
@@ -257,11 +290,12 @@ static int acpi_lpss_create_device(struct acpi_device *adev,
 				pdata->mmio_size = resource_size(&rentry->res);
 			pdata->mmio_base = ioremap(rentry->res.start,
 						   pdata->mmio_size);
-			pdata->dev_desc = dev_desc;
 			break;
 		}
 
 	acpi_dev_free_resource_list(&resource_list);
+
+	pdata->dev_desc = dev_desc;
 
 	if (dev_desc->clk_required) {
 		ret = register_device_clock(adev, pdata);
@@ -299,6 +333,17 @@ static int acpi_lpss_create_device(struct acpi_device *adev,
 	return ret;
 }
 
+static u32 __lpss_reg_read(struct lpss_private_data *pdata, unsigned int reg)
+{
+	return readl(pdata->mmio_base + pdata->dev_desc->prv_offset + reg);
+}
+
+static void __lpss_reg_write(u32 val, struct lpss_private_data *pdata,
+			     unsigned int reg)
+{
+	writel(val, pdata->mmio_base + pdata->dev_desc->prv_offset + reg);
+}
+
 static int lpss_reg_read(struct device *dev, unsigned int reg, u32 *val)
 {
 	struct acpi_device *adev;
@@ -320,7 +365,7 @@ static int lpss_reg_read(struct device *dev, unsigned int reg, u32 *val)
 		ret = -ENODEV;
 		goto out;
 	}
-	*val = readl(pdata->mmio_base + pdata->dev_desc->prv_offset + reg);
+	*val = __lpss_reg_read(pdata, reg);
 
  out:
 	spin_unlock_irqrestore(&dev->power.lock, flags);
@@ -373,6 +418,37 @@ static struct attribute_group lpss_attr_group = {
 	.name = "lpss_ltr",
 };
 
+static void acpi_lpss_set_ltr(struct device *dev, s32 val)
+{
+	struct lpss_private_data *pdata = acpi_driver_data(ACPI_COMPANION(dev));
+	u32 ltr_mode, ltr_val;
+
+	ltr_mode = __lpss_reg_read(pdata, LPSS_GENERAL);
+	if (val < 0) {
+		if (ltr_mode & LPSS_GENERAL_LTR_MODE_SW) {
+			ltr_mode &= ~LPSS_GENERAL_LTR_MODE_SW;
+			__lpss_reg_write(ltr_mode, pdata, LPSS_GENERAL);
+		}
+		return;
+	}
+	ltr_val = __lpss_reg_read(pdata, LPSS_SW_LTR) & ~LPSS_LTR_SNOOP_MASK;
+	if (val >= LPSS_LTR_SNOOP_LAT_CUTOFF) {
+		ltr_val |= LPSS_LTR_SNOOP_LAT_32US;
+		val = LPSS_LTR_MAX_VAL;
+	} else if (val > LPSS_LTR_MAX_VAL) {
+		ltr_val |= LPSS_LTR_SNOOP_LAT_32US | LPSS_LTR_SNOOP_REQ;
+		val >>= LPSS_LTR_SNOOP_LAT_SHIFT;
+	} else {
+		ltr_val |= LPSS_LTR_SNOOP_LAT_1US | LPSS_LTR_SNOOP_REQ;
+	}
+	ltr_val |= val;
+	__lpss_reg_write(ltr_val, pdata, LPSS_SW_LTR);
+	if (!(ltr_mode & LPSS_GENERAL_LTR_MODE_SW)) {
+		ltr_mode |= LPSS_GENERAL_LTR_MODE_SW;
+		__lpss_reg_write(ltr_mode, pdata, LPSS_GENERAL);
+	}
+}
+
 static int acpi_lpss_platform_notify(struct notifier_block *nb,
 				     unsigned long action, void *data)
 {
@@ -410,9 +486,29 @@ static struct notifier_block acpi_lpss_nb = {
 	.notifier_call = acpi_lpss_platform_notify,
 };
 
+static void acpi_lpss_bind(struct device *dev)
+{
+	struct lpss_private_data *pdata = acpi_driver_data(ACPI_COMPANION(dev));
+
+	if (!pdata || !pdata->mmio_base || !pdata->dev_desc->ltr_required)
+		return;
+
+	if (pdata->mmio_size >= pdata->dev_desc->prv_offset + LPSS_LTR_SIZE)
+		dev->power.set_latency_tolerance = acpi_lpss_set_ltr;
+	else
+		dev_err(dev, "MMIO size insufficient to access LTR\n");
+}
+
+static void acpi_lpss_unbind(struct device *dev)
+{
+	dev->power.set_latency_tolerance = NULL;
+}
+
 static struct acpi_scan_handler lpss_handler = {
 	.ids = acpi_lpss_device_ids,
 	.attach = acpi_lpss_create_device,
+	.bind = acpi_lpss_bind,
+	.unbind = acpi_lpss_unbind,
 };
 
 void __init acpi_lpss_init(void)

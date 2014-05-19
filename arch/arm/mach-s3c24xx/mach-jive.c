@@ -19,6 +19,7 @@
 #include <linux/gpio.h>
 #include <linux/syscore_ops.h>
 #include <linux/serial_core.h>
+#include <linux/serial_s3c.h>
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
 
@@ -31,13 +32,13 @@
 #include <asm/mach/map.h>
 #include <asm/mach/irq.h>
 
-#include <plat/regs-serial.h>
 #include <linux/platform_data/mtd-nand-s3c2410.h>
 #include <linux/platform_data/i2c-s3c2410.h>
 
 #include <mach/regs-gpio.h>
 #include <mach/regs-lcd.h>
 #include <mach/fb.h>
+#include <mach/gpio-samsung.h>
 
 #include <asm/mach-types.h>
 
@@ -466,6 +467,7 @@ static struct platform_device *jive_devices[] __initdata = {
 	&jive_device_wm8750,
 	&s3c_device_nand,
 	&s3c_device_usbgadget,
+	&s3c2412_device_dma,
 };
 
 static struct s3c2410_udc_mach_info jive_udc_cfg __initdata = {

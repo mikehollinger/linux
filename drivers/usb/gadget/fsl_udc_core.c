@@ -1219,6 +1219,10 @@ static int fsl_pullup(struct usb_gadget *gadget, int is_on)
 	struct fsl_udc *udc;
 
 	udc = container_of(gadget, struct fsl_udc, gadget);
+
+	if (!udc->vbus_active)
+		return -EOPNOTSUPP;
+
 	udc->softconnect = (is_on != 0);
 	if (can_pullup(udc))
 		fsl_writel((fsl_readl(&dr_regs->usbcmd) | USB_CMD_RUN_STOP),
@@ -2248,7 +2252,7 @@ static int __init struct_udc_setup(struct fsl_udc *udc,
 	struct fsl_usb2_platform_data *pdata;
 	size_t size;
 
-	pdata = pdev->dev.platform_data;
+	pdata = dev_get_platdata(&pdev->dev);
 	udc->phy_mode = pdata->phy_mode;
 
 	udc->eps = kzalloc(sizeof(struct fsl_ep) * udc->max_ep, GFP_KERNEL);
@@ -2311,7 +2315,7 @@ static int __init struct_ep_setup(struct fsl_udc *udc, unsigned char index,
 	/* for ep0: maxP defined in desc
 	 * for other eps, maxP is set by epautoconfig() called by gadget layer
 	 */
-	ep->ep.maxpacket = (unsigned short) ~0;
+	usb_ep_set_maxpacket_limit(&ep->ep, (unsigned short) ~0);
 
 	/* the queue lists any req for this ep */
 	INIT_LIST_HEAD(&ep->queue);
@@ -2343,7 +2347,7 @@ static int __init fsl_udc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	pdata = pdev->dev.platform_data;
+	pdata = dev_get_platdata(&pdev->dev);
 	udc_controller->pdata = pdata;
 	spin_lock_init(&udc_controller->lock);
 	udc_controller->stopped = 1;
@@ -2469,7 +2473,8 @@ static int __init fsl_udc_probe(struct platform_device *pdev)
 	 * for other eps, gadget layer called ep_enable with defined desc
 	 */
 	udc_controller->eps[0].ep.desc = &fsl_ep0_desc;
-	udc_controller->eps[0].ep.maxpacket = USB_MAX_CTRL_PAYLOAD;
+	usb_ep_set_maxpacket_limit(&udc_controller->eps[0].ep,
+				   USB_MAX_CTRL_PAYLOAD);
 
 	/* setup the udc->eps[] for non-control endpoints and link
 	 * to gadget.ep_list */
@@ -2524,15 +2529,15 @@ err_kfree:
 static int __exit fsl_udc_remove(struct platform_device *pdev)
 {
 	struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	struct fsl_usb2_platform_data *pdata = pdev->dev.platform_data;
+	struct fsl_usb2_platform_data *pdata = dev_get_platdata(&pdev->dev);
 
 	DECLARE_COMPLETION(done);
 
 	if (!udc_controller)
 		return -ENODEV;
 
-	usb_del_gadget_udc(&udc_controller->gadget);
 	udc_controller->done = &done;
+	usb_del_gadget_udc(&udc_controller->gadget);
 
 	fsl_udc_clk_release();
 
@@ -2666,7 +2671,7 @@ static struct platform_driver udc_driver = {
 	.suspend	= fsl_udc_suspend,
 	.resume		= fsl_udc_resume,
 	.driver		= {
-			.name = (char *)driver_name,
+			.name = driver_name,
 			.owner = THIS_MODULE,
 			/* udc suspend/resume called from OTG driver */
 			.suspend = fsl_udc_otg_suspend,

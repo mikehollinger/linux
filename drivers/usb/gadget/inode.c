@@ -439,11 +439,9 @@ ep_write (struct file *fd, const char __user *buf, size_t len, loff_t *ptr)
 	/* FIXME writebehind for O_NONBLOCK and poll(), qlen = 1 */
 
 	value = -ENOMEM;
-	kbuf = kmalloc (len, GFP_KERNEL);
-	if (!kbuf)
-		goto free1;
-	if (copy_from_user (kbuf, buf, len)) {
-		value = -EFAULT;
+	kbuf = memdup_user(buf, len);
+	if (!kbuf) {
+		value = PTR_ERR(kbuf);
 		goto free1;
 	}
 
@@ -452,7 +450,6 @@ ep_write (struct file *fd, const char __user *buf, size_t len, loff_t *ptr)
 		data->name, len, (int) value);
 free1:
 	mutex_unlock(&data->lock);
-	kfree (kbuf);
 	return value;
 }
 
@@ -524,7 +521,7 @@ struct kiocb_priv {
 	unsigned		actual;
 };
 
-static int ep_aio_cancel(struct kiocb *iocb, struct io_event *e)
+static int ep_aio_cancel(struct kiocb *iocb)
 {
 	struct kiocb_priv	*priv = iocb->private;
 	struct ep_data		*epdata;
@@ -540,7 +537,6 @@ static int ep_aio_cancel(struct kiocb *iocb, struct io_event *e)
 	// spin_unlock(&epdata->dev->lock);
 	local_irq_enable();
 
-	aio_put_req(iocb);
 	return value;
 }
 
@@ -709,11 +705,11 @@ ep_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	if (unlikely(usb_endpoint_dir_in(&epdata->desc)))
 		return -EINVAL;
 
-	buf = kmalloc(iocb->ki_left, GFP_KERNEL);
+	buf = kmalloc(iocb->ki_nbytes, GFP_KERNEL);
 	if (unlikely(!buf))
 		return -ENOMEM;
 
-	return ep_aio_rwtail(iocb, buf, iocb->ki_left, epdata, iov, nr_segs);
+	return ep_aio_rwtail(iocb, buf, iocb->ki_nbytes, epdata, iov, nr_segs);
 }
 
 static ssize_t
@@ -728,7 +724,7 @@ ep_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	if (unlikely(!usb_endpoint_dir_in(&epdata->desc)))
 		return -EINVAL;
 
-	buf = kmalloc(iocb->ki_left, GFP_KERNEL);
+	buf = kmalloc(iocb->ki_nbytes, GFP_KERNEL);
 	if (unlikely(!buf))
 		return -ENOMEM;
 
@@ -1270,10 +1266,6 @@ dev_release (struct inode *inode, struct file *fd)
 	dev->buf = NULL;
 	put_dev (dev);
 
-	/* other endpoints were all decoupled from this device */
-	spin_lock_irq(&dev->lock);
-	dev->state = STATE_DEV_DISABLED;
-	spin_unlock_irq(&dev->lock);
 	return 0;
 }
 
@@ -2051,6 +2043,7 @@ gadgetfs_fill_super (struct super_block *sb, void *opts, int silent)
 		return -ESRCH;
 
 	/* fake probe to determine $CHIP */
+	CHIP = NULL;
 	usb_gadget_probe_driver(&probe_driver);
 	if (!CHIP)
 		return -ENODEV;

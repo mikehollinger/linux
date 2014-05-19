@@ -34,7 +34,6 @@
 
 #include <linux/kernel.h>
 #include <linux/errno.h>
-#include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -177,24 +176,24 @@ static void usb_tranzport_abort_transfers(struct usb_tranzport *dev)
 }
 
 #define show_int(value)	\
-	static ssize_t show_##value(struct device *dev,	\
+	static ssize_t value##_show(struct device *dev,	\
 			      struct device_attribute *attr, char *buf)	\
 	{	\
 		struct usb_interface *intf = to_usb_interface(dev);	\
 		struct usb_tranzport *t = usb_get_intfdata(intf);	\
 		return sprintf(buf, "%d\n", t->value);	\
 	}	\
-	static DEVICE_ATTR(value, S_IRUGO, show_##value, NULL);
+	static DEVICE_ATTR_RO(value)
 
 #define show_set_int(value)	\
-	static ssize_t show_##value(struct device *dev,	\
+	static ssize_t value##_show(struct device *dev,	\
 			      struct device_attribute *attr, char *buf)	\
 	{	\
 		struct usb_interface *intf = to_usb_interface(dev);	\
 		struct usb_tranzport *t = usb_get_intfdata(intf);	\
 		return sprintf(buf, "%d\n", t->value);	\
 	}	\
-	static ssize_t set_##value(struct device *dev,	\
+	static ssize_t value##_store(struct device *dev,	\
 			     struct device_attribute *attr,		\
 			     const char *buf, size_t count)		\
 	{	\
@@ -206,7 +205,7 @@ static void usb_tranzport_abort_transfers(struct usb_tranzport *dev)
 		t->value = temp;	\
 		return count;	\
 	}	\
-	static DEVICE_ATTR(value, S_IWUSR | S_IRUGO, show_##value, set_##value);
+	static DEVICE_ATTR_RW(value)
 
 show_int(enable);
 show_int(offline);
@@ -258,8 +257,7 @@ static void usb_tranzport_interrupt_in_callback(struct urb *urb)
 
 	if (urb->actual_length != 8) {
 		dev_warn(&dev->intf->dev,
-			"Urb length was %d bytes!!"
-			"Do something intelligent\n",
+			"Urb length was %d bytes!! Do something intelligent\n",
 			 urb->actual_length);
 	} else {
 		dbg_info(&dev->intf->dev,
@@ -543,8 +541,7 @@ static ssize_t usb_tranzport_read(struct file *file, char __user *buffer,
 	}
 
 	dbg_info(&dev->intf->dev,
-		"%s: copying to userspace: "
-		"%02x%02x%02x%02x%02x%02x%02x%02x\n",
+		"%s: copying to userspace: %02x%02x%02x%02x%02x%02x%02x%02x\n",
 		 __func__,
 		 (*dev->ring_buffer)[dev->ring_tail].cmd[0],
 		 (*dev->ring_buffer)[dev->ring_tail].cmd[1],
@@ -571,8 +568,7 @@ static ssize_t usb_tranzport_read(struct file *file, char __user *buffer,
 			 * and we are the same sign, we can compress +- 7F
 			 */
 			dbg_info(&dev->intf->dev,
-				"%s: trying to compress: "
-				"%02x%02x%02x%02x%02x%02x%02x%02x\n",
+				"%s: trying to compress: %02x%02x%02x%02x%02x%02x%02x%02x\n",
 				__func__,
 				(*dev->ring_buffer)[dev->ring_tail].cmd[0],
 				(*dev->ring_buffer)[dev->ring_tail].cmd[1],
@@ -831,8 +827,7 @@ static int usb_tranzport_probe(struct usb_interface *intf,
 	}
 	if (dev->interrupt_out_endpoint == NULL)
 		dev_warn(&intf->dev,
-			"Interrupt out endpoint not found"
-			"(using control endpoint instead)\n");
+			"Interrupt out endpoint not found (using control endpoint instead)\n");
 
 	dev->interrupt_in_endpoint_size =
 	    le16_to_cpu(dev->interrupt_in_endpoint->wMaxPacketSize);

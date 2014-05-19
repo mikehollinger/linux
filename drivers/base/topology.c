@@ -23,7 +23,6 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-#include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/cpu.h>
 #include <linux/module.h>
@@ -40,8 +39,7 @@
 static ssize_t show_##name(struct device *dev,			\
 		struct device_attribute *attr, char *buf)	\
 {								\
-	unsigned int cpu = dev->id;				\
-	return sprintf(buf, "%d\n", topology_##name(cpu));	\
+	return sprintf(buf, "%d\n", topology_##name(dev->id));	\
 }
 
 #if defined(topology_thread_cpumask) || defined(topology_core_cpumask) || \
@@ -62,25 +60,6 @@ static ssize_t show_cpumap(int type, const struct cpumask *mask, char *buf)
 }
 #endif
 
-#ifdef arch_provides_topology_pointers
-#define define_siblings_show_map(name)					\
-static ssize_t show_##name(struct device *dev,				\
-			   struct device_attribute *attr, char *buf)	\
-{									\
-	unsigned int cpu = dev->id;					\
-	return show_cpumap(0, topology_##name(cpu), buf);		\
-}
-
-#define define_siblings_show_list(name)					\
-static ssize_t show_##name##_list(struct device *dev,			\
-				  struct device_attribute *attr,	\
-				  char *buf)				\
-{									\
-	unsigned int cpu = dev->id;					\
-	return show_cpumap(1, topology_##name(cpu), buf);		\
-}
-
-#else
 #define define_siblings_show_map(name)					\
 static ssize_t show_##name(struct device *dev,				\
 			   struct device_attribute *attr, char *buf)	\
@@ -95,7 +74,6 @@ static ssize_t show_##name##_list(struct device *dev,			\
 {									\
 	return show_cpumap(1, topology_##name(dev->id), buf);		\
 }
-#endif
 
 #define define_siblings_show_func(name)		\
 	define_siblings_show_map(name); define_siblings_show_list(name)
@@ -181,16 +159,20 @@ static int topology_cpu_callback(struct notifier_block *nfb,
 static int topology_sysfs_init(void)
 {
 	int cpu;
-	int rc;
+	int rc = 0;
+
+	cpu_notifier_register_begin();
 
 	for_each_online_cpu(cpu) {
 		rc = topology_add_dev(cpu);
 		if (rc)
-			return rc;
+			goto out;
 	}
-	hotcpu_notifier(topology_cpu_callback, 0);
+	__hotcpu_notifier(topology_cpu_callback, 0);
 
-	return 0;
+out:
+	cpu_notifier_register_done();
+	return rc;
 }
 
 device_initcall(topology_sysfs_init);

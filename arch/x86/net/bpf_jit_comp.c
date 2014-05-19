@@ -359,15 +359,21 @@ void bpf_jit_compile(struct sk_filter *fp)
 				EMIT2(0x89, 0xd0);	/* mov %edx,%eax */
 				break;
 			case BPF_S_ALU_MOD_K: /* A %= K; */
+				if (K == 1) {
+					CLEAR_A();
+					break;
+				}
 				EMIT2(0x31, 0xd2);	/* xor %edx,%edx */
 				EMIT1(0xb9);EMIT(K, 4);	/* mov imm32,%ecx */
 				EMIT2(0xf7, 0xf1);	/* div %ecx */
 				EMIT2(0x89, 0xd0);	/* mov %edx,%eax */
 				break;
-			case BPF_S_ALU_DIV_K: /* A = reciprocal_divide(A, K); */
-				EMIT3(0x48, 0x69, 0xc0); /* imul imm32,%rax,%rax */
-				EMIT(K, 4);
-				EMIT4(0x48, 0xc1, 0xe8, 0x20); /* shr $0x20,%rax */
+			case BPF_S_ALU_DIV_K: /* A /= K */
+				if (K == 1)
+					break;
+				EMIT2(0x31, 0xd2);	/* xor %edx,%edx */
+				EMIT1(0xb9);EMIT(K, 4);	/* mov imm32,%ecx */
+				EMIT2(0xf7, 0xf1);	/* div %ecx */
 				break;
 			case BPF_S_ALU_AND_X:
 				seen |= SEEN_XREG;
@@ -547,13 +553,13 @@ void bpf_jit_compile(struct sk_filter *fp)
 				}
 				break;
 			case BPF_S_ANC_RXHASH:
-				BUILD_BUG_ON(FIELD_SIZEOF(struct sk_buff, rxhash) != 4);
-				if (is_imm8(offsetof(struct sk_buff, rxhash))) {
+				BUILD_BUG_ON(FIELD_SIZEOF(struct sk_buff, hash) != 4);
+				if (is_imm8(offsetof(struct sk_buff, hash))) {
 					/* mov off8(%rdi),%eax */
-					EMIT3(0x8b, 0x47, offsetof(struct sk_buff, rxhash));
+					EMIT3(0x8b, 0x47, offsetof(struct sk_buff, hash));
 				} else {
 					EMIT2(0x8b, 0x87);
-					EMIT(offsetof(struct sk_buff, rxhash), 4);
+					EMIT(offsetof(struct sk_buff, hash), 4);
 				}
 				break;
 			case BPF_S_ANC_QUEUE:
@@ -766,19 +772,30 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 		bpf_flush_icache(header, image + proglen);
 		set_memory_ro((unsigned long)header, header->pages);
 		fp->bpf_func = (void *)image;
+		fp->jited = 1;
 	}
 out:
 	kfree(addrs);
 	return;
 }
 
+static void bpf_jit_free_deferred(struct work_struct *work)
+{
+	struct sk_filter *fp = container_of(work, struct sk_filter, work);
+	unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
+	struct bpf_binary_header *header = (void *)addr;
+
+	set_memory_rw(addr, header->pages);
+	module_free(NULL, header);
+	kfree(fp);
+}
+
 void bpf_jit_free(struct sk_filter *fp)
 {
-	if (fp->bpf_func != sk_run_filter) {
-		unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
-		struct bpf_binary_header *header = (void *)addr;
-
-		set_memory_rw(addr, header->pages);
-		module_free(NULL, header);
+	if (fp->jited) {
+		INIT_WORK(&fp->work, bpf_jit_free_deferred);
+		schedule_work(&fp->work);
+	} else {
+		kfree(fp);
 	}
 }

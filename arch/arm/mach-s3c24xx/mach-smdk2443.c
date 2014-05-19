@@ -20,6 +20,7 @@
 #include <linux/timer.h>
 #include <linux/init.h>
 #include <linux/serial_core.h>
+#include <linux/serial_s3c.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
 
@@ -31,7 +32,6 @@
 #include <asm/irq.h>
 #include <asm/mach-types.h>
 
-#include <plat/regs-serial.h>
 #include <mach/regs-gpio.h>
 #include <mach/regs-lcd.h>
 
@@ -115,6 +115,7 @@ static struct platform_device *smdk2443_devices[] __initdata = {
 #ifdef CONFIG_SND_SOC_SMDK2443_WM9710
 	&s3c_device_ac97,
 #endif
+	&s3c2443_device_dma,
 };
 
 static void __init smdk2443_map_io(void)

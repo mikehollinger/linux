@@ -60,12 +60,8 @@
  */
 void ptlrpc_initiate_recovery(struct obd_import *imp)
 {
-	ENTRY;
-
 	CDEBUG(D_HA, "%s: starting recovery\n", obd2cli_tgt(imp->imp_obd));
 	ptlrpc_connect_import(imp);
-
-	EXIT;
 }
 
 /**
@@ -78,7 +74,6 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 	struct list_head *tmp, *pos;
 	struct ptlrpc_request *req = NULL;
 	__u64 last_transno;
-	ENTRY;
 
 	*inflight = 0;
 
@@ -110,23 +105,58 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 	 * imp_lock is being held by ptlrpc_replay, but it's not. it's
 	 * just a little race...
 	 */
-	list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
+
+	/* Replay all the committed open requests on committed_list first */
+	if (!list_empty(&imp->imp_committed_list)) {
+		tmp = imp->imp_committed_list.prev;
 		req = list_entry(tmp, struct ptlrpc_request,
 				     rq_replay_list);
 
-		/* If need to resend the last sent transno (because a
-		   reconnect has occurred), then stop on the matching
-		   req and send it again. If, however, the last sent
-		   transno has been committed then we continue replay
-		   from the next request. */
+		/* The last request on committed_list hasn't been replayed */
 		if (req->rq_transno > last_transno) {
-			if (imp->imp_resend_replay)
-				lustre_msg_add_flags(req->rq_reqmsg,
-						     MSG_RESENT);
-			break;
+			/* Since the imp_committed_list is immutable before
+			 * all of it's requests being replayed, it's safe to
+			 * use a cursor to accelerate the search */
+			imp->imp_replay_cursor = imp->imp_replay_cursor->next;
+
+			while (imp->imp_replay_cursor !=
+			       &imp->imp_committed_list) {
+				req = list_entry(imp->imp_replay_cursor,
+						 struct ptlrpc_request,
+						 rq_replay_list);
+				if (req->rq_transno > last_transno)
+					break;
+
+				req = NULL;
+				imp->imp_replay_cursor =
+					imp->imp_replay_cursor->next;
+			}
+		} else {
+			/* All requests on committed_list have been replayed */
+			imp->imp_replay_cursor = &imp->imp_committed_list;
+			req = NULL;
 		}
-		req = NULL;
 	}
+
+	/* All the requests in committed list have been replayed, let's replay
+	 * the imp_replay_list */
+	if (req == NULL) {
+		list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
+			req = list_entry(tmp, struct ptlrpc_request,
+					 rq_replay_list);
+
+			if (req->rq_transno > last_transno)
+				break;
+			req = NULL;
+		}
+	}
+
+	/* If need to resend the last sent transno (because a reconnect
+	 * has occurred), then stop on the matching req and send it again.
+	 * If, however, the last sent transno has been committed then we
+	 * continue replay from the next request. */
+	if (req != NULL && imp->imp_resend_replay)
+		lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
 
 	spin_lock(&imp->imp_lock);
 	imp->imp_resend_replay = 0;
@@ -137,11 +167,11 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 		if (rc) {
 			CERROR("recovery replay error %d for req "
 			       LPU64"\n", rc, req->rq_xid);
-			RETURN(rc);
+			return rc;
 		}
 		*inflight = 1;
 	}
-	RETURN(rc);
+	return rc;
 }
 
 /**
@@ -152,8 +182,6 @@ int ptlrpc_resend(struct obd_import *imp)
 {
 	struct ptlrpc_request *req, *next;
 
-	ENTRY;
-
 	/* As long as we're in recovery, nothing should be added to the sending
 	 * list, so we don't need to hold the lock during this iteration and
 	 * resend process.
@@ -163,7 +191,7 @@ int ptlrpc_resend(struct obd_import *imp)
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state != LUSTRE_IMP_RECOVER) {
 		spin_unlock(&imp->imp_lock);
-		RETURN(-1);
+		return -1;
 	}
 
 	list_for_each_entry_safe(req, next, &imp->imp_sending_list,
@@ -176,7 +204,7 @@ int ptlrpc_resend(struct obd_import *imp)
 	}
 	spin_unlock(&imp->imp_lock);
 
-	RETURN(0);
+	return 0;
 }
 EXPORT_SYMBOL(ptlrpc_resend);
 
@@ -203,7 +231,6 @@ EXPORT_SYMBOL(ptlrpc_wake_delayed);
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
 	struct obd_import *imp = failed_req->rq_import;
-	ENTRY;
 
 	CDEBUG(D_HA, "import %s of %s@%s abruptly disconnected: reconnecting\n",
 	       imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
@@ -230,8 +257,6 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 	if (!failed_req->rq_no_resend)
 		failed_req->rq_resend = 1;
 	spin_unlock(&failed_req->rq_lock);
-
-	EXIT;
 }
 
 /**
@@ -246,7 +271,6 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
 	struct obd_device *obd = imp->imp_obd;
 	int rc = 0;
 
-	ENTRY;
 	LASSERT(obd);
 
 	/* When deactivating, mark import invalid, and abort in-flight
@@ -279,7 +303,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
 		rc = ptlrpc_recover_import(imp, NULL, 0);
 	}
 
-	RETURN(rc);
+	return rc;
 }
 EXPORT_SYMBOL(ptlrpc_set_import_active);
 
@@ -287,7 +311,6 @@ EXPORT_SYMBOL(ptlrpc_set_import_active);
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 {
 	int rc = 0;
-	ENTRY;
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state == LUSTRE_IMP_NEW || imp->imp_deactive ||
@@ -337,7 +360,6 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 		CDEBUG(D_HA, "%s: recovery finished\n",
 		       obd2cli_tgt(imp->imp_obd));
 	}
-	EXIT;
 
 out:
 	return rc;

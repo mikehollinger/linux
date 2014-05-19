@@ -122,7 +122,7 @@ const char *mpc8xxx_spi_strmode(unsigned int flags)
 int mpc8xxx_spi_probe(struct device *dev, struct resource *mem,
 			unsigned int irq)
 {
-	struct fsl_spi_platform_data *pdata = dev->platform_data;
+	struct fsl_spi_platform_data *pdata = dev_get_platdata(dev);
 	struct spi_master *master;
 	struct mpc8xxx_spi *mpc8xxx_spi;
 	int ret = 0;
@@ -200,7 +200,7 @@ int of_mpc8xxx_spi_probe(struct platform_device *ofdev)
 	const void *prop;
 	int ret = -ENOMEM;
 
-	pinfo = kzalloc(sizeof(*pinfo), GFP_KERNEL);
+	pinfo = devm_kzalloc(&ofdev->dev, sizeof(*pinfo), GFP_KERNEL);
 	if (!pinfo)
 		return -ENOMEM;
 
@@ -215,15 +215,13 @@ int of_mpc8xxx_spi_probe(struct platform_device *ofdev)
 	pdata->sysclk = get_brgfreq();
 	if (pdata->sysclk == -1) {
 		pdata->sysclk = fsl_get_sys_freq();
-		if (pdata->sysclk == -1) {
-			ret = -ENODEV;
-			goto err;
-		}
+		if (pdata->sysclk == -1)
+			return -ENODEV;
 	}
 #else
 	ret = of_property_read_u32(np, "clock-frequency", &pdata->sysclk);
 	if (ret)
-		goto err;
+		return ret;
 #endif
 
 	prop = of_get_property(np, "mode", NULL);
@@ -237,8 +235,4 @@ int of_mpc8xxx_spi_probe(struct platform_device *ofdev)
 		pdata->flags = SPI_CPM_MODE | SPI_CPM1;
 
 	return 0;
-
-err:
-	kfree(pinfo);
-	return ret;
 }

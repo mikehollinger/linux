@@ -23,6 +23,7 @@ config B44
 	depends on SSB_POSSIBLE && HAS_DMA
 	select SSB
 	select MII
+	select PHYLIB
 	---help---
 	  If you have a network (Ethernet) controller of this type, say Y
 	  or M and read the Ethernet-HOWTO, available from
@@ -58,6 +59,17 @@ config BCM63XX_ENET
 	help
 	  This driver supports the ethernet MACs in the Broadcom 63xx
 	  MIPS chipset family (BCM63XX).
+
+config BCMGENET
+	tristate "Broadcom GENET internal MAC support"
+	depends on OF
+	select MII
+	select PHYLIB
+	select FIXED_PHY if BCMGENET=y
+	select BCM7XXX_PHY
+	help
+	  This driver supports the built-in Ethernet MACs found in the
+	  Broadcom BCM7xxx Set Top Box family chipset.
 
 config BNX2
 	tristate "Broadcom NetXtremeII support"
@@ -130,7 +142,7 @@ config BNX2X_SRIOV
 
 config BGMAC
 	tristate "BCMA bus GBit core support"
-	depends on BCMA_HOST_SOC && HAS_DMA
+	depends on BCMA_HOST_SOC && HAS_DMA && BCM47XX
 	select PHYLIB
 	---help---
 	  This driver supports GBit MAC and BCM4706 GBit MAC cores on BCMA bus.

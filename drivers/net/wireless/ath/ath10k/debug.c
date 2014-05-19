@@ -21,6 +21,9 @@
 #include "core.h"
 #include "debug.h"
 
+/* ms */
+#define ATH10K_DEBUG_HTT_STATS_INTERVAL 1000
+
 static int ath10k_printk(const char *level, const char *fmt, ...)
 {
 	struct va_format vaf;
@@ -161,7 +164,7 @@ void ath10k_debug_read_target_stats(struct ath10k *ar,
 	struct wmi_pdev_stats *ps;
 	int i;
 
-	mutex_lock(&ar->conf_mutex);
+	spin_lock_bh(&ar->data_lock);
 
 	stats = &ar->debug.target_stats;
 
@@ -259,7 +262,7 @@ void ath10k_debug_read_target_stats(struct ath10k *ar,
 		}
 	}
 
-	mutex_unlock(&ar->conf_mutex);
+	spin_unlock_bh(&ar->data_lock);
 	complete(&ar->debug.event_stats_compl);
 }
 
@@ -268,35 +271,35 @@ static ssize_t ath10k_read_fw_stats(struct file *file, char __user *user_buf,
 {
 	struct ath10k *ar = file->private_data;
 	struct ath10k_target_stats *fw_stats;
-	char *buf;
+	char *buf = NULL;
 	unsigned int len = 0, buf_len = 2500;
-	ssize_t ret_cnt;
+	ssize_t ret_cnt = 0;
 	long left;
 	int i;
 	int ret;
 
 	fw_stats = &ar->debug.target_stats;
 
+	mutex_lock(&ar->conf_mutex);
+
+	if (ar->state != ATH10K_STATE_ON)
+		goto exit;
+
 	buf = kzalloc(buf_len, GFP_KERNEL);
 	if (!buf)
-		return -ENOMEM;
+		goto exit;
 
 	ret = ath10k_wmi_request_stats(ar, WMI_REQUEST_PEER_STAT);
 	if (ret) {
 		ath10k_warn("could not request stats (%d)\n", ret);
-		kfree(buf);
-		return -EIO;
+		goto exit;
 	}
 
 	left = wait_for_completion_timeout(&ar->debug.event_stats_compl, 1*HZ);
+	if (left <= 0)
+		goto exit;
 
-	if (left <= 0) {
-		kfree(buf);
-		return -ETIMEDOUT;
-	}
-
-	mutex_lock(&ar->conf_mutex);
-
+	spin_lock_bh(&ar->data_lock);
 	len += scnprintf(buf + len, buf_len - len, "\n");
 	len += scnprintf(buf + len, buf_len - len, "%30s\n",
 			 "ath10k PDEV stats");
@@ -424,20 +427,356 @@ static ssize_t ath10k_read_fw_stats(struct file *file, char __user *user_buf,
 				 fw_stats->peer_stat[i].peer_tx_rate);
 		len += scnprintf(buf + len, buf_len - len, "\n");
 	}
+	spin_unlock_bh(&ar->data_lock);
 
 	if (len > buf_len)
 		len = buf_len;
 
 	ret_cnt = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
+exit:
 	mutex_unlock(&ar->conf_mutex);
-
 	kfree(buf);
 	return ret_cnt;
 }
 
 static const struct file_operations fops_fw_stats = {
 	.read = ath10k_read_fw_stats,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t ath10k_read_simulate_fw_crash(struct file *file,
+					     char __user *user_buf,
+					     size_t count, loff_t *ppos)
+{
+	const char buf[] = "To simulate firmware crash write the keyword"
+			   " `crash` to this file.\nThis will force firmware"
+			   " to report a crash to the host system.\n";
+	return simple_read_from_buffer(user_buf, count, ppos, buf, strlen(buf));
+}
+
+static ssize_t ath10k_write_simulate_fw_crash(struct file *file,
+					      const char __user *user_buf,
+					      size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	char buf[32] = {};
+	int ret;
+
+	mutex_lock(&ar->conf_mutex);
+
+	simple_write_to_buffer(buf, sizeof(buf) - 1, ppos, user_buf, count);
+	if (strcmp(buf, "crash") && strcmp(buf, "crash\n")) {
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	if (ar->state != ATH10K_STATE_ON &&
+	    ar->state != ATH10K_STATE_RESTARTED) {
+		ret = -ENETDOWN;
+		goto exit;
+	}
+
+	ath10k_info("simulating firmware crash\n");
+
+	ret = ath10k_wmi_force_fw_hang(ar, WMI_FORCE_FW_HANG_ASSERT, 0);
+	if (ret)
+		ath10k_warn("failed to force fw hang (%d)\n", ret);
+
+	if (ret == 0)
+		ret = count;
+
+exit:
+	mutex_unlock(&ar->conf_mutex);
+	return ret;
+}
+
+static const struct file_operations fops_simulate_fw_crash = {
+	.read = ath10k_read_simulate_fw_crash,
+	.write = ath10k_write_simulate_fw_crash,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t ath10k_read_chip_id(struct file *file, char __user *user_buf,
+				   size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	unsigned int len;
+	char buf[50];
+
+	len = scnprintf(buf, sizeof(buf), "0x%08x\n", ar->chip_id);
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static const struct file_operations fops_chip_id = {
+	.read = ath10k_read_chip_id,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static int ath10k_debug_htt_stats_req(struct ath10k *ar)
+{
+	u64 cookie;
+	int ret;
+
+	lockdep_assert_held(&ar->conf_mutex);
+
+	if (ar->debug.htt_stats_mask == 0)
+		/* htt stats are disabled */
+		return 0;
+
+	if (ar->state != ATH10K_STATE_ON)
+		return 0;
+
+	cookie = get_jiffies_64();
+
+	ret = ath10k_htt_h2t_stats_req(&ar->htt, ar->debug.htt_stats_mask,
+				       cookie);
+	if (ret) {
+		ath10k_warn("failed to send htt stats request: %d\n", ret);
+		return ret;
+	}
+
+	queue_delayed_work(ar->workqueue, &ar->debug.htt_stats_dwork,
+			   msecs_to_jiffies(ATH10K_DEBUG_HTT_STATS_INTERVAL));
+
+	return 0;
+}
+
+static void ath10k_debug_htt_stats_dwork(struct work_struct *work)
+{
+	struct ath10k *ar = container_of(work, struct ath10k,
+					 debug.htt_stats_dwork.work);
+
+	mutex_lock(&ar->conf_mutex);
+
+	ath10k_debug_htt_stats_req(ar);
+
+	mutex_unlock(&ar->conf_mutex);
+}
+
+static ssize_t ath10k_read_htt_stats_mask(struct file *file,
+					    char __user *user_buf,
+					    size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	char buf[32];
+	unsigned int len;
+
+	len = scnprintf(buf, sizeof(buf), "%lu\n", ar->debug.htt_stats_mask);
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static ssize_t ath10k_write_htt_stats_mask(struct file *file,
+					     const char __user *user_buf,
+					     size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	unsigned long mask;
+	int ret;
+
+	ret = kstrtoul_from_user(user_buf, count, 0, &mask);
+	if (ret)
+		return ret;
+
+	/* max 8 bit masks (for now) */
+	if (mask > 0xff)
+		return -E2BIG;
+
+	mutex_lock(&ar->conf_mutex);
+
+	ar->debug.htt_stats_mask = mask;
+
+	ret = ath10k_debug_htt_stats_req(ar);
+	if (ret)
+		goto out;
+
+	ret = count;
+
+out:
+	mutex_unlock(&ar->conf_mutex);
+
+	return ret;
+}
+
+static const struct file_operations fops_htt_stats_mask = {
+	.read = ath10k_read_htt_stats_mask,
+	.write = ath10k_write_htt_stats_mask,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t ath10k_read_fw_dbglog(struct file *file,
+					    char __user *user_buf,
+					    size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	unsigned int len;
+	char buf[32];
+
+	len = scnprintf(buf, sizeof(buf), "0x%08x\n",
+			ar->debug.fw_dbglog_mask);
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static ssize_t ath10k_write_fw_dbglog(struct file *file,
+				      const char __user *user_buf,
+				      size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	unsigned long mask;
+	int ret;
+
+	ret = kstrtoul_from_user(user_buf, count, 0, &mask);
+	if (ret)
+		return ret;
+
+	mutex_lock(&ar->conf_mutex);
+
+	ar->debug.fw_dbglog_mask = mask;
+
+	if (ar->state == ATH10K_STATE_ON) {
+		ret = ath10k_wmi_dbglog_cfg(ar, ar->debug.fw_dbglog_mask);
+		if (ret) {
+			ath10k_warn("dbglog cfg failed from debugfs: %d\n",
+				    ret);
+			goto exit;
+		}
+	}
+
+	ret = count;
+
+exit:
+	mutex_unlock(&ar->conf_mutex);
+
+	return ret;
+}
+
+static const struct file_operations fops_fw_dbglog = {
+	.read = ath10k_read_fw_dbglog,
+	.write = ath10k_write_fw_dbglog,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+int ath10k_debug_start(struct ath10k *ar)
+{
+	int ret;
+
+	lockdep_assert_held(&ar->conf_mutex);
+
+	ret = ath10k_debug_htt_stats_req(ar);
+	if (ret)
+		/* continue normally anyway, this isn't serious */
+		ath10k_warn("failed to start htt stats workqueue: %d\n", ret);
+
+	if (ar->debug.fw_dbglog_mask) {
+		ret = ath10k_wmi_dbglog_cfg(ar, ar->debug.fw_dbglog_mask);
+		if (ret)
+			/* not serious */
+			ath10k_warn("failed to enable dbglog during start: %d",
+				    ret);
+	}
+
+	return 0;
+}
+
+void ath10k_debug_stop(struct ath10k *ar)
+{
+	lockdep_assert_held(&ar->conf_mutex);
+
+	/* Must not use _sync to avoid deadlock, we do that in
+	 * ath10k_debug_destroy(). The check for htt_stats_mask is to avoid
+	 * warning from del_timer(). */
+	if (ar->debug.htt_stats_mask != 0)
+		cancel_delayed_work(&ar->debug.htt_stats_dwork);
+}
+
+static ssize_t ath10k_write_simulate_radar(struct file *file,
+					   const char __user *user_buf,
+					   size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+
+	ieee80211_radar_detected(ar->hw);
+
+	return count;
+}
+
+static const struct file_operations fops_simulate_radar = {
+	.write = ath10k_write_simulate_radar,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+#define ATH10K_DFS_STAT(s, p) (\
+	len += scnprintf(buf + len, size - len, "%-28s : %10u\n", s, \
+			 ar->debug.dfs_stats.p))
+
+#define ATH10K_DFS_POOL_STAT(s, p) (\
+	len += scnprintf(buf + len, size - len, "%-28s : %10u\n", s, \
+			 ar->debug.dfs_pool_stats.p))
+
+static ssize_t ath10k_read_dfs_stats(struct file *file, char __user *user_buf,
+				     size_t count, loff_t *ppos)
+{
+	int retval = 0, len = 0;
+	const int size = 8000;
+	struct ath10k *ar = file->private_data;
+	char *buf;
+
+	buf = kzalloc(size, GFP_KERNEL);
+	if (buf == NULL)
+		return -ENOMEM;
+
+	if (!ar->dfs_detector) {
+		len += scnprintf(buf + len, size - len, "DFS not enabled\n");
+		goto exit;
+	}
+
+	ar->debug.dfs_pool_stats =
+			ar->dfs_detector->get_stats(ar->dfs_detector);
+
+	len += scnprintf(buf + len, size - len, "Pulse detector statistics:\n");
+
+	ATH10K_DFS_STAT("reported phy errors", phy_errors);
+	ATH10K_DFS_STAT("pulse events reported", pulses_total);
+	ATH10K_DFS_STAT("DFS pulses detected", pulses_detected);
+	ATH10K_DFS_STAT("DFS pulses discarded", pulses_discarded);
+	ATH10K_DFS_STAT("Radars detected", radar_detected);
+
+	len += scnprintf(buf + len, size - len, "Global Pool statistics:\n");
+	ATH10K_DFS_POOL_STAT("Pool references", pool_reference);
+	ATH10K_DFS_POOL_STAT("Pulses allocated", pulse_allocated);
+	ATH10K_DFS_POOL_STAT("Pulses alloc error", pulse_alloc_error);
+	ATH10K_DFS_POOL_STAT("Pulses in use", pulse_used);
+	ATH10K_DFS_POOL_STAT("Seqs. allocated", pseq_allocated);
+	ATH10K_DFS_POOL_STAT("Seqs. alloc error", pseq_alloc_error);
+	ATH10K_DFS_POOL_STAT("Seqs. in use", pseq_used);
+
+exit:
+	if (len > size)
+		len = size;
+
+	retval = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	kfree(buf);
+
+	return retval;
+}
+
+static const struct file_operations fops_dfs_stats = {
+	.read = ath10k_read_dfs_stats,
 	.open = simple_open,
 	.owner = THIS_MODULE,
 	.llseek = default_llseek,
@@ -451,6 +790,9 @@ int ath10k_debug_create(struct ath10k *ar)
 	if (!ar->debug.debugfs_phy)
 		return -ENOMEM;
 
+	INIT_DELAYED_WORK(&ar->debug.htt_stats_dwork,
+			  ath10k_debug_htt_stats_dwork);
+
 	init_completion(&ar->debug.event_stats_compl);
 
 	debugfs_create_file("fw_stats", S_IRUSR, ar->debug.debugfs_phy, ar,
@@ -459,8 +801,40 @@ int ath10k_debug_create(struct ath10k *ar)
 	debugfs_create_file("wmi_services", S_IRUSR, ar->debug.debugfs_phy, ar,
 			    &fops_wmi_services);
 
+	debugfs_create_file("simulate_fw_crash", S_IRUSR, ar->debug.debugfs_phy,
+			    ar, &fops_simulate_fw_crash);
+
+	debugfs_create_file("chip_id", S_IRUSR, ar->debug.debugfs_phy,
+			    ar, &fops_chip_id);
+
+	debugfs_create_file("htt_stats_mask", S_IRUSR, ar->debug.debugfs_phy,
+			    ar, &fops_htt_stats_mask);
+
+	debugfs_create_file("fw_dbglog", S_IRUSR, ar->debug.debugfs_phy,
+			    ar, &fops_fw_dbglog);
+
+	if (config_enabled(CONFIG_ATH10K_DFS_CERTIFIED)) {
+		debugfs_create_file("dfs_simulate_radar", S_IWUSR,
+				    ar->debug.debugfs_phy, ar,
+				    &fops_simulate_radar);
+
+		debugfs_create_bool("dfs_block_radar_events", S_IWUSR,
+				    ar->debug.debugfs_phy,
+				    &ar->dfs_block_radar_events);
+
+		debugfs_create_file("dfs_stats", S_IRUSR,
+				    ar->debug.debugfs_phy, ar,
+				    &fops_dfs_stats);
+	}
+
 	return 0;
 }
+
+void ath10k_debug_destroy(struct ath10k *ar)
+{
+	cancel_delayed_work_sync(&ar->debug.htt_stats_dwork);
+}
+
 #endif /* CONFIG_ATH10K_DEBUGFS */
 
 #ifdef CONFIG_ATH10K_DEBUG

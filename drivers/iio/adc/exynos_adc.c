@@ -33,6 +33,7 @@
 #include <linux/of_irq.h>
 #include <linux/regulator/consumer.h>
 #include <linux/of_platform.h>
+#include <linux/err.h>
 
 #include <linux/iio/iio.h>
 #include <linux/iio/machine.h>
@@ -261,7 +262,7 @@ static int exynos_adc_probe(struct platform_device *pdev)
 	if (!np)
 		return ret;
 
-	indio_dev = iio_device_alloc(sizeof(struct exynos_adc));
+	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(struct exynos_adc));
 	if (!indio_dev) {
 		dev_err(&pdev->dev, "failed allocating iio device\n");
 		return -ENOMEM;
@@ -271,23 +272,18 @@ static int exynos_adc_probe(struct platform_device *pdev)
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	info->regs = devm_ioremap_resource(&pdev->dev, mem);
-	if (IS_ERR(info->regs)) {
-		ret = PTR_ERR(info->regs);
-		goto err_iio;
-	}
+	if (IS_ERR(info->regs))
+		return PTR_ERR(info->regs);
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	info->enable_reg = devm_ioremap_resource(&pdev->dev, mem);
-	if (IS_ERR(info->enable_reg)) {
-		ret = PTR_ERR(info->enable_reg);
-		goto err_iio;
-	}
+	if (IS_ERR(info->enable_reg))
+		return PTR_ERR(info->enable_reg);
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
 		dev_err(&pdev->dev, "no irq resource?\n");
-		ret = irq;
-		goto err_iio;
+		return irq;
 	}
 
 	info->irq = irq;
@@ -299,7 +295,7 @@ static int exynos_adc_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed requesting irq, irq = %d\n",
 							info->irq);
-		goto err_iio;
+		return ret;
 	}
 
 	writel(1, info->enable_reg);
@@ -348,7 +344,7 @@ static int exynos_adc_probe(struct platform_device *pdev)
 
 	exynos_adc_hw_init(info);
 
-	ret = of_platform_populate(np, exynos_adc_match, NULL, &pdev->dev);
+	ret = of_platform_populate(np, exynos_adc_match, NULL, &indio_dev->dev);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed adding child nodes\n");
 		goto err_of_populate;
@@ -357,7 +353,7 @@ static int exynos_adc_probe(struct platform_device *pdev)
 	return 0;
 
 err_of_populate:
-	device_for_each_child(&pdev->dev, NULL,
+	device_for_each_child(&indio_dev->dev, NULL,
 				exynos_adc_remove_devices);
 	regulator_disable(info->vdd);
 	clk_disable_unprepare(info->clk);
@@ -365,8 +361,6 @@ err_iio_dev:
 	iio_device_unregister(indio_dev);
 err_irq:
 	free_irq(info->irq, info);
-err_iio:
-	iio_device_free(indio_dev);
 	return ret;
 }
 
@@ -375,14 +369,13 @@ static int exynos_adc_remove(struct platform_device *pdev)
 	struct iio_dev *indio_dev = platform_get_drvdata(pdev);
 	struct exynos_adc *info = iio_priv(indio_dev);
 
-	device_for_each_child(&pdev->dev, NULL,
+	device_for_each_child(&indio_dev->dev, NULL,
 				exynos_adc_remove_devices);
 	regulator_disable(info->vdd);
 	clk_disable_unprepare(info->clk);
 	writel(0, info->enable_reg);
 	iio_device_unregister(indio_dev);
 	free_irq(info->irq, info);
-	iio_device_free(indio_dev);
 
 	return 0;
 }

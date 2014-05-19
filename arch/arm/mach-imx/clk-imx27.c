@@ -231,7 +231,6 @@ int __init mx27_clocks_init(unsigned long fref)
 	clk_register_clkdev(clk[per1_gate], "per", "imx-gpt.4");
 	clk_register_clkdev(clk[gpt6_ipg_gate], "ipg", "imx-gpt.5");
 	clk_register_clkdev(clk[per1_gate], "per", "imx-gpt.5");
-	clk_register_clkdev(clk[pwm_ipg_gate], NULL, "mxc_pwm.0");
 	clk_register_clkdev(clk[per2_gate], "per", "imx21-mmc.0");
 	clk_register_clkdev(clk[sdhc1_ipg_gate], "ipg", "imx21-mmc.0");
 	clk_register_clkdev(clk[per2_gate], "per", "imx21-mmc.1");
@@ -285,7 +284,7 @@ int __init mx27_clocks_init(unsigned long fref)
 	clk_register_clkdev(clk[ata_ahb_gate], "ata", NULL);
 	clk_register_clkdev(clk[rtc_ipg_gate], NULL, "imx21-rtc");
 	clk_register_clkdev(clk[scc_ipg_gate], "scc", NULL);
-	clk_register_clkdev(clk[cpu_div], NULL, "cpufreq-cpu0.0");
+	clk_register_clkdev(clk[cpu_div], NULL, "cpu0");
 	clk_register_clkdev(clk[emi_ahb_gate], "emi_ahb" , NULL);
 
 	mxc_timer_init(MX27_IO_ADDRESS(MX27_GPT1_BASE_ADDR), MX27_INT_GPT1);

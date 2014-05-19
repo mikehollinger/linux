@@ -257,7 +257,6 @@ static const struct file_operations shmob_drm_fops = {
 #endif
 	.poll		= drm_poll,
 	.read		= drm_read,
-	.fasync		= drm_fasync,
 	.llseek		= no_llseek,
 	.mmap		= drm_gem_cma_mmap,
 };
@@ -285,7 +284,7 @@ static struct drm_driver shmob_drm_driver = {
 	.gem_prime_mmap		= drm_gem_cma_prime_mmap,
 	.dumb_create		= drm_gem_cma_dumb_create,
 	.dumb_map_offset	= drm_gem_cma_dumb_map_offset,
-	.dumb_destroy		= drm_gem_cma_dumb_destroy,
+	.dumb_destroy		= drm_gem_dumb_destroy,
 	.fops			= &shmob_drm_fops,
 	.name			= "shmob-drm",
 	.desc			= "Renesas SH Mobile DRM",
@@ -337,7 +336,9 @@ static int shmob_drm_probe(struct platform_device *pdev)
 
 static int shmob_drm_remove(struct platform_device *pdev)
 {
-	drm_platform_exit(&shmob_drm_driver, pdev);
+	struct shmob_drm_device *sdev = platform_get_drvdata(pdev);
+
+	drm_put_dev(sdev->ddev);
 
 	return 0;
 }

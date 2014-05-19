@@ -5,7 +5,7 @@
  *
  * GPL LICENSE SUMMARY
  *
- * Copyright(c) 2007 - 2013 Intel Corporation. All rights reserved.
+ * Copyright(c) 2007 - 2014 Intel Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of version 2 of the GNU General Public License as
@@ -30,7 +30,7 @@
  *
  * BSD LICENSE
  *
- * Copyright(c) 2005 - 2013 Intel Corporation. All rights reserved.
+ * Copyright(c) 2005 - 2014 Intel Corporation. All rights reserved.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,7 +72,7 @@
 #include "iwl-trans.h"
 
 #define CHANNEL_NUM_SIZE	4	/* num of channels in calib_ch size */
-#define IWL_NUM_PAPD_CH_GROUPS	4
+#define IWL_NUM_PAPD_CH_GROUPS	7
 #define IWL_NUM_TXP_CH_GROUPS	9
 
 struct iwl_phy_db_entry {
@@ -383,7 +383,7 @@ static int iwl_phy_db_send_all_channel_groups(
 		if (!entry)
 			return -EINVAL;
 
-		if (WARN_ON_ONCE(!entry->size))
+		if (!entry->size)
 			continue;
 
 		/* Send the requested PHY DB section */

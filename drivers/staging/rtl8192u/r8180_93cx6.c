@@ -3,7 +3,7 @@
    memory is addressed by 16 bits words.
 
    This is part of rtl8180 OpenSource driver.
-   Copyright (C) Andrea Merello 2004  <andreamrl@tiscali.it>
+   Copyright (C) Andrea Merello 2004  <andrea.merello@gmail.com>
    Released under the terms of GPL (General Public Licence)
 
    Parts of this driver are based on the GPL part of the
@@ -20,7 +20,7 @@
 
 #include "r8180_93cx6.h"
 
-void eprom_cs(struct net_device *dev, short bit)
+static void eprom_cs(struct net_device *dev, short bit)
 {
 	u8 cmdreg;
 
@@ -37,7 +37,7 @@ void eprom_cs(struct net_device *dev, short bit)
 }
 
 
-void eprom_ck_cycle(struct net_device *dev)
+static void eprom_ck_cycle(struct net_device *dev)
 {
 	u8 cmdreg;
 
@@ -53,7 +53,7 @@ void eprom_ck_cycle(struct net_device *dev)
 }
 
 
-void eprom_w(struct net_device *dev,short bit)
+static void eprom_w(struct net_device *dev,short bit)
 {
 	u8 cmdreg;
 
@@ -68,7 +68,7 @@ void eprom_w(struct net_device *dev,short bit)
 }
 
 
-short eprom_r(struct net_device *dev)
+static short eprom_r(struct net_device *dev)
 {
 	u8 bit;
 
@@ -82,7 +82,7 @@ short eprom_r(struct net_device *dev)
 }
 
 
-void eprom_send_bits_string(struct net_device *dev, short b[], int len)
+static void eprom_send_bits_string(struct net_device *dev, short b[], int len)
 {
 	int i;
 

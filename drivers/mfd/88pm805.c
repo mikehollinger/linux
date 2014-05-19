@@ -77,7 +77,7 @@ static struct resource codec_resources[] = {
 	 },
 };
 
-static struct mfd_cell codec_devs[] = {
+static const struct mfd_cell codec_devs[] = {
 	{
 	 .name = "88pm80x-codec",
 	 .num_resources = ARRAY_SIZE(codec_resources),
@@ -227,7 +227,7 @@ static int pm805_probe(struct i2c_client *client,
 {
 	int ret = 0;
 	struct pm80x_chip *chip;
-	struct pm80x_platform_data *pdata = client->dev.platform_data;
+	struct pm80x_platform_data *pdata = dev_get_platdata(&client->dev);
 
 	ret = pm80x_init(client);
 	if (ret) {
@@ -243,7 +243,7 @@ static int pm805_probe(struct i2c_client *client,
 		goto err_805_init;
 	}
 
-	if (pdata->plat_config)
+	if (pdata && pdata->plat_config)
 		pdata->plat_config(chip, pdata);
 
 err_805_init:

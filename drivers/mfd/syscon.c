@@ -25,7 +25,6 @@
 static struct platform_driver syscon_driver;
 
 struct syscon {
-	void __iomem *base;
 	struct regmap *regmap;
 };
 
@@ -70,13 +69,6 @@ EXPORT_SYMBOL_GPL(syscon_regmap_lookup_by_compatible);
 
 static int syscon_match_pdevname(struct device *dev, void *data)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	const struct platform_device_id *id = platform_get_device_id(pdev);
-
-	if (id)
-		if (!strcmp(id->name, (const char *)data))
-			return 1;
-
 	return !strcmp(dev_name(dev), (const char *)data);
 }
 
@@ -129,6 +121,7 @@ static int syscon_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct syscon *syscon;
 	struct resource *res;
+	void __iomem *base;
 
 	syscon = devm_kzalloc(dev, sizeof(*syscon), GFP_KERNEL);
 	if (!syscon)
@@ -138,12 +131,12 @@ static int syscon_probe(struct platform_device *pdev)
 	if (!res)
 		return -ENOENT;
 
-	syscon->base = devm_ioremap(dev, res->start, resource_size(res));
-	if (!syscon->base)
+	base = devm_ioremap(dev, res->start, resource_size(res));
+	if (!base)
 		return -ENOMEM;
 
 	syscon_regmap_config.max_register = res->end - res->start - 3;
-	syscon->regmap = devm_regmap_init_mmio(dev, syscon->base,
+	syscon->regmap = devm_regmap_init_mmio(dev, base,
 					&syscon_regmap_config);
 	if (IS_ERR(syscon->regmap)) {
 		dev_err(dev, "regmap init failed\n");
@@ -152,16 +145,13 @@ static int syscon_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, syscon);
 
-	dev_info(dev, "regmap %pR registered\n", res);
+	dev_dbg(dev, "regmap %pR registered\n", res);
 
 	return 0;
 }
 
 static const struct platform_device_id syscon_ids[] = {
 	{ "syscon", },
-#ifdef CONFIG_ARCH_CLPS711X
-	{ "clps711x-syscon", },
-#endif
 	{ }
 };
 

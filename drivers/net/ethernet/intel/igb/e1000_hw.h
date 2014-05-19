@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) Gigabit Ethernet Linux driver
-  Copyright(c) 2007-2013 Intel Corporation.
+  Copyright(c) 2007-2014 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -13,8 +13,7 @@
   more details.
 
   You should have received a copy of the GNU General Public License along with
-  this program; if not, write to the Free Software Foundation, Inc.,
-  51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+  this program; if not, see <http://www.gnu.org/licenses/>.
 
   The full GNU General Public License is included in this distribution in
   the file called "COPYING".
@@ -67,6 +66,8 @@ struct e1000_hw;
 #define E1000_DEV_ID_I210_FIBER			0x1536
 #define E1000_DEV_ID_I210_SERDES		0x1537
 #define E1000_DEV_ID_I210_SGMII			0x1538
+#define E1000_DEV_ID_I210_COPPER_FLASHLESS	0x157B
+#define E1000_DEV_ID_I210_SERDES_FLASHLESS	0x157C
 #define E1000_DEV_ID_I211_COPPER		0x1539
 #define E1000_DEV_ID_I354_BACKPLANE_1GBPS	0x1F40
 #define E1000_DEV_ID_I354_SGMII			0x1F41
@@ -110,6 +111,7 @@ enum e1000_nvm_type {
 	e1000_nvm_none,
 	e1000_nvm_eeprom_spi,
 	e1000_nvm_flash_hw,
+	e1000_nvm_invm,
 	e1000_nvm_flash_sw
 };
 
@@ -530,6 +532,9 @@ struct e1000_dev_spec_82575 {
 	bool clear_semaphore_once;
 	struct e1000_sfp_flags eth_flags;
 	bool module_plugged;
+	u8 media_port;
+	bool media_changed;
+	bool mas_capable;
 };
 
 struct e1000_hw {
@@ -559,11 +564,11 @@ struct e1000_hw {
 	u8  revision_id;
 };
 
-extern struct net_device *igb_get_hw_dev(struct e1000_hw *hw);
+struct net_device *igb_get_hw_dev(struct e1000_hw *hw);
 #define hw_dbg(format, arg...) \
 	netdev_dbg(igb_get_hw_dev(hw), format, ##arg)
 
 /* These functions must be implemented by drivers */
-s32  igb_read_pcie_cap_reg(struct e1000_hw *hw, u32 reg, u16 *value);
-s32  igb_write_pcie_cap_reg(struct e1000_hw *hw, u32 reg, u16 *value);
+s32 igb_read_pcie_cap_reg(struct e1000_hw *hw, u32 reg, u16 *value);
+s32 igb_write_pcie_cap_reg(struct e1000_hw *hw, u32 reg, u16 *value);
 #endif /* _E1000_HW_H_ */

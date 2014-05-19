@@ -1965,7 +1965,6 @@ static irqreturn_t omap2_dma_irq_handler(int irq, void *dev_id)
 static struct irqaction omap24xx_dma_irq = {
 	.name = "DMA",
 	.handler = omap2_dma_irq_handler,
-	.flags = IRQF_DISABLED
 };
 
 #else
@@ -2001,6 +2000,12 @@ void omap_dma_global_context_restore(void)
 			omap_clear_dma(ch);
 }
 
+struct omap_system_dma_plat_info *omap_get_plat_info(void)
+{
+	return p;
+}
+EXPORT_SYMBOL_GPL(omap_get_plat_info);
+
 static int omap_system_dma_probe(struct platform_device *pdev)
 {
 	int ch, ret = 0;
@@ -2025,8 +2030,15 @@ static int omap_system_dma_probe(struct platform_device *pdev)
 
 	dma_lch_count		= d->lch_count;
 	dma_chan_count		= dma_lch_count;
-	dma_chan		= d->chan;
 	enable_1510_mode	= d->dev_caps & ENABLE_1510_MODE;
+
+	dma_chan = devm_kcalloc(&pdev->dev, dma_lch_count,
+				sizeof(struct omap_dma_lch), GFP_KERNEL);
+	if (!dma_chan) {
+		dev_err(&pdev->dev, "%s: kzalloc fail\n", __func__);
+		return -ENOMEM;
+	}
+
 
 	if (dma_omap2plus()) {
 		dma_linked_lch = kzalloc(sizeof(struct dma_link_info) *
@@ -2083,6 +2095,7 @@ static int omap_system_dma_probe(struct platform_device *pdev)
 		dma_irq = platform_get_irq_byname(pdev, irq_name);
 		if (dma_irq < 0) {
 			dev_err(&pdev->dev, "failed: request IRQ %d", dma_irq);
+			ret = dma_irq;
 			goto exit_dma_lch_fail;
 		}
 		ret = setup_irq(dma_irq, &omap24xx_dma_irq);
@@ -2111,7 +2124,6 @@ exit_dma_irq_fail:
 	}
 
 exit_dma_lch_fail:
-	kfree(dma_chan);
 	return ret;
 }
 
@@ -2131,7 +2143,6 @@ static int omap_system_dma_remove(struct platform_device *pdev)
 			free_irq(dma_irq, (void *)(irq_rel + 1));
 		}
 	}
-	kfree(dma_chan);
 	return 0;
 }
 

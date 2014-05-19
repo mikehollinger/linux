@@ -11,11 +11,10 @@ if [ "$KBUILD_VERBOSE" = "1" ]; then
 	set -x
 fi
 
-# This is a duplicate of RCS_FIND_IGNORE without escaped '()'
-ignore="( -name SCCS -o -name BitKeeper -o -name .svn -o \
-          -name CVS  -o -name .pc       -o -name .hg  -o \
-          -name .git )                                   \
-          -prune -o"
+# RCS_FIND_IGNORE has escaped ()s -- remove them.
+ignore="$(echo "$RCS_FIND_IGNORE" | sed 's|\\||g' )"
+# tags and cscope files should also ignore MODVERSION *.mod.c files
+ignore="$ignore ( -name *.mod.c ) -prune -o"
 
 # Do not use full path if we do not use O=.. builds
 # Use make O=. {tags|cscope}
@@ -149,15 +148,16 @@ dogtags()
 exuberant()
 {
 	all_target_sources | xargs $1 -a                        \
-	-I __initdata,__exitdata,__initconst,__devinitdata	\
-	-I __devinitconst,__cpuinitdata,__initdata_memblock	\
-	-I __refdata,__attribute				\
+	-I __initdata,__exitdata,__initconst,			\
+	-I __cpuinitdata,__initdata_memblock			\
+	-I __refdata,__attribute,__maybe_unused,__always_unused \
 	-I __acquires,__releases,__deprecated			\
 	-I __read_mostly,__aligned,____cacheline_aligned        \
 	-I ____cacheline_aligned_in_smp                         \
+	-I __cacheline_aligned,__cacheline_aligned_in_smp	\
 	-I ____cacheline_internodealigned_in_smp                \
 	-I __used,__packed,__packed2__,__must_check,__must_hold	\
-	-I EXPORT_SYMBOL,EXPORT_SYMBOL_GPL                      \
+	-I EXPORT_SYMBOL,EXPORT_SYMBOL_GPL,ACPI_EXPORT_SYMBOL   \
 	-I DEFINE_TRACE,EXPORT_TRACEPOINT_SYMBOL,EXPORT_TRACEPOINT_SYMBOL_GPL \
 	-I static,const						\
 	--extra=+f --c-kinds=+px                                \

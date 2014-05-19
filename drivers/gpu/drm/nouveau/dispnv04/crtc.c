@@ -22,6 +22,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
+#include <linux/pm_runtime.h>
 
 #include <drm/drmP.h>
 #include <drm/drm_crtc_helper.h>
@@ -238,7 +239,7 @@ nv_crtc_mode_set_vga(struct drm_crtc *crtc, struct drm_display_mode *mode)
 	struct drm_device *dev = crtc->dev;
 	struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
 	struct nv04_crtc_reg *regp = &nv04_display(dev)->mode_reg.crtc_reg[nv_crtc->index];
-	struct drm_framebuffer *fb = crtc->fb;
+	struct drm_framebuffer *fb = crtc->primary->fb;
 
 	/* Calculate our timings */
 	int horizDisplay	= (mode->crtc_hdisplay >> 3)		- 1;
@@ -324,8 +325,6 @@ nv_crtc_mode_set_vga(struct drm_crtc *crtc, struct drm_display_mode *mode)
 		else
 			regp->MiscOutReg = 0x23;	/* +hsync +vsync */
 	}
-
-	regp->MiscOutReg |= (mode->clock_index & 0x03) << 2;
 
 	/*
 	 * Time Sequencer
@@ -575,7 +574,7 @@ nv_crtc_mode_set_regs(struct drm_crtc *crtc, struct drm_display_mode * mode)
 		regp->CRTC[NV_CIO_CRE_86] = 0x1;
 	}
 
-	regp->CRTC[NV_CIO_CRE_PIXEL_INDEX] = (crtc->fb->depth + 1) / 8;
+	regp->CRTC[NV_CIO_CRE_PIXEL_INDEX] = (crtc->primary->fb->depth + 1) / 8;
 	/* Enable slaved mode (called MODE_TV in nv4ref.h) */
 	if (lvds_output || tmds_output || tv_output)
 		regp->CRTC[NV_CIO_CRE_PIXEL_INDEX] |= (1 << 7);
@@ -589,7 +588,7 @@ nv_crtc_mode_set_regs(struct drm_crtc *crtc, struct drm_display_mode * mode)
 	regp->ramdac_gen_ctrl = NV_PRAMDAC_GENERAL_CONTROL_BPC_8BITS |
 				NV_PRAMDAC_GENERAL_CONTROL_VGA_STATE_SEL |
 				NV_PRAMDAC_GENERAL_CONTROL_PIXMIX_ON;
-	if (crtc->fb->depth == 16)
+	if (crtc->primary->fb->depth == 16)
 		regp->ramdac_gen_ctrl |= NV_PRAMDAC_GENERAL_CONTROL_ALT_MODE_SEL;
 	if (nv_device(drm->device)->chipset >= 0x11)
 		regp->ramdac_gen_ctrl |= NV_PRAMDAC_GENERAL_CONTROL_PIPE_LONG;
@@ -610,7 +609,7 @@ static int
 nv_crtc_swap_fbs(struct drm_crtc *crtc, struct drm_framebuffer *old_fb)
 {
 	struct nv04_display *disp = nv04_display(crtc->dev);
-	struct nouveau_framebuffer *nvfb = nouveau_framebuffer(crtc->fb);
+	struct nouveau_framebuffer *nvfb = nouveau_framebuffer(crtc->primary->fb);
 	struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
 	int ret;
 
@@ -809,7 +808,7 @@ nv_crtc_gamma_set(struct drm_crtc *crtc, u16 *r, u16 *g, u16 *b, uint32_t start,
 	 * mark the lut values as dirty by setting depth==0, and it'll be
 	 * uploaded on the first mode_set_base()
 	 */
-	if (!nv_crtc->base.fb) {
+	if (!nv_crtc->base.primary->fb) {
 		nv_crtc->lut.depth = 0;
 		return;
 	}
@@ -833,7 +832,7 @@ nv04_crtc_do_mode_set_base(struct drm_crtc *crtc,
 	NV_DEBUG(drm, "index %d\n", nv_crtc->index);
 
 	/* no fb bound */
-	if (!atomic && !crtc->fb) {
+	if (!atomic && !crtc->primary->fb) {
 		NV_DEBUG(drm, "No FB bound\n");
 		return 0;
 	}
@@ -845,8 +844,8 @@ nv04_crtc_do_mode_set_base(struct drm_crtc *crtc,
 		drm_fb = passed_fb;
 		fb = nouveau_framebuffer(passed_fb);
 	} else {
-		drm_fb = crtc->fb;
-		fb = nouveau_framebuffer(crtc->fb);
+		drm_fb = crtc->primary->fb;
+		fb = nouveau_framebuffer(crtc->primary->fb);
 	}
 
 	nv_crtc->fb.offset = fb->nvbo->bo.offset;
@@ -858,9 +857,9 @@ nv04_crtc_do_mode_set_base(struct drm_crtc *crtc,
 
 	/* Update the framebuffer format. */
 	regp->CRTC[NV_CIO_CRE_PIXEL_INDEX] &= ~3;
-	regp->CRTC[NV_CIO_CRE_PIXEL_INDEX] |= (crtc->fb->depth + 1) / 8;
+	regp->CRTC[NV_CIO_CRE_PIXEL_INDEX] |= (crtc->primary->fb->depth + 1) / 8;
 	regp->ramdac_gen_ctrl &= ~NV_PRAMDAC_GENERAL_CONTROL_ALT_MODE_SEL;
-	if (crtc->fb->depth == 16)
+	if (crtc->primary->fb->depth == 16)
 		regp->ramdac_gen_ctrl |= NV_PRAMDAC_GENERAL_CONTROL_ALT_MODE_SEL;
 	crtc_wr_cio_state(crtc, regp, NV_CIO_CRE_PIXEL_INDEX);
 	NVWriteRAMDAC(dev, nv_crtc->index, NV_PRAMDAC_GENERAL_CONTROL,
@@ -1034,13 +1033,59 @@ nv04_crtc_cursor_move(struct drm_crtc *crtc, int x, int y)
 	return 0;
 }
 
+int
+nouveau_crtc_set_config(struct drm_mode_set *set)
+{
+	struct drm_device *dev;
+	struct nouveau_drm *drm;
+	int ret;
+	struct drm_crtc *crtc;
+	bool active = false;
+	if (!set || !set->crtc)
+		return -EINVAL;
+
+	dev = set->crtc->dev;
+
+	/* get a pm reference here */
+	ret = pm_runtime_get_sync(dev->dev);
+	if (ret < 0 && ret != -EACCES)
+		return ret;
+
+	ret = drm_crtc_helper_set_config(set);
+
+	drm = nouveau_drm(dev);
+
+	/* if we get here with no crtcs active then we can drop a reference */
+	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
+		if (crtc->enabled)
+			active = true;
+	}
+
+	pm_runtime_mark_last_busy(dev->dev);
+	/* if we have active crtcs and we don't have a power ref,
+	   take the current one */
+	if (active && !drm->have_disp_power_ref) {
+		drm->have_disp_power_ref = true;
+		return ret;
+	}
+	/* if we have no active crtcs, then drop the power ref
+	   we got before */
+	if (!active && drm->have_disp_power_ref) {
+		pm_runtime_put_autosuspend(dev->dev);
+		drm->have_disp_power_ref = false;
+	}
+	/* drop the power reference we got coming in here */
+	pm_runtime_put_autosuspend(dev->dev);
+	return ret;
+}
+
 static const struct drm_crtc_funcs nv04_crtc_funcs = {
 	.save = nv_crtc_save,
 	.restore = nv_crtc_restore,
 	.cursor_set = nv04_crtc_cursor_set,
 	.cursor_move = nv04_crtc_cursor_move,
 	.gamma_set = nv_crtc_gamma_set,
-	.set_config = drm_crtc_helper_set_config,
+	.set_config = nouveau_crtc_set_config,
 	.page_flip = nouveau_crtc_page_flip,
 	.destroy = nv_crtc_destroy,
 };

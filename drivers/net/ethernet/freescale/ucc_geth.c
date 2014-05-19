@@ -31,6 +31,8 @@
 #include <linux/mii.h>
 #include <linux/phy.h>
 #include <linux/workqueue.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
 #include <linux/of_platform.h>
@@ -431,11 +433,6 @@ static void hw_add_addr_in_hash(struct ucc_geth_private *ugeth,
 
 	qe_issue_cmd(QE_SET_GROUP_ADDRESS, cecr_subblock,
 		     QE_CR_PROTOCOL_ETHERNET, 0);
-}
-
-static inline int compare_addr(u8 **addr1, u8 **addr2)
-{
-	return memcmp(addr1, addr2, ETH_ALEN);
 }
 
 #ifdef DEBUG
@@ -3264,7 +3261,7 @@ static int ucc_geth_tx(struct net_device *dev, u8 txQ)
 
 		dev->stats.tx_packets++;
 
-		dev_kfree_skb(skb);
+		dev_consume_skb_any(skb);
 
 		ugeth->tx_skbuff[txQ][ugeth->skb_dirtytx[txQ]] = NULL;
 		ugeth->skb_dirtytx[txQ] =
@@ -3899,7 +3896,7 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 
 	mac_addr = of_get_mac_address(np);
 	if (mac_addr)
-		memcpy(dev->dev_addr, mac_addr, 6);
+		memcpy(dev->dev_addr, mac_addr, ETH_ALEN);
 
 	ugeth->ug_info = ug_info;
 	ugeth->dev = device;
@@ -3911,14 +3908,12 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 
 static int ucc_geth_remove(struct platform_device* ofdev)
 {
-	struct device *device = &ofdev->dev;
-	struct net_device *dev = dev_get_drvdata(device);
+	struct net_device *dev = platform_get_drvdata(ofdev);
 	struct ucc_geth_private *ugeth = netdev_priv(dev);
 
 	unregister_netdev(dev);
 	free_netdev(dev);
 	ucc_geth_memclean(ugeth);
-	dev_set_drvdata(device, NULL);
 
 	return 0;
 }

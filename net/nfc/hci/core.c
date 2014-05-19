@@ -12,9 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- * Free Software Foundation, Inc.,
- * 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #define pr_fmt(fmt) "hci: %s: " fmt, __func__
@@ -337,11 +335,8 @@ exit:
 	kfree_skb(skb);
 
 exit_noskb:
-	if (r) {
-		/* TODO: There was an error dispatching the event,
-		 * how to propagate up to nfc core?
-		 */
-	}
+	if (r)
+		nfc_hci_driver_failure(hdev, r);
 }
 
 static void nfc_hci_cmd_timeout(unsigned long data)
@@ -717,7 +712,7 @@ static int hci_disable_se(struct nfc_dev *nfc_dev, u32 se_idx)
 	struct nfc_hci_dev *hdev = nfc_get_drvdata(nfc_dev);
 
 	if (hdev->ops->disable_se)
-		return hdev->ops->enable_se(hdev, se_idx);
+		return hdev->ops->disable_se(hdev, se_idx);
 
 	return 0;
 }

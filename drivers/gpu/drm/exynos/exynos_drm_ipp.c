@@ -16,7 +16,6 @@
 #include <linux/types.h>
 #include <linux/clk.h>
 #include <linux/pm_runtime.h>
-#include <plat/map-base.h>
 
 #include <drm/drmP.h>
 #include <drm/exynos_drm.h>
@@ -335,7 +334,7 @@ int exynos_drm_ipp_get_property(struct drm_device *drm_dev, void *data,
 	} else {
 		/*
 		 * Getting ippdrv capability by ipp_id.
-		 * some deivce not supported wb, output interface.
+		 * some device not supported wb, output interface.
 		 * so, user application detect correct ipp driver
 		 * using this ioctl.
 		 */
@@ -408,10 +407,8 @@ static struct drm_exynos_ipp_cmd_work *ipp_create_cmd_work(void)
 	struct drm_exynos_ipp_cmd_work *cmd_work;
 
 	cmd_work = kzalloc(sizeof(*cmd_work), GFP_KERNEL);
-	if (!cmd_work) {
-		DRM_ERROR("failed to alloc cmd_work.\n");
+	if (!cmd_work)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	INIT_WORK((struct work_struct *)cmd_work, ipp_sched_cmd);
 
@@ -423,10 +420,8 @@ static struct drm_exynos_ipp_event_work *ipp_create_event_work(void)
 	struct drm_exynos_ipp_event_work *event_work;
 
 	event_work = kzalloc(sizeof(*event_work), GFP_KERNEL);
-	if (!event_work) {
-		DRM_ERROR("failed to alloc event_work.\n");
+	if (!event_work)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	INIT_WORK((struct work_struct *)event_work, ipp_sched_event);
 
@@ -482,10 +477,8 @@ int exynos_drm_ipp_set_property(struct drm_device *drm_dev, void *data,
 
 	/* allocate command node */
 	c_node = kzalloc(sizeof(*c_node), GFP_KERNEL);
-	if (!c_node) {
-		DRM_ERROR("failed to allocate map node.\n");
+	if (!c_node)
 		return -ENOMEM;
-	}
 
 	/* create property id */
 	ret = ipp_create_id(&ctx->prop_idr, &ctx->prop_lock, c_node,
@@ -694,10 +687,8 @@ static struct drm_exynos_ipp_mem_node
 	mutex_lock(&c_node->mem_lock);
 
 	m_node = kzalloc(sizeof(*m_node), GFP_KERNEL);
-	if (!m_node) {
-		DRM_ERROR("failed to allocate queue node.\n");
+	if (!m_node)
 		goto err_unlock;
-	}
 
 	/* clear base address for error handling */
 	memset(&buf_info, 0x0, sizeof(buf_info));
@@ -798,9 +789,7 @@ static int ipp_get_event(struct drm_device *drm_dev,
 	DRM_DEBUG_KMS("ops_id[%d]buf_id[%d]\n", qbuf->ops_id, qbuf->buf_id);
 
 	e = kzalloc(sizeof(*e), GFP_KERNEL);
-
 	if (!e) {
-		DRM_ERROR("failed to allocate event.\n");
 		spin_lock_irqsave(&drm_dev->event_lock, flags);
 		file->event_space += sizeof(e->event);
 		spin_unlock_irqrestore(&drm_dev->event_lock, flags);
@@ -836,7 +825,7 @@ static void ipp_put_event(struct drm_exynos_ipp_cmd_node *c_node,
 		DRM_DEBUG_KMS("count[%d]e[0x%x]\n", count++, (int)e);
 
 		/*
-		 * quf == NULL condition means all event deletion.
+		 * qbuf == NULL condition means all event deletion.
 		 * stop operations want to delete all event list.
 		 * another case delete only same buf id.
 		 */
@@ -1780,10 +1769,8 @@ static int ipp_subdrv_open(struct drm_device *drm_dev, struct device *dev,
 	struct exynos_drm_ipp_private *priv;
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv) {
-		DRM_ERROR("failed to allocate priv.\n");
+	if (!priv)
 		return -ENOMEM;
-	}
 	priv->dev = dev;
 	file_priv->ipp_priv = priv;
 

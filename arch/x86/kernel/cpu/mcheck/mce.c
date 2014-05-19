@@ -89,6 +89,9 @@ static DECLARE_WAIT_QUEUE_HEAD(mce_chrdev_wait);
 static DEFINE_PER_CPU(struct mce, mces_seen);
 static int			cpu_missing;
 
+/* CMCI storm detection filter */
+static DEFINE_PER_CPU(unsigned long, mce_polled_error);
+
 /*
  * MCA banks polled by the period polling timer for corrected events.
  * With Intel CMCI, this only has MCA banks which do not support CMCI (if any).
@@ -96,6 +99,15 @@ static int			cpu_missing;
 DEFINE_PER_CPU(mce_banks_t, mce_poll_banks) = {
 	[0 ... BITS_TO_LONGS(MAX_NR_BANKS)-1] = ~0UL
 };
+
+/*
+ * MCA banks controlled through firmware first for corrected errors.
+ * This is a global list of banks for which we won't enable CMCI and we
+ * won't poll. Firmware controls these banks and is responsible for
+ * reporting corrected errors through GHES. Uncorrected/recoverable
+ * errors are still notified through a machine check.
+ */
+mce_banks_t mce_banks_ce_disabled;
 
 static DEFINE_PER_CPU(struct work_struct, mce_work);
 
@@ -605,6 +617,7 @@ void machine_check_poll(enum mcp_flags flags, mce_banks_t *b)
 		if (!(m.status & MCI_STATUS_VAL))
 			continue;
 
+		this_cpu_write(mce_polled_error, 1);
 		/*
 		 * Uncorrected or signalled events are handled by the exception
 		 * handler when it is enabled, so don't process those here.
@@ -1269,10 +1282,18 @@ static unsigned long mce_adjust_timer_default(unsigned long interval)
 static unsigned long (*mce_adjust_timer)(unsigned long interval) =
 	mce_adjust_timer_default;
 
+static int cmc_error_seen(void)
+{
+	unsigned long *v = &__get_cpu_var(mce_polled_error);
+
+	return test_and_clear_bit(0, v);
+}
+
 static void mce_timer_fn(unsigned long data)
 {
 	struct timer_list *t = &__get_cpu_var(mce_timer);
 	unsigned long iv;
+	int notify;
 
 	WARN_ON(smp_processor_id() != data);
 
@@ -1287,7 +1308,9 @@ static void mce_timer_fn(unsigned long data)
 	 * polling interval, otherwise increase the polling interval.
 	 */
 	iv = __this_cpu_read(mce_next_interval);
-	if (mce_notify_irq()) {
+	notify = mce_notify_irq();
+	notify |= cmc_error_seen();
+	if (notify) {
 		iv = max(iv / 2, (unsigned long) HZ/100);
 	} else {
 		iv = min(iv * 2, round_jiffies_relative(check_interval * HZ));
@@ -1629,15 +1652,15 @@ static void __mcheck_cpu_init_vendor(struct cpuinfo_x86 *c)
 
 static void mce_start_timer(unsigned int cpu, struct timer_list *t)
 {
-	unsigned long iv = mce_adjust_timer(check_interval * HZ);
-
-	__this_cpu_write(mce_next_interval, iv);
+	unsigned long iv = check_interval * HZ;
 
 	if (mca_cfg.ignore_ce || !iv)
 		return;
 
+	per_cpu(mce_next_interval, cpu) = iv;
+
 	t->expires = round_jiffies(jiffies + iv);
-	add_timer_on(t, smp_processor_id());
+	add_timer_on(t, cpu);
 }
 
 static void __mcheck_cpu_init_timer(void)
@@ -1934,6 +1957,25 @@ static struct miscdevice mce_chrdev_device = {
 	"mcelog",
 	&mce_chrdev_ops,
 };
+
+static void __mce_disable_bank(void *arg)
+{
+	int bank = *((int *)arg);
+	__clear_bit(bank, __get_cpu_var(mce_poll_banks));
+	cmci_disable_bank(bank);
+}
+
+void mce_disable_bank(int bank)
+{
+	if (bank >= mca_cfg.banks) {
+		pr_warn(FW_BUG
+			"Ignoring request to disable invalid MCA bank %d.\n",
+			bank);
+		return;
+	}
+	set_bit(bank, mce_banks_ce_disabled);
+	on_each_cpu(__mce_disable_bank, &bank, 1);
+}
 
 /*
  * mce=off Disables machine check
@@ -2244,8 +2286,10 @@ static int mce_device_create(unsigned int cpu)
 	dev->release = &mce_device_release;
 
 	err = device_register(dev);
-	if (err)
+	if (err) {
+		put_device(dev);
 		return err;
+	}
 
 	for (i = 0; mce_device_attrs[i]; i++) {
 		err = device_create_file(dev, mce_device_attrs[i]);
@@ -2404,14 +2448,18 @@ static __init int mcheck_init_device(void)
 	if (err)
 		return err;
 
+	cpu_notifier_register_begin();
 	for_each_online_cpu(i) {
 		err = mce_device_create(i);
-		if (err)
+		if (err) {
+			cpu_notifier_register_done();
 			return err;
+		}
 	}
 
 	register_syscore_ops(&mce_syscore_ops);
-	register_hotcpu_notifier(&mce_cpu_notifier);
+	__register_hotcpu_notifier(&mce_cpu_notifier);
+	cpu_notifier_register_done();
 
 	/* register character device /dev/mcelog */
 	misc_register(&mce_chrdev_device);

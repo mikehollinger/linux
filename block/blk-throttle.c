@@ -256,6 +256,12 @@ static struct throtl_data *sq_to_td(struct throtl_service_queue *sq)
 	}								\
 } while (0)
 
+static void tg_stats_init(struct tg_stats_cpu *tg_stats)
+{
+	blkg_rwstat_init(&tg_stats->service_bytes);
+	blkg_rwstat_init(&tg_stats->serviced);
+}
+
 /*
  * Worker for allocating per cpu stat for tgs. This is scheduled on the
  * system_wq once there are some groups on the alloc_list waiting for
@@ -269,12 +275,16 @@ static void tg_stats_alloc_fn(struct work_struct *work)
 
 alloc_stats:
 	if (!stats_cpu) {
+		int cpu;
+
 		stats_cpu = alloc_percpu(struct tg_stats_cpu);
 		if (!stats_cpu) {
 			/* allocation failed, try again after some time */
 			schedule_delayed_work(dwork, msecs_to_jiffies(10));
 			return;
 		}
+		for_each_possible_cpu(cpu)
+			tg_stats_init(per_cpu_ptr(stats_cpu, cpu));
 	}
 
 	spin_lock_irq(&tg_stats_alloc_lock);
@@ -867,14 +877,14 @@ static bool tg_with_in_bps_limit(struct throtl_grp *tg, struct bio *bio,
 	do_div(tmp, HZ);
 	bytes_allowed = tmp;
 
-	if (tg->bytes_disp[rw] + bio->bi_size <= bytes_allowed) {
+	if (tg->bytes_disp[rw] + bio->bi_iter.bi_size <= bytes_allowed) {
 		if (wait)
 			*wait = 0;
 		return 1;
 	}
 
 	/* Calc approx time to dispatch */
-	extra_bytes = tg->bytes_disp[rw] + bio->bi_size - bytes_allowed;
+	extra_bytes = tg->bytes_disp[rw] + bio->bi_iter.bi_size - bytes_allowed;
 	jiffy_wait = div64_u64(extra_bytes * HZ, tg->bps[rw]);
 
 	if (!jiffy_wait)
@@ -977,7 +987,7 @@ static void throtl_charge_bio(struct throtl_grp *tg, struct bio *bio)
 	bool rw = bio_data_dir(bio);
 
 	/* Charge the bio to the group */
-	tg->bytes_disp[rw] += bio->bi_size;
+	tg->bytes_disp[rw] += bio->bi_iter.bi_size;
 	tg->io_disp[rw]++;
 
 	/*
@@ -993,8 +1003,8 @@ static void throtl_charge_bio(struct throtl_grp *tg, struct bio *bio)
 	 */
 	if (!(bio->bi_rw & REQ_THROTTLED)) {
 		bio->bi_rw |= REQ_THROTTLED;
-		throtl_update_dispatch_stats(tg_to_blkg(tg), bio->bi_size,
-					     bio->bi_rw);
+		throtl_update_dispatch_stats(tg_to_blkg(tg),
+					     bio->bi_iter.bi_size, bio->bi_rw);
 	}
 }
 
@@ -1293,13 +1303,10 @@ static u64 tg_prfill_cpu_rwstat(struct seq_file *sf,
 	return __blkg_prfill_rwstat(sf, pd, &rwstat);
 }
 
-static int tg_print_cpu_rwstat(struct cgroup *cgrp, struct cftype *cft,
-			       struct seq_file *sf)
+static int tg_print_cpu_rwstat(struct seq_file *sf, void *v)
 {
-	struct blkcg *blkcg = cgroup_to_blkcg(cgrp);
-
-	blkcg_print_blkgs(sf, blkcg, tg_prfill_cpu_rwstat, &blkcg_policy_throtl,
-			  cft->private, true);
+	blkcg_print_blkgs(sf, css_to_blkcg(seq_css(sf)), tg_prfill_cpu_rwstat,
+			  &blkcg_policy_throtl, seq_cft(sf)->private, true);
 	return 0;
 }
 
@@ -1325,31 +1332,29 @@ static u64 tg_prfill_conf_uint(struct seq_file *sf, struct blkg_policy_data *pd,
 	return __blkg_prfill_u64(sf, pd, v);
 }
 
-static int tg_print_conf_u64(struct cgroup *cgrp, struct cftype *cft,
-			     struct seq_file *sf)
+static int tg_print_conf_u64(struct seq_file *sf, void *v)
 {
-	blkcg_print_blkgs(sf, cgroup_to_blkcg(cgrp), tg_prfill_conf_u64,
-			  &blkcg_policy_throtl, cft->private, false);
+	blkcg_print_blkgs(sf, css_to_blkcg(seq_css(sf)), tg_prfill_conf_u64,
+			  &blkcg_policy_throtl, seq_cft(sf)->private, false);
 	return 0;
 }
 
-static int tg_print_conf_uint(struct cgroup *cgrp, struct cftype *cft,
-			      struct seq_file *sf)
+static int tg_print_conf_uint(struct seq_file *sf, void *v)
 {
-	blkcg_print_blkgs(sf, cgroup_to_blkcg(cgrp), tg_prfill_conf_uint,
-			  &blkcg_policy_throtl, cft->private, false);
+	blkcg_print_blkgs(sf, css_to_blkcg(seq_css(sf)), tg_prfill_conf_uint,
+			  &blkcg_policy_throtl, seq_cft(sf)->private, false);
 	return 0;
 }
 
-static int tg_set_conf(struct cgroup *cgrp, struct cftype *cft, const char *buf,
-		       bool is_u64)
+static int tg_set_conf(struct cgroup_subsys_state *css, struct cftype *cft,
+		       const char *buf, bool is_u64)
 {
-	struct blkcg *blkcg = cgroup_to_blkcg(cgrp);
+	struct blkcg *blkcg = css_to_blkcg(css);
 	struct blkg_conf_ctx ctx;
 	struct throtl_grp *tg;
 	struct throtl_service_queue *sq;
 	struct blkcg_gq *blkg;
-	struct cgroup *pos_cgrp;
+	struct cgroup_subsys_state *pos_css;
 	int ret;
 
 	ret = blkg_conf_prep(blkcg, &blkcg_policy_throtl, buf, &ctx);
@@ -1379,8 +1384,7 @@ static int tg_set_conf(struct cgroup *cgrp, struct cftype *cft, const char *buf,
 	 * restrictions in the whole hierarchy and allows them to bypass
 	 * blk-throttle.
 	 */
-	tg_update_has_rules(tg);
-	blkg_for_each_descendant_pre(blkg, pos_cgrp, ctx.blkg)
+	blkg_for_each_descendant_pre(blkg, pos_css, ctx.blkg)
 		tg_update_has_rules(blkg_to_tg(blkg));
 
 	/*
@@ -1403,56 +1407,52 @@ static int tg_set_conf(struct cgroup *cgrp, struct cftype *cft, const char *buf,
 	return 0;
 }
 
-static int tg_set_conf_u64(struct cgroup *cgrp, struct cftype *cft,
-			   const char *buf)
+static int tg_set_conf_u64(struct cgroup_subsys_state *css, struct cftype *cft,
+			   char *buf)
 {
-	return tg_set_conf(cgrp, cft, buf, true);
+	return tg_set_conf(css, cft, buf, true);
 }
 
-static int tg_set_conf_uint(struct cgroup *cgrp, struct cftype *cft,
-			    const char *buf)
+static int tg_set_conf_uint(struct cgroup_subsys_state *css, struct cftype *cft,
+			    char *buf)
 {
-	return tg_set_conf(cgrp, cft, buf, false);
+	return tg_set_conf(css, cft, buf, false);
 }
 
 static struct cftype throtl_files[] = {
 	{
 		.name = "throttle.read_bps_device",
 		.private = offsetof(struct throtl_grp, bps[READ]),
-		.read_seq_string = tg_print_conf_u64,
+		.seq_show = tg_print_conf_u64,
 		.write_string = tg_set_conf_u64,
-		.max_write_len = 256,
 	},
 	{
 		.name = "throttle.write_bps_device",
 		.private = offsetof(struct throtl_grp, bps[WRITE]),
-		.read_seq_string = tg_print_conf_u64,
+		.seq_show = tg_print_conf_u64,
 		.write_string = tg_set_conf_u64,
-		.max_write_len = 256,
 	},
 	{
 		.name = "throttle.read_iops_device",
 		.private = offsetof(struct throtl_grp, iops[READ]),
-		.read_seq_string = tg_print_conf_uint,
+		.seq_show = tg_print_conf_uint,
 		.write_string = tg_set_conf_uint,
-		.max_write_len = 256,
 	},
 	{
 		.name = "throttle.write_iops_device",
 		.private = offsetof(struct throtl_grp, iops[WRITE]),
-		.read_seq_string = tg_print_conf_uint,
+		.seq_show = tg_print_conf_uint,
 		.write_string = tg_set_conf_uint,
-		.max_write_len = 256,
 	},
 	{
 		.name = "throttle.io_service_bytes",
 		.private = offsetof(struct tg_stats_cpu, service_bytes),
-		.read_seq_string = tg_print_cpu_rwstat,
+		.seq_show = tg_print_cpu_rwstat,
 	},
 	{
 		.name = "throttle.io_serviced",
 		.private = offsetof(struct tg_stats_cpu, serviced),
-		.read_seq_string = tg_print_cpu_rwstat,
+		.seq_show = tg_print_cpu_rwstat,
 	},
 	{ }	/* terminate */
 };
@@ -1499,7 +1499,7 @@ bool blk_throtl_bio(struct request_queue *q, struct bio *bio)
 	if (tg) {
 		if (!tg->has_rules[rw]) {
 			throtl_update_dispatch_stats(tg_to_blkg(tg),
-						     bio->bi_size, bio->bi_rw);
+					bio->bi_iter.bi_size, bio->bi_rw);
 			goto out_unlock_rcu;
 		}
 	}
@@ -1555,7 +1555,7 @@ bool blk_throtl_bio(struct request_queue *q, struct bio *bio)
 	/* out-of-limit, queue to @tg */
 	throtl_log(sq, "[%c] bio. bdisp=%llu sz=%u bps=%llu iodisp=%u iops=%u queued=%d/%d",
 		   rw == READ ? 'R' : 'W',
-		   tg->bytes_disp[rw], bio->bi_size, tg->bps[rw],
+		   tg->bytes_disp[rw], bio->bi_iter.bi_size, tg->bps[rw],
 		   tg->io_disp[rw], tg->iops[rw],
 		   sq->nr_queued[READ], sq->nr_queued[WRITE]);
 
@@ -1623,7 +1623,7 @@ void blk_throtl_drain(struct request_queue *q)
 {
 	struct throtl_data *td = q->td;
 	struct blkcg_gq *blkg;
-	struct cgroup *pos_cgrp;
+	struct cgroup_subsys_state *pos_css;
 	struct bio *bio;
 	int rw;
 
@@ -1636,10 +1636,8 @@ void blk_throtl_drain(struct request_queue *q)
 	 * better to walk service_queue tree directly but blkg walk is
 	 * easier.
 	 */
-	blkg_for_each_descendant_post(blkg, pos_cgrp, td->queue->root_blkg)
+	blkg_for_each_descendant_post(blkg, pos_css, td->queue->root_blkg)
 		tg_drain_bios(&blkg_to_tg(blkg)->service_queue);
-
-	tg_drain_bios(&td_root_tg(td)->service_queue);
 
 	/* finally, transfer bios from top-level tg's into the td */
 	tg_drain_bios(&td->service_queue);

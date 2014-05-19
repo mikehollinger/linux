@@ -1020,8 +1020,12 @@ int ti_bandgap_get_trend(struct ti_bandgap *bgp, int id, int *trend)
 
 	/* Fetch the update interval */
 	ret = ti_bandgap_read_update_interval(bgp, id, &interval);
-	if (ret || !interval)
+	if (ret)
 		goto unfreeze;
+
+	/* Set the interval to 1 ms if bandgap counter delay is not set */
+	if (interval == 0)
+		interval = 1;
 
 	*trend = (t1 - t2) / interval;
 
@@ -1496,10 +1500,8 @@ static int ti_bandgap_resume(struct device *dev)
 
 	return ti_bandgap_restore_ctxt(bgp);
 }
-static const struct dev_pm_ops ti_bandgap_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(ti_bandgap_suspend,
-				ti_bandgap_resume)
-};
+static SIMPLE_DEV_PM_OPS(ti_bandgap_dev_pm_ops, ti_bandgap_suspend,
+			 ti_bandgap_resume);
 
 #define DEV_PM_OPS	(&ti_bandgap_dev_pm_ops)
 #else

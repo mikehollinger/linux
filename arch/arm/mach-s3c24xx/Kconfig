@@ -12,7 +12,7 @@ if ARCH_S3C24XX
 config PLAT_S3C24XX
 	def_bool y
 	select ARCH_REQUIRE_GPIOLIB
-	select NO_IOPORT
+	select NO_IOPORT_MAP
 	select S3C_DEV_NAND
 	select IRQ_DOMAIN
 	help
@@ -28,9 +28,9 @@ config CPU_S3C2410
 	select CPU_ARM920T
 	select CPU_LLSERIAL_S3C2410
 	select S3C2410_CLOCK
+	select S3C2410_DMA if S3C24XX_DMA
 	select ARM_S3C2410_CPUFREQ if ARM_S3C24XX_CPUFREQ
 	select S3C2410_PM if PM
-	select SAMSUNG_HRT
 	select SAMSUNG_WDT_RESET
 	help
 	  Support for S3C2410 and S3C2410A family from the S3C24XX line
@@ -42,7 +42,6 @@ config CPU_S3C2412
 	select CPU_LLSERIAL_S3C2440
 	select S3C2412_DMA if S3C24XX_DMA
 	select S3C2412_PM if PM
-	select SAMSUNG_HRT
 	help
 	  Support for the S3C2412 and S3C2413 SoCs from the S3C24XX line
 
@@ -54,7 +53,6 @@ config CPU_S3C2416
 	select S3C2443_COMMON
 	select S3C2443_DMA if S3C24XX_DMA
 	select SAMSUNG_CLKSRC
-	select SAMSUNG_HRT
 	help
 	  Support for the S3C2416 SoC from the S3C24XX line
 
@@ -65,7 +63,6 @@ config CPU_S3C2440
 	select S3C2410_CLOCK
 	select S3C2410_PM if PM
 	select S3C2440_DMA if S3C24XX_DMA
-	select SAMSUNG_HRT
 	help
 	  Support for S3C2440 Samsung Mobile CPU based systems.
 
@@ -74,8 +71,8 @@ config CPU_S3C2442
 	select CPU_ARM920T
 	select CPU_LLSERIAL_S3C2440
 	select S3C2410_CLOCK
+	select S3C2410_DMA if S3C24XX_DMA
 	select S3C2410_PM if PM
-	select SAMSUNG_HRT
 	help
 	  Support for S3C2442 Samsung Mobile CPU based systems.
 
@@ -91,7 +88,6 @@ config CPU_S3C2443
 	select S3C2443_COMMON
 	select S3C2443_DMA if S3C24XX_DMA
 	select SAMSUNG_CLKSRC
-	select SAMSUNG_HRT
 	help
 	  Support for the S3C2443 SoC from the S3C24XX line
 
@@ -154,7 +150,6 @@ config S3C2410_DMA_DEBUG
 config S3C2410_DMA
 	bool
 	depends on S3C24XX_DMA && (CPU_S3C2410 || CPU_S3C2442)
-	default y if CPU_S3C2410 || CPU_S3C2442
 	help
 	  DMA device selection for S3C2410 and compatible CPUs
 
@@ -184,27 +179,6 @@ config CPU_LLSERIAL_S3C2440
 	help
 	  Selected if there is an S3C2440 (or register compatible) serial
 	  low-level implementation needed
-
-# gpio configurations
-
-config S3C24XX_GPIO_EXTRA
-	int
-	default 128 if S3C24XX_GPIO_EXTRA128
-	default 64 if S3C24XX_GPIO_EXTRA64
-	default 16 if ARCH_H1940
-	default 0
-
-config S3C24XX_GPIO_EXTRA64
-	bool
-	help
-	  Add an extra 64 gpio numbers to the available GPIO pool. This is
-	  available for boards that need extra gpios for external devices.
-
-config S3C24XX_GPIO_EXTRA128
-	bool
-	help
-	  Add an extra 128 gpio numbers to the available GPIO pool. This is
-	  available for boards that need extra gpios for external devices.
 
 config S3C24XX_PLL
 	bool "Support CPUfreq changing of PLL frequency (EXPERIMENTAL)"
@@ -547,7 +521,6 @@ config MACH_ANUBIS
 	select HAVE_PATA_PLATFORM
 	select S3C2440_XTAL_12000000
 	select S3C24XX_DCLK
-	select S3C24XX_GPIO_EXTRA64
 	select S3C24XX_SIMTEC_PM if PM
 	select S3C_DEV_USB_HOST
 	help
@@ -563,7 +536,7 @@ config MACH_AT2440EVB
 
 config MACH_MINI2440
 	bool "MINI2440 development board"
-	select EEPROM_AT24
+	select EEPROM_AT24 if I2C
 	select LEDS_CLASS
 	select LEDS_TRIGGERS
 	select LEDS_TRIGGER_BACKLIGHT
@@ -588,7 +561,6 @@ config MACH_OSIRIS
 	select S3C2410_IOTIMING if ARM_S3C2440_CPUFREQ
 	select S3C2440_XTAL_12000000
 	select S3C24XX_DCLK
-	select S3C24XX_GPIO_EXTRA128
 	select S3C24XX_SIMTEC_PM if PM
 	select S3C_DEV_NAND
 	select S3C_DEV_USB_HOST
@@ -599,7 +571,7 @@ config MACH_OSIRIS
 config MACH_OSIRIS_DVS
 	tristate "Simtec IM2440D20 (OSIRIS) Dynamic Voltage Scaling driver"
 	depends on MACH_OSIRIS
-	select TPS65010
+	depends on TPS65010
 	help
 	  Say Y/M here if you want to have dynamic voltage scaling support
 	  on the Simtec IM2440D20 (OSIRIS) module via the TPS65011.

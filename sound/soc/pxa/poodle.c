@@ -74,14 +74,9 @@ static void poodle_ext_control(struct snd_soc_dapm_context *dapm)
 static int poodle_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_codec *codec = rtd->codec;
-
-	mutex_lock(&codec->mutex);
 
 	/* check the jack status at stream startup */
-	poodle_ext_control(&codec->dapm);
-
-	mutex_unlock(&codec->mutex);
+	poodle_ext_control(&rtd->card->dapm);
 
 	return 0;
 }
@@ -303,6 +298,7 @@ static struct platform_driver poodle_driver = {
 	.driver		= {
 		.name	= "poodle-audio",
 		.owner	= THIS_MODULE,
+		.pm     = &snd_soc_pm_ops,
 	},
 	.probe		= poodle_probe,
 	.remove		= poodle_remove,

@@ -44,15 +44,6 @@
 #define __LIBCFS_CURPROC_H__
 
 /*
- * Portable API to access common characteristics of "current" UNIX process.
- *
- * Implemented in portals/include/libcfs/<os>/
- */
-int    cfs_curproc_groups_nr(void);
-int    current_is_in_group(gid_t group);
-void   cfs_curproc_groups_dump(gid_t *array, int size);
-
-/*
  * Plus, platform-specific constant
  *
  * CFS_CURPROC_COMM_MAX,
@@ -63,7 +54,6 @@ void   cfs_curproc_groups_dump(gid_t *array, int size);
  */
 
 /* check if task is running in compat mode.*/
-int current_is_32bit(void);
 #define current_pid()		(current->pid)
 #define current_comm()		(current->comm)
 int cfs_get_environ(const char *key, char *value, int *val_len);
@@ -94,8 +84,6 @@ void cfs_cap_raise(cfs_cap_t cap);
 void cfs_cap_lower(cfs_cap_t cap);
 int cfs_cap_raised(cfs_cap_t cap);
 cfs_cap_t cfs_curproc_cap_pack(void);
-void cfs_curproc_cap_unpack(cfs_cap_t cap);
-int cfs_capable(cfs_cap_t cap);
 
 /* __LIBCFS_CURPROC_H__ */
 #endif

@@ -1863,8 +1863,8 @@ void rv770_enable_auto_throttle_source(struct radeon_device *rdev,
 	}
 }
 
-int rv770_set_thermal_temperature_range(struct radeon_device *rdev,
-					int min_temp, int max_temp)
+static int rv770_set_thermal_temperature_range(struct radeon_device *rdev,
+					       int min_temp, int max_temp)
 {
 	int low_temp = 0 * 1000;
 	int high_temp = 255 * 1000;
@@ -1966,6 +1966,15 @@ int rv770_dpm_enable(struct radeon_device *rdev)
 	if (pi->mg_clock_gating)
 		rv770_mg_clock_gating_enable(rdev, true);
 
+	rv770_enable_auto_throttle_source(rdev, RADEON_DPM_AUTO_THROTTLE_SRC_THERMAL, true);
+
+	return 0;
+}
+
+int rv770_dpm_late_enable(struct radeon_device *rdev)
+{
+	int ret;
+
 	if (rdev->irq.installed &&
 	    r600_is_internal_thermal_sensor(rdev->pm.int_thermal_type)) {
 		PPSMC_Result result;
@@ -1980,8 +1989,6 @@ int rv770_dpm_enable(struct radeon_device *rdev)
 		if (result != PPSMC_Result_OK)
 			DRM_DEBUG_KMS("Could not enable thermal interrupts.\n");
 	}
-
-	rv770_enable_auto_throttle_source(rdev, RADEON_DPM_AUTO_THROTTLE_SRC_THERMAL, true);
 
 	return 0;
 }
@@ -2064,12 +2071,6 @@ int rv770_dpm_set_power_state(struct radeon_device *rdev)
 		rv770_program_dcodt_after_state_switch(rdev, new_ps, old_ps);
 	rv770_set_uvd_clock_after_set_eng_clock(rdev, new_ps, old_ps);
 
-	ret = rv770_dpm_force_performance_level(rdev, RADEON_DPM_FORCED_LEVEL_AUTO);
-	if (ret) {
-		DRM_ERROR("rv770_dpm_force_performance_level failed\n");
-		return ret;
-	}
-
 	return 0;
 }
 
@@ -2147,12 +2148,16 @@ static void rv7xx_parse_pplib_non_clock_info(struct radeon_device *rdev,
 	if (ATOM_PPLIB_NONCLOCKINFO_VER1 < table_rev) {
 		rps->vclk = le32_to_cpu(non_clock_info->ulVCLK);
 		rps->dclk = le32_to_cpu(non_clock_info->ulDCLK);
-	} else if (r600_is_uvd_state(rps->class, rps->class2)) {
-		rps->vclk = RV770_DEFAULT_VCLK_FREQ;
-		rps->dclk = RV770_DEFAULT_DCLK_FREQ;
 	} else {
 		rps->vclk = 0;
 		rps->dclk = 0;
+	}
+
+	if (r600_is_uvd_state(rps->class, rps->class2)) {
+		if ((rps->vclk == 0) || (rps->dclk == 0)) {
+			rps->vclk = RV770_DEFAULT_VCLK_FREQ;
+			rps->dclk = RV770_DEFAULT_DCLK_FREQ;
+		}
 	}
 
 	if (rps->class & ATOM_PPLIB_CLASSIFICATION_BOOT)
@@ -2169,7 +2174,6 @@ static void rv7xx_parse_pplib_clock_info(struct radeon_device *rdev,
 	struct evergreen_power_info *eg_pi = evergreen_get_pi(rdev);
 	struct rv7xx_ps *ps = rv770_get_ps(rps);
 	u32 sclk, mclk;
-	u16 vddc;
 	struct rv7xx_pl *pl;
 
 	switch (index) {
@@ -2209,8 +2213,8 @@ static void rv7xx_parse_pplib_clock_info(struct radeon_device *rdev,
 
 	/* patch up vddc if necessary */
 	if (pl->vddc == 0xff01) {
-		if (radeon_atom_get_max_vddc(rdev, 0, 0, &vddc) == 0)
-			pl->vddc = vddc;
+		if (pi->max_vddc)
+			pl->vddc = pi->max_vddc;
 	}
 
 	if (rps->class & ATOM_PPLIB_CLASSIFICATION_ACPI) {
@@ -2246,14 +2250,12 @@ static void rv7xx_parse_pplib_clock_info(struct radeon_device *rdev,
 		pl->vddci = vddci;
 	}
 
-	if (rdev->family >= CHIP_BARTS) {
-		if ((rps->class & ATOM_PPLIB_CLASSIFICATION_UI_MASK) ==
-		    ATOM_PPLIB_CLASSIFICATION_UI_PERFORMANCE) {
-			rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.sclk = pl->sclk;
-			rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.mclk = pl->mclk;
-			rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.vddc = pl->vddc;
-			rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.vddci = pl->vddci;
-		}
+	if ((rps->class & ATOM_PPLIB_CLASSIFICATION_UI_MASK) ==
+	    ATOM_PPLIB_CLASSIFICATION_UI_PERFORMANCE) {
+		rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.sclk = pl->sclk;
+		rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.mclk = pl->mclk;
+		rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.vddc = pl->vddc;
+		rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.vddci = pl->vddci;
 	}
 }
 
@@ -2279,9 +2281,6 @@ int rv7xx_parse_power_table(struct radeon_device *rdev)
 				  power_info->pplib.ucNumStates, GFP_KERNEL);
 	if (!rdev->pm.dpm.ps)
 		return -ENOMEM;
-	rdev->pm.dpm.platform_caps = le32_to_cpu(power_info->pplib.ulPlatformCaps);
-	rdev->pm.dpm.backbias_response_time = le16_to_cpu(power_info->pplib.usBackbiasTime);
-	rdev->pm.dpm.voltage_response_time = le16_to_cpu(power_info->pplib.usVoltageTime);
 
 	for (i = 0; i < power_info->pplib.ucNumStates; i++) {
 		power_state = (union pplib_power_state *)
@@ -2294,6 +2293,7 @@ int rv7xx_parse_power_table(struct radeon_device *rdev)
 			 (power_state->v1.ucNonClockStateIndex *
 			  power_info->pplib.ucNonClockSize));
 		if (power_info->pplib.ucStateEntrySize - 1) {
+			u8 *idx;
 			ps = kzalloc(sizeof(struct rv7xx_ps), GFP_KERNEL);
 			if (ps == NULL) {
 				kfree(rdev->pm.dpm.ps);
@@ -2303,12 +2303,12 @@ int rv7xx_parse_power_table(struct radeon_device *rdev)
 			rv7xx_parse_pplib_non_clock_info(rdev, &rdev->pm.dpm.ps[i],
 							 non_clock_info,
 							 power_info->pplib.ucNonClockSize);
+			idx = (u8 *)&power_state->v1.ucClockStateIndices[0];
 			for (j = 0; j < (power_info->pplib.ucStateEntrySize - 1); j++) {
 				clock_info = (union pplib_clock_info *)
 					(mode_info->atom_context->bios + data_offset +
 					 le16_to_cpu(power_info->pplib.usClockInfoArrayOffset) +
-					 (power_state->v1.ucClockStateIndices[j] *
-					  power_info->pplib.ucClockInfoSize));
+					 (idx[j] * power_info->pplib.ucClockInfoSize));
 				rv7xx_parse_pplib_clock_info(rdev,
 							     &rdev->pm.dpm.ps[i], j,
 							     clock_info);
@@ -2328,6 +2328,12 @@ void rv770_get_engine_memory_ss(struct radeon_device *rdev)
 						       ASIC_INTERNAL_ENGINE_SS, 0);
 	pi->mclk_ss = radeon_atombios_get_asic_ss_info(rdev, &ss,
 						       ASIC_INTERNAL_MEMORY_SS, 0);
+
+	/* disable ss, causes hangs on some cayman boards */
+	if (rdev->family == CHIP_CAYMAN) {
+		pi->sclk_ss = false;
+		pi->mclk_ss = false;
+	}
 
 	if (pi->sclk_ss || pi->mclk_ss)
 		pi->dynamic_ss = true;
@@ -2351,6 +2357,10 @@ int rv770_dpm_init(struct radeon_device *rdev)
 	pi->acpi_vddc = 0;
 	pi->min_vddc_in_table = 0;
 	pi->max_vddc_in_table = 0;
+
+	ret = r600_get_platform_caps(rdev);
+	if (ret)
+		return ret;
 
 	ret = rv7xx_parse_power_table(rdev);
 	if (ret)
@@ -2517,8 +2527,15 @@ u32 rv770_dpm_get_mclk(struct radeon_device *rdev, bool low)
 bool rv770_dpm_vblank_too_short(struct radeon_device *rdev)
 {
 	u32 vblank_time = r600_dpm_get_vblank_time(rdev);
+	u32 switch_limit = 200; /* 300 */
 
-	if (vblank_time < 300)
+	/* RV770 */
+	/* mclk switching doesn't seem to work reliably on desktop RV770s */
+	if ((rdev->family == CHIP_RV770) &&
+	    !(rdev->flags & RADEON_IS_MOBILITY))
+		switch_limit = 0xffffffff; /* disable mclk switching */
+
+	if (vblank_time < switch_limit)
 		return true;
 	else
 		return false;

@@ -25,7 +25,6 @@
 #include <linux/moduleparam.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
-#include <linux/init.h>
 #include <linux/list.h>
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
@@ -36,6 +35,7 @@
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
 
+#include "u_rndis.h"
 
 #undef	VERBOSE_DEBUG
 
@@ -1068,7 +1068,7 @@ static int rndis_proc_show(struct seq_file *m, void *v)
 				s = "RNDIS_INITIALIZED"; break;
 			 case RNDIS_DATA_INITIALIZED:
 				s = "RNDIS_DATA_INITIALIZED"; break;
-			}; s; }),
+			} s; }),
 			 param->medium,
 			 (param->media_state) ? 0 : param->speed*100,
 			 (param->media_state) ? "disconnected" : "connected",
@@ -1174,7 +1174,6 @@ int rndis_init(void)
 
 	return 0;
 }
-module_init(rndis_init);
 
 void rndis_exit(void)
 {
@@ -1188,6 +1187,4 @@ void rndis_exit(void)
 	}
 #endif
 }
-module_exit(rndis_exit);
 
-MODULE_LICENSE("GPL");

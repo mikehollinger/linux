@@ -14,6 +14,7 @@
 #include <linux/clk.h>
 #include <linux/gpio.h>
 #include <linux/irqdomain.h>
+#include <linux/irqchip/chained_irq.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -175,7 +176,7 @@ static int sunxi_pctrl_dt_node_to_map(struct pinctrl_dev *pctldev,
 	}
 
 	*map = kmalloc(nmaps * sizeof(struct pinctrl_map), GFP_KERNEL);
-	if (!map)
+	if (!*map)
 		return -ENOMEM;
 
 	of_property_for_each_string(node, "allwinner,pins", prop, group) {
@@ -274,7 +275,8 @@ static int sunxi_pconf_group_get(struct pinctrl_dev *pctldev,
 
 static int sunxi_pconf_group_set(struct pinctrl_dev *pctldev,
 				 unsigned group,
-				 unsigned long config)
+				 unsigned long *configs,
+				 unsigned num_configs)
 {
 	struct sunxi_pinctrl *pctl = pinctrl_dev_get_drvdata(pctldev);
 	struct sunxi_pinctrl_group *g = &pctl->groups[group];
@@ -282,56 +284,52 @@ static int sunxi_pconf_group_set(struct pinctrl_dev *pctldev,
 	u32 val, mask;
 	u16 strength;
 	u8 dlevel;
+	int i;
 
-	switch (pinconf_to_config_param(config)) {
-	case PIN_CONFIG_DRIVE_STRENGTH:
-		strength = pinconf_to_config_argument(config);
-		if (strength > 40)
-			return -EINVAL;
-		/*
-		 * We convert from mA to what the register expects:
-		 *   0: 10mA
-		 *   1: 20mA
-		 *   2: 30mA
-		 *   3: 40mA
-		 */
-		dlevel = strength / 10 - 1;
+	spin_lock_irqsave(&pctl->lock, flags);
 
-		spin_lock_irqsave(&pctl->lock, flags);
+	for (i = 0; i < num_configs; i++) {
+		switch (pinconf_to_config_param(configs[i])) {
+		case PIN_CONFIG_DRIVE_STRENGTH:
+			strength = pinconf_to_config_argument(configs[i]);
+			if (strength > 40) {
+				spin_unlock_irqrestore(&pctl->lock, flags);
+				return -EINVAL;
+			}
+			/*
+			 * We convert from mA to what the register expects:
+			 *   0: 10mA
+			 *   1: 20mA
+			 *   2: 30mA
+			 *   3: 40mA
+			 */
+			dlevel = strength / 10 - 1;
+			val = readl(pctl->membase + sunxi_dlevel_reg(g->pin));
+			mask = DLEVEL_PINS_MASK << sunxi_dlevel_offset(g->pin);
+			writel((val & ~mask)
+				| dlevel << sunxi_dlevel_offset(g->pin),
+				pctl->membase + sunxi_dlevel_reg(g->pin));
+			break;
+		case PIN_CONFIG_BIAS_PULL_UP:
+			val = readl(pctl->membase + sunxi_pull_reg(g->pin));
+			mask = PULL_PINS_MASK << sunxi_pull_offset(g->pin);
+			writel((val & ~mask) | 1 << sunxi_pull_offset(g->pin),
+				pctl->membase + sunxi_pull_reg(g->pin));
+			break;
+		case PIN_CONFIG_BIAS_PULL_DOWN:
+			val = readl(pctl->membase + sunxi_pull_reg(g->pin));
+			mask = PULL_PINS_MASK << sunxi_pull_offset(g->pin);
+			writel((val & ~mask) | 2 << sunxi_pull_offset(g->pin),
+				pctl->membase + sunxi_pull_reg(g->pin));
+			break;
+		default:
+			break;
+		}
+		/* cache the config value */
+		g->config = configs[i];
+	} /* for each config */
 
-		val = readl(pctl->membase + sunxi_dlevel_reg(g->pin));
-	        mask = DLEVEL_PINS_MASK << sunxi_dlevel_offset(g->pin);
-		writel((val & ~mask) | dlevel << sunxi_dlevel_offset(g->pin),
-			pctl->membase + sunxi_dlevel_reg(g->pin));
-
-		spin_unlock_irqrestore(&pctl->lock, flags);
-		break;
-	case PIN_CONFIG_BIAS_PULL_UP:
-		spin_lock_irqsave(&pctl->lock, flags);
-
-		val = readl(pctl->membase + sunxi_pull_reg(g->pin));
-		mask = PULL_PINS_MASK << sunxi_pull_offset(g->pin);
-		writel((val & ~mask) | 1 << sunxi_pull_offset(g->pin),
-			pctl->membase + sunxi_pull_reg(g->pin));
-
-		spin_unlock_irqrestore(&pctl->lock, flags);
-		break;
-	case PIN_CONFIG_BIAS_PULL_DOWN:
-		spin_lock_irqsave(&pctl->lock, flags);
-
-		val = readl(pctl->membase + sunxi_pull_reg(g->pin));
-		mask = PULL_PINS_MASK << sunxi_pull_offset(g->pin);
-		writel((val & ~mask) | 2 << sunxi_pull_offset(g->pin),
-			pctl->membase + sunxi_pull_reg(g->pin));
-
-		spin_unlock_irqrestore(&pctl->lock, flags);
-		break;
-	default:
-		break;
-	}
-
-	/* cache the config value */
-	g->config = config;
+	spin_unlock_irqrestore(&pctl->lock, flags);
 
 	return 0;
 }
@@ -472,12 +470,6 @@ static int sunxi_pinctrl_gpio_get(struct gpio_chip *chip, unsigned offset)
 	return val;
 }
 
-static int sunxi_pinctrl_gpio_direction_output(struct gpio_chip *chip,
-					unsigned offset, int value)
-{
-	return pinctrl_gpio_direction_output(chip->base + offset);
-}
-
 static void sunxi_pinctrl_gpio_set(struct gpio_chip *chip,
 				unsigned offset, int value)
 {
@@ -499,6 +491,13 @@ static void sunxi_pinctrl_gpio_set(struct gpio_chip *chip,
 	writel(regval, pctl->membase + reg);
 
 	spin_unlock_irqrestore(&pctl->lock, flags);
+}
+
+static int sunxi_pinctrl_gpio_direction_output(struct gpio_chip *chip,
+					unsigned offset, int value)
+{
+	sunxi_pinctrl_gpio_set(chip, offset, value);
+	return pinctrl_gpio_direction_output(chip->base + offset);
 }
 
 static int sunxi_pinctrl_gpio_of_xlate(struct gpio_chip *gc,
@@ -524,7 +523,7 @@ static int sunxi_pinctrl_gpio_to_irq(struct gpio_chip *chip, unsigned offset)
 	struct sunxi_pinctrl *pctl = dev_get_drvdata(chip->dev);
 	struct sunxi_desc_function *desc;
 
-	if (offset > chip->ngpio)
+	if (offset >= chip->ngpio)
 		return -ENXIO;
 
 	desc = sunxi_pinctrl_desc_find_function_by_pin(pctl, offset, "irq");
@@ -550,7 +549,7 @@ static struct gpio_chip sunxi_pinctrl_gpio_chip = {
 	.of_xlate		= sunxi_pinctrl_gpio_of_xlate,
 	.to_irq			= sunxi_pinctrl_gpio_to_irq,
 	.of_gpio_n_cells	= 3,
-	.can_sleep		= 0,
+	.can_sleep		= false,
 };
 
 static int sunxi_pinctrl_irq_set_type(struct irq_data *d,
@@ -586,7 +585,7 @@ static int sunxi_pinctrl_irq_set_type(struct irq_data *d,
 	spin_lock_irqsave(&pctl->lock, flags);
 
 	regval = readl(pctl->membase + reg);
-	regval &= ~IRQ_CFG_IRQ_MASK;
+	regval &= ~(IRQ_CFG_IRQ_MASK << index);
 	writel(regval | (mode << index), pctl->membase + reg);
 
 	spin_unlock_irqrestore(&pctl->lock, flags);
@@ -667,6 +666,7 @@ static struct irq_chip sunxi_pinctrl_irq_chip = {
 
 static void sunxi_pinctrl_irq_handler(unsigned irq, struct irq_desc *desc)
 {
+	struct irq_chip *chip = irq_get_chip(irq);
 	struct sunxi_pinctrl *pctl = irq_get_handler_data(irq);
 	const unsigned long reg = readl(pctl->membase + IRQ_STATUS_REG);
 
@@ -676,10 +676,12 @@ static void sunxi_pinctrl_irq_handler(unsigned irq, struct irq_desc *desc)
 	if (reg) {
 		int irqoffset;
 
+		chained_irq_enter(chip, desc);
 		for_each_set_bit(irqoffset, &reg, SUNXI_IRQ_NUMBER) {
 			int pin_irq = irq_find_mapping(pctl->domain, irqoffset);
 			generic_handle_irq(pin_irq);
 		}
+		chained_irq_exit(chip, desc);
 	}
 }
 
@@ -687,6 +689,8 @@ static struct of_device_id sunxi_pinctrl_match[] = {
 	{ .compatible = "allwinner,sun4i-a10-pinctrl", .data = (void *)&sun4i_a10_pinctrl_data },
 	{ .compatible = "allwinner,sun5i-a10s-pinctrl", .data = (void *)&sun5i_a10s_pinctrl_data },
 	{ .compatible = "allwinner,sun5i-a13-pinctrl", .data = (void *)&sun5i_a13_pinctrl_data },
+	{ .compatible = "allwinner,sun6i-a31-pinctrl", .data = (void *)&sun6i_a31_pinctrl_data },
+	{ .compatible = "allwinner,sun7i-a20-pinctrl", .data = (void *)&sun7i_a20_pinctrl_data },
 	{}
 };
 MODULE_DEVICE_TABLE(of, sunxi_pinctrl_match);

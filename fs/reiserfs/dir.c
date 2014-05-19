@@ -71,6 +71,7 @@ int reiserfs_readdir_inode(struct inode *inode, struct dir_context *ctx)
 	char small_buf[32];	/* avoid kmalloc if we can */
 	struct reiserfs_dir_entry de;
 	int ret = 0;
+	int depth;
 
 	reiserfs_write_lock(inode->i_sb);
 
@@ -124,6 +125,7 @@ int reiserfs_readdir_inode(struct inode *inode, struct dir_context *ctx)
 				int d_reclen;
 				char *d_name;
 				ino_t d_ino;
+				loff_t cur_pos = deh_offset(deh);
 
 				if (!de_visible(deh))
 					/* it is hidden entry */
@@ -181,22 +183,23 @@ int reiserfs_readdir_inode(struct inode *inode, struct dir_context *ctx)
 				 * Since filldir might sleep, we can release
 				 * the write lock here for other waiters
 				 */
-				reiserfs_write_unlock(inode->i_sb);
+				depth = reiserfs_write_unlock_nested(inode->i_sb);
 				if (!dir_emit
 				    (ctx, local_buf, d_reclen, d_ino,
 				     DT_UNKNOWN)) {
-					reiserfs_write_lock(inode->i_sb);
+					reiserfs_write_lock_nested(inode->i_sb, depth);
 					if (local_buf != small_buf) {
 						kfree(local_buf);
 					}
 					goto end;
 				}
-				reiserfs_write_lock(inode->i_sb);
+				reiserfs_write_lock_nested(inode->i_sb, depth);
 				if (local_buf != small_buf) {
 					kfree(local_buf);
 				}
-				// next entry should be looked for with such offset
-				next_pos = deh_offset(deh) + 1;
+
+				/* deh_offset(deh) may be invalid now. */
+				next_pos = cur_pos + 1;
 
 				if (item_moved(&tmp_ih, &path_to_entry)) {
 					set_cpu_key_k_offset(&pos_key,

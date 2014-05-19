@@ -14,9 +14,6 @@
 
 #include "blk.h"
 
-int blk_iopoll_enabled = 1;
-EXPORT_SYMBOL(blk_iopoll_enabled);
-
 static unsigned int blk_iopoll_budget __read_mostly = 256;
 
 static DEFINE_PER_CPU(struct list_head, blk_cpu_iopoll);
@@ -35,7 +32,7 @@ void blk_iopoll_sched(struct blk_iopoll *iop)
 	unsigned long flags;
 
 	local_irq_save(flags);
-	list_add_tail(&iop->list, &__get_cpu_var(blk_cpu_iopoll));
+	list_add_tail(&iop->list, this_cpu_ptr(&blk_cpu_iopoll));
 	__raise_softirq_irqoff(BLOCK_IOPOLL_SOFTIRQ);
 	local_irq_restore(flags);
 }
@@ -79,7 +76,7 @@ EXPORT_SYMBOL(blk_iopoll_complete);
 
 static void blk_iopoll_softirq(struct softirq_action *h)
 {
-	struct list_head *list = &__get_cpu_var(blk_cpu_iopoll);
+	struct list_head *list = this_cpu_ptr(&blk_cpu_iopoll);
 	int rearm = 0, budget = blk_iopoll_budget;
 	unsigned long start_time = jiffies;
 
@@ -201,7 +198,7 @@ static int blk_iopoll_cpu_notify(struct notifier_block *self,
 
 		local_irq_disable();
 		list_splice_init(&per_cpu(blk_cpu_iopoll, cpu),
-				 &__get_cpu_var(blk_cpu_iopoll));
+				 this_cpu_ptr(&blk_cpu_iopoll));
 		__raise_softirq_irqoff(BLOCK_IOPOLL_SOFTIRQ);
 		local_irq_enable();
 	}

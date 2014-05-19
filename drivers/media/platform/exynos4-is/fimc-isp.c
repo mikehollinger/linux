@@ -25,6 +25,7 @@
 #include <media/v4l2-device.h>
 
 #include "media-dev.h"
+#include "fimc-isp-video.h"
 #include "fimc-is-command.h"
 #include "fimc-is-param.h"
 #include "fimc-is-regs.h"
@@ -93,8 +94,8 @@ void fimc_isp_irq_handler(struct fimc_is *is)
 	is->i2h_cmd.args[1] = mcuctl_read(is, MCUCTL_REG_ISSR(21));
 
 	fimc_is_fw_clear_irq1(is, FIMC_IS_INT_FRAME_DONE_ISP);
+	fimc_isp_video_irq_handler(is);
 
-	/* TODO: Complete ISP DMA interrupt handler */
 	wake_up(&is->irq_queue);
 }
 
@@ -388,7 +389,33 @@ static int fimc_isp_subdev_open(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int fimc_isp_subdev_registered(struct v4l2_subdev *sd)
+{
+	struct fimc_isp *isp = v4l2_get_subdevdata(sd);
+	int ret;
+
+	/* Use pipeline object allocated by the media device. */
+	isp->video_capture.ve.pipe = v4l2_get_subdev_hostdata(sd);
+
+	ret = fimc_isp_video_device_register(isp, sd->v4l2_dev,
+			V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
+	if (ret < 0)
+		isp->video_capture.ve.pipe = NULL;
+
+	return ret;
+}
+
+static void fimc_isp_subdev_unregistered(struct v4l2_subdev *sd)
+{
+	struct fimc_isp *isp = v4l2_get_subdevdata(sd);
+
+	fimc_isp_video_device_unregister(isp,
+			V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
+}
+
 static const struct v4l2_subdev_internal_ops fimc_is_subdev_internal_ops = {
+	.registered = fimc_isp_subdev_registered,
+	.unregistered = fimc_isp_subdev_unregistered,
 	.open = fimc_isp_subdev_open,
 };
 
@@ -511,7 +538,7 @@ static int __ctrl_set_metering(struct fimc_is *is, unsigned int value)
 		break;
 	default:
 		return -EINVAL;
-	};
+	}
 
 	__is_set_isp_metering(is, IS_METERING_CONFIG_CMD, val);
 	return 0;
@@ -672,6 +699,8 @@ int fimc_isp_subdev_create(struct fimc_isp *isp)
 	mutex_init(&isp->subdev_lock);
 
 	v4l2_subdev_init(sd, &fimc_is_subdev_ops);
+
+	sd->owner = THIS_MODULE;
 	sd->grp_id = GRP_ID_FIMC_IS;
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	snprintf(sd->name, sizeof(sd->name), "FIMC-IS-ISP");

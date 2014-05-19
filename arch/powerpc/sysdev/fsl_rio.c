@@ -28,6 +28,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
 #include <linux/device.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
@@ -529,6 +531,7 @@ int fsl_rio_setup(struct platform_device *dev)
 		sprintf(port->name, "RIO mport %d", i);
 
 		priv->dev = &dev->dev;
+		port->dev.parent = &dev->dev;
 		port->ops = ops;
 		port->priv = priv;
 		port->phys_efptr = 0x100;

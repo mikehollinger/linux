@@ -12,8 +12,8 @@
 #include <linux/random.h>
 #include <linux/init.h>
 #include <asm/cacheflush.h>
-#include <asm/processor.h>
 #include <asm/facility.h>
+#include <asm/dis.h>
 
 /*
  * Conventions:
@@ -156,8 +156,8 @@ static void bpf_jit_prologue(struct bpf_jit *jit)
 		EMIT6(0xeb8ff058, 0x0024);
 		/* lgr %r14,%r15 */
 		EMIT4(0xb90400ef);
-		/* ahi %r15,<offset> */
-		EMIT4_IMM(0xa7fa0000, (jit->seen & SEEN_MEM) ? -112 : -80);
+		/* aghi %r15,<offset> */
+		EMIT4_IMM(0xa7fb0000, (jit->seen & SEEN_MEM) ? -112 : -80);
 		/* stg %r14,152(%r15) */
 		EMIT6(0xe3e0f098, 0x0024);
 	} else if ((jit->seen & SEEN_XREG) && (jit->seen & SEEN_LITERAL))
@@ -276,7 +276,6 @@ static void bpf_jit_noleaks(struct bpf_jit *jit, struct sock_filter *filter)
 	case BPF_S_LD_W_IND:
 	case BPF_S_LD_H_IND:
 	case BPF_S_LD_B_IND:
-	case BPF_S_LDX_B_MSH:
 	case BPF_S_LD_IMM:
 	case BPF_S_LD_MEM:
 	case BPF_S_MISC_TXA:
@@ -368,14 +367,16 @@ static int bpf_jit_insn(struct bpf_jit *jit, struct sock_filter *filter,
 		EMIT4_PCREL(0xa7840000, (jit->ret0_ip - jit->prg));
 		/* lhi %r4,0 */
 		EMIT4(0xa7480000);
-		/* dr %r4,%r12 */
-		EMIT2(0x1d4c);
+		/* dlr %r4,%r12 */
+		EMIT4(0xb997004c);
 		break;
-	case BPF_S_ALU_DIV_K: /* A = reciprocal_divide(A, K) */
-		/* m %r4,<d(K)>(%r13) */
-		EMIT4_DISP(0x5c40d000, EMIT_CONST(K));
-		/* lr %r5,%r4 */
-		EMIT2(0x1854);
+	case BPF_S_ALU_DIV_K: /* A /= K */
+		if (K == 1)
+			break;
+		/* lhi %r4,0 */
+		EMIT4(0xa7480000);
+		/* dl %r4,<d(K)>(%r13) */
+		EMIT6_DISP(0xe340d000, 0x0097, EMIT_CONST(K));
 		break;
 	case BPF_S_ALU_MOD_X: /* A %= X */
 		jit->seen |= SEEN_XREG | SEEN_RET0;
@@ -385,16 +386,21 @@ static int bpf_jit_insn(struct bpf_jit *jit, struct sock_filter *filter,
 		EMIT4_PCREL(0xa7840000, (jit->ret0_ip - jit->prg));
 		/* lhi %r4,0 */
 		EMIT4(0xa7480000);
-		/* dr %r4,%r12 */
-		EMIT2(0x1d4c);
+		/* dlr %r4,%r12 */
+		EMIT4(0xb997004c);
 		/* lr %r5,%r4 */
 		EMIT2(0x1854);
 		break;
 	case BPF_S_ALU_MOD_K: /* A %= K */
+		if (K == 1) {
+			/* lhi %r5,0 */
+			EMIT4(0xa7580000);
+			break;
+		}
 		/* lhi %r4,0 */
 		EMIT4(0xa7480000);
-		/* d %r4,<d(K)>(%r13) */
-		EMIT4_DISP(0x5d40d000, EMIT_CONST(K));
+		/* dl %r4,<d(K)>(%r13) */
+		EMIT6_DISP(0xe340d000, 0x0097, EMIT_CONST(K));
 		/* lr %r5,%r4 */
 		EMIT2(0x1854);
 		break;
@@ -730,10 +736,10 @@ call_fn:	/* lg %r1,<d(function)>(%r13) */
 		/* icm	%r5,3,<d(type)>(%r1) */
 		EMIT4_DISP(0xbf531000, offsetof(struct net_device, type));
 		break;
-	case BPF_S_ANC_RXHASH: /* A = skb->rxhash */
-		BUILD_BUG_ON(FIELD_SIZEOF(struct sk_buff, rxhash) != 4);
-		/* l %r5,<d(rxhash)>(%r2) */
-		EMIT4_DISP(0x58502000, offsetof(struct sk_buff, rxhash));
+	case BPF_S_ANC_RXHASH: /* A = skb->hash */
+		BUILD_BUG_ON(FIELD_SIZEOF(struct sk_buff, hash) != 4);
+		/* l %r5,<d(hash)>(%r2) */
+		EMIT4_DISP(0x58502000, offsetof(struct sk_buff, hash));
 		break;
 	case BPF_S_ANC_VLAN_TAG:
 	case BPF_S_ANC_VLAN_TAG_PRESENT:
@@ -805,7 +811,7 @@ static struct bpf_binary_header *bpf_alloc_binary(unsigned int bpfsize,
 		return NULL;
 	memset(header, 0, sz);
 	header->pages = sz / PAGE_SIZE;
-	hole = sz - bpfsize + sizeof(*header);
+	hole = sz - (bpfsize + sizeof(*header));
 	/* Insert random number of illegal instructions before BPF code
 	 * and make sure the first instruction starts at an even address.
 	 */
@@ -870,6 +876,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 	if (jit.start) {
 		set_memory_ro((unsigned long)header, header->pages);
 		fp->bpf_func = (void *) jit.start;
+		fp->jited = 1;
 	}
 out:
 	kfree(addrs);
@@ -880,8 +887,12 @@ void bpf_jit_free(struct sk_filter *fp)
 	unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
 	struct bpf_binary_header *header = (void *)addr;
 
-	if (fp->bpf_func == sk_run_filter)
-		return;
+	if (!fp->jited)
+		goto free_filter;
+
 	set_memory_rw(addr, header->pages);
 	module_free(NULL, header);
+
+free_filter:
+	kfree(fp);
 }

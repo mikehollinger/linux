@@ -181,11 +181,11 @@ typedef struct lnet_msg {
 	lnet_nid_t		msg_from;
 	__u32			msg_type;
 
-	/* commited for sending */
+	/* committed for sending */
 	unsigned int		msg_tx_committed:1;
 	/* CPT # this message committed for sending */
 	unsigned int		msg_tx_cpt:15;
-	/* commited for receiving */
+	/* committed for receiving */
 	unsigned int		msg_rx_committed:1;
 	/* CPT # this message committed for receiving */
 	unsigned int		msg_rx_cpt:15;
@@ -282,16 +282,14 @@ typedef struct lnet_libmd {
 #define LNET_MD_FLAG_AUTO_UNLINK      (1 << 1)
 
 #ifdef LNET_USE_LIB_FREELIST
-typedef struct
-{
+typedef struct {
 	void		  *fl_objs;	  /* single contiguous array of objects */
 	int		    fl_nobjs;	 /* the number of them */
 	int		    fl_objsize;       /* the size (including overhead) of each of them */
 	struct list_head	     fl_list;	  /* where they are enqueued */
 } lnet_freelist_t;
 
-typedef struct
-{
+typedef struct {
 	struct list_head	     fo_list;	     /* enqueue on fl_list */
 	void		  *fo_contents;	 /* aligned contents */
 } lnet_freeobj_t;
@@ -312,8 +310,7 @@ typedef struct {
 
 struct lnet_ni;				  /* forward ref */
 
-typedef struct lnet_lnd
-{
+typedef struct lnet_lnd {
 	/* fields managed by portals */
 	struct list_head	    lnd_list;	     /* stash in the LND table */
 	int		   lnd_refcount;	 /* # active instances */
@@ -321,8 +318,8 @@ typedef struct lnet_lnd
 	/* fields initialised by the LND */
 	unsigned int	  lnd_type;
 
-	int  (*lnd_startup) (struct lnet_ni *ni);
-	void (*lnd_shutdown) (struct lnet_ni *ni);
+	int  (*lnd_startup)(struct lnet_ni *ni);
+	void (*lnd_shutdown)(struct lnet_ni *ni);
 	int  (*lnd_ctl)(struct lnet_ni *ni, unsigned int cmd, void *arg);
 
 	/* In data movement APIs below, payload buffers are described as a set
@@ -478,7 +475,6 @@ typedef struct lnet_peer {
 	lnet_rc_data_t		*lp_rcd;	/* router checker state */
 } lnet_peer_t;
 
-
 /* peer hash size */
 #define LNET_PEER_HASH_BITS     9
 #define LNET_PEER_HASH_SIZE     (1 << LNET_PEER_HASH_BITS)
@@ -504,6 +500,7 @@ typedef struct {
 	int			lr_seq;		/* sequence for round-robin */
 	unsigned int		lr_downis;	/* number of down NIs */
 	unsigned int		lr_hops;	/* how far I am */
+	unsigned int            lr_priority;    /* route priority */
 } lnet_route_t;
 
 #define LNET_REMOTE_NETS_HASH_DEFAULT	(1U << 7)
@@ -619,7 +616,7 @@ typedef struct lnet_portal {
 	unsigned int		ptl_index;	/* portal ID, reserved */
 	/* flags on this portal: lazy, unique... */
 	unsigned int		ptl_options;
-	/* list of messags which are stealing buffer */
+	/* list of messages which are stealing buffer */
 	struct list_head		ptl_msg_stealing;
 	/* messages blocking for MD */
 	struct list_head		ptl_msg_delayed;
@@ -668,8 +665,7 @@ struct lnet_msg_container {
 #define LNET_RC_STATE_RUNNING		1	/* started up OK */
 #define LNET_RC_STATE_STOPPING		2	/* telling thread to stop */
 
-typedef struct
-{
+typedef struct {
 	/* CPU partition table of LNet */
 	struct cfs_cpt_table		*ln_cpt_table;
 	/* number of CPTs in ln_cpt_table */

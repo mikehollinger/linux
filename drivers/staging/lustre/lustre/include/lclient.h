@@ -118,8 +118,8 @@ struct ccc_io {
 };
 
 /**
- * True, if \a io is a normal io, False for other (sendfile, splice*).
- * must be impementated in arch specific code.
+ * True, if \a io is a normal io, False for splice_{read,write}.
+ * must be implemented in arch specific code.
  */
 int cl_is_normalio(const struct lu_env *env, const struct cl_io *io);
 
@@ -388,8 +388,8 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent);
 __u64 cl_fid_build_ino(const struct lu_fid *fid, int api32);
 __u32 cl_fid_build_gen(const struct lu_fid *fid);
 
-# define CLOBINVRNT(env, clob, expr)				    \
-	((void)sizeof(env), (void)sizeof(clob), (void)sizeof !!(expr))
+# define CLOBINVRNT(env, clob, expr)					\
+	((void)sizeof(env), (void)sizeof(clob), (void)sizeof(!!(expr)))
 
 int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp);
 int cl_ocd_update(struct obd_device *host,

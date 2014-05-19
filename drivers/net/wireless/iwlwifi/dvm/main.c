@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2003 - 2013 Intel Corporation. All rights reserved.
+ * Copyright(c) 2003 - 2014 Intel Corporation. All rights reserved.
  *
  * Portions of this file are derived from the ipw3945 project, as well
  * as portions of the ieee80211 subsystem header files.
@@ -252,13 +252,17 @@ static void iwl_bg_bt_runtime_config(struct work_struct *work)
 	struct iwl_priv *priv =
 		container_of(work, struct iwl_priv, bt_runtime_config);
 
+	mutex_lock(&priv->mutex);
 	if (test_bit(STATUS_EXIT_PENDING, &priv->status))
-		return;
+		goto out;
 
 	/* dont send host command if rf-kill is on */
 	if (!iwl_is_ready_rf(priv))
-		return;
+		goto out;
+
 	iwlagn_send_advance_bt_config(priv);
+out:
+	mutex_unlock(&priv->mutex);
 }
 
 static void iwl_bg_bt_full_concurrency(struct work_struct *work)
@@ -587,11 +591,6 @@ static void iwl_init_context(struct iwl_priv *priv, u32 ucode_flags)
 	priv->contexts[IWL_RXON_CTX_PAN].interface_modes =
 		BIT(NL80211_IFTYPE_STATION) | BIT(NL80211_IFTYPE_AP);
 
-	if (ucode_flags & IWL_UCODE_TLV_FLAGS_P2P)
-		priv->contexts[IWL_RXON_CTX_PAN].interface_modes |=
-			BIT(NL80211_IFTYPE_P2P_CLIENT) |
-			BIT(NL80211_IFTYPE_P2P_GO);
-
 	priv->contexts[IWL_RXON_CTX_PAN].ap_devtype = RXON_DEV_TYPE_CP;
 	priv->contexts[IWL_RXON_CTX_PAN].station_devtype = RXON_DEV_TYPE_2STA;
 	priv->contexts[IWL_RXON_CTX_PAN].unused_devtype = RXON_DEV_TYPE_P2P;
@@ -854,14 +853,6 @@ void iwl_down(struct iwl_priv *priv)
 
 	iwl_scan_cancel_timeout(priv, 200);
 
-	/*
-	 * If active, scanning won't cancel it, so say it expired.
-	 * No race since we hold the mutex here and a new one
-	 * can't come in at this time.
-	 */
-	if (priv->ucode_loaded && priv->cur_ucode != IWL_UCODE_INIT)
-		ieee80211_remain_on_channel_expired(priv->hw);
-
 	exit_pending =
 		test_and_set_bit(STATUS_EXIT_PENDING, &priv->status);
 
@@ -1002,41 +993,6 @@ static void iwl_bg_restart(struct work_struct *data)
 	}
 }
 
-
-
-
-void iwlagn_disable_roc(struct iwl_priv *priv)
-{
-	struct iwl_rxon_context *ctx = &priv->contexts[IWL_RXON_CTX_PAN];
-
-	lockdep_assert_held(&priv->mutex);
-
-	if (!priv->hw_roc_setup)
-		return;
-
-	ctx->staging.dev_type = RXON_DEV_TYPE_P2P;
-	ctx->staging.filter_flags &= ~RXON_FILTER_ASSOC_MSK;
-
-	priv->hw_roc_channel = NULL;
-
-	memset(ctx->staging.node_addr, 0, ETH_ALEN);
-
-	iwlagn_commit_rxon(priv, ctx);
-
-	ctx->is_active = false;
-	priv->hw_roc_setup = false;
-}
-
-static void iwlagn_disable_roc_work(struct work_struct *work)
-{
-	struct iwl_priv *priv = container_of(work, struct iwl_priv,
-					     hw_roc_disable_work.work);
-
-	mutex_lock(&priv->mutex);
-	iwlagn_disable_roc(priv);
-	mutex_unlock(&priv->mutex);
-}
-
 /*****************************************************************************
  *
  * driver setup and teardown
@@ -1053,8 +1009,6 @@ static void iwl_setup_deferred_work(struct iwl_priv *priv)
 	INIT_WORK(&priv->tx_flush, iwl_bg_tx_flush);
 	INIT_WORK(&priv->bt_full_concurrency, iwl_bg_bt_full_concurrency);
 	INIT_WORK(&priv->bt_runtime_config, iwl_bg_bt_runtime_config);
-	INIT_DELAYED_WORK(&priv->hw_roc_disable_work,
-			  iwlagn_disable_roc_work);
 
 	iwl_setup_scan_deferred_work(priv);
 
@@ -1082,7 +1036,6 @@ void iwl_cancel_deferred_work(struct iwl_priv *priv)
 
 	cancel_work_sync(&priv->bt_full_concurrency);
 	cancel_work_sync(&priv->bt_runtime_config);
-	cancel_delayed_work_sync(&priv->hw_roc_disable_work);
 
 	del_timer_sync(&priv->statistics_periodic);
 	del_timer_sync(&priv->ucode_trace);
@@ -1168,12 +1121,6 @@ static void iwl_option_config(struct iwl_priv *priv)
 	IWL_INFO(priv, "CONFIG_IWLWIFI_DEVICE_TRACING enabled\n");
 #else
 	IWL_INFO(priv, "CONFIG_IWLWIFI_DEVICE_TRACING disabled\n");
-#endif
-
-#ifdef CONFIG_IWLWIFI_P2P
-	IWL_INFO(priv, "CONFIG_IWLWIFI_P2P enabled\n");
-#else
-	IWL_INFO(priv, "CONFIG_IWLWIFI_P2P disabled\n");
 #endif
 }
 
@@ -1315,10 +1262,6 @@ static struct iwl_op_mode *iwl_op_mode_dvm_start(struct iwl_trans *trans,
 
 	ucode_flags = fw->ucode_capa.flags;
 
-#ifndef CONFIG_IWLWIFI_P2P
-	ucode_flags &= ~IWL_UCODE_TLV_FLAGS_P2P;
-#endif
-
 	if (ucode_flags & IWL_UCODE_TLV_FLAGS_PAN) {
 		priv->sta_key_max_num = STA_KEY_MAX_NUM_PAN;
 		trans_cfg.cmd_queue = IWL_IPAN_CMD_QUEUE_NUM;
@@ -1374,7 +1317,7 @@ static struct iwl_op_mode *iwl_op_mode_dvm_start(struct iwl_trans *trans,
 	}
 
 	/* Reset chip to save power until we load uCode during "up". */
-	iwl_trans_stop_hw(priv->trans, false);
+	iwl_trans_stop_device(priv->trans);
 
 	priv->nvm_data = iwl_parse_eeprom_data(priv->trans->dev, priv->cfg,
 						  priv->eeprom_blob,
@@ -1413,7 +1356,6 @@ static struct iwl_op_mode *iwl_op_mode_dvm_start(struct iwl_trans *trans,
 		 * if not PAN, then don't support P2P -- might be a uCode
 		 * packaging bug or due to the eeprom check above
 		 */
-		ucode_flags &= ~IWL_UCODE_TLV_FLAGS_P2P;
 		priv->sta_key_max_num = STA_KEY_MAX_NUM;
 		trans_cfg.cmd_queue = IWL_DEFAULT_CMD_QUEUE_NUM;
 
@@ -1520,7 +1462,7 @@ static void iwl_op_mode_dvm_stop(struct iwl_op_mode *op_mode)
 
 	dev_kfree_skb(priv->beacon_skb);
 
-	iwl_trans_stop_hw(priv->trans, true);
+	iwl_trans_op_mode_leave(priv->trans);
 	ieee80211_free_hw(priv->hw);
 }
 
@@ -2097,7 +2039,7 @@ static void iwl_free_skb(struct iwl_op_mode *op_mode, struct sk_buff *skb)
 	ieee80211_free_txskb(priv->hw, skb);
 }
 
-static void iwl_set_hw_rfkill_state(struct iwl_op_mode *op_mode, bool state)
+static bool iwl_set_hw_rfkill_state(struct iwl_op_mode *op_mode, bool state)
 {
 	struct iwl_priv *priv = IWL_OP_MODE_GET_DVM(op_mode);
 
@@ -2107,6 +2049,8 @@ static void iwl_set_hw_rfkill_state(struct iwl_op_mode *op_mode, bool state)
 		clear_bit(STATUS_RF_KILL_HW, &priv->status);
 
 	wiphy_rfkill_set_hw_state(priv->hw->wiphy, state);
+
+	return false;
 }
 
 static const struct iwl_op_mode_ops iwl_dvm_ops = {

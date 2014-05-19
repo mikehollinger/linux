@@ -37,7 +37,6 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/input.h>
 #include <linux/usb.h>
@@ -138,7 +137,10 @@
  * comedi constants
  */
 static const struct comedi_lrange range_usbduxfast_ai_range = {
-	2, {BIP_RANGE(0.75), BIP_RANGE(0.5)}
+	2, {
+		BIP_RANGE(0.75),
+		BIP_RANGE(0.5)
+	}
 };
 
 /*
@@ -370,7 +372,7 @@ static int usbduxfast_ai_cmdtest(struct comedi_device *dev,
 	err |= cfc_check_trigger_src(&cmd->start_src,
 					TRIG_NOW | TRIG_EXT | TRIG_INT);
 	err |= cfc_check_trigger_src(&cmd->scan_begin_src,
-					TRIG_TIMER | TRIG_FOLLOW | TRIG_EXT);
+					TRIG_FOLLOW | TRIG_EXT);
 	err |= cfc_check_trigger_src(&cmd->convert_src, TRIG_TIMER | TRIG_EXT);
 	err |= cfc_check_trigger_src(&cmd->scan_end_src, TRIG_COUNT);
 	err |= cfc_check_trigger_src(&cmd->stop_src, TRIG_COUNT | TRIG_NONE);
@@ -421,9 +423,6 @@ static int usbduxfast_ai_cmdtest(struct comedi_device *dev,
 		tmp = steps / 30;
 		err |= cfc_check_trigger_arg_is(&cmd->convert_arg, tmp);
 	}
-
-	if (cmd->scan_begin_src == TRIG_TIMER)
-		err |= -EINVAL;
 
 	/* stop source */
 	switch (cmd->stop_src) {
@@ -512,36 +511,28 @@ static int usbduxfast_ai_cmd(struct comedi_device *dev,
 	 */
 	devpriv->ignore = PACKETS_TO_IGNORE;
 
-	if (cmd->chanlist_len > 0) {
-		gain = CR_RANGE(cmd->chanlist[0]);
-		for (i = 0; i < cmd->chanlist_len; ++i) {
-			chan = CR_CHAN(cmd->chanlist[i]);
-			if (chan != i) {
-				dev_err(dev->class_dev,
-					"channels are not consecutive\n");
-				up(&devpriv->sem);
-				return -EINVAL;
-			}
-			if ((gain != CR_RANGE(cmd->chanlist[i]))
-			    && (cmd->chanlist_len > 3)) {
-				dev_err(dev->class_dev,
-					"gain must be the same for all channels\n");
-				up(&devpriv->sem);
-				return -EINVAL;
-			}
-			if (i >= NUMCHANNELS) {
-				dev_err(dev->class_dev, "chanlist too long\n");
-				break;
-			}
+	gain = CR_RANGE(cmd->chanlist[0]);
+	for (i = 0; i < cmd->chanlist_len; ++i) {
+		chan = CR_CHAN(cmd->chanlist[i]);
+		if (chan != i) {
+			dev_err(dev->class_dev,
+				"channels are not consecutive\n");
+			up(&devpriv->sem);
+			return -EINVAL;
+		}
+		if ((gain != CR_RANGE(cmd->chanlist[i]))
+			&& (cmd->chanlist_len > 3)) {
+			dev_err(dev->class_dev,
+				"gain must be the same for all channels\n");
+			up(&devpriv->sem);
+			return -EINVAL;
+		}
+		if (i >= NUMCHANNELS) {
+			dev_err(dev->class_dev, "chanlist too long\n");
+			break;
 		}
 	}
 	steps = 0;
-	if (cmd->scan_begin_src == TRIG_TIMER) {
-		dev_err(dev->class_dev,
-			"scan_begin_src==TRIG_TIMER not valid\n");
-		up(&devpriv->sem);
-		return -EINVAL;
-	}
 	if (cmd->convert_src == TRIG_TIMER)
 		steps = (cmd->convert_arg * 30) / 1000;
 
@@ -1061,10 +1052,9 @@ static int usbduxfast_auto_attach(struct comedi_device *dev,
 		return -ENODEV;
 	}
 
-	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	devpriv = comedi_alloc_devpriv(dev, sizeof(*devpriv));
 	if (!devpriv)
 		return -ENOMEM;
-	dev->private = devpriv;
 
 	sema_init(&devpriv->sem, 1);
 	usb_set_intfdata(intf, devpriv);

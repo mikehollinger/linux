@@ -296,6 +296,9 @@ struct fec_enet_private {
 	/* The ring entries to be free()ed */
 	struct bufdesc	*dirty_tx;
 
+	unsigned short tx_ring_size;
+	unsigned short rx_ring_size;
+
 	struct	platform_device *pdev;
 
 	int	opened;
@@ -336,7 +339,8 @@ struct fec_enet_private {
 
 void fec_ptp_init(struct platform_device *pdev);
 void fec_ptp_start_cyclecounter(struct net_device *ndev);
-int fec_ptp_ioctl(struct net_device *ndev, struct ifreq *ifr, int cmd);
+int fec_ptp_set(struct net_device *ndev, struct ifreq *ifr);
+int fec_ptp_get(struct net_device *ndev, struct ifreq *ifr);
 
 /****************************************************************************/
 #endif /* FEC_H */

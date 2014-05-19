@@ -36,7 +36,6 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/libcfs/libcfs.h>
-#include <linux/libcfs/libcfs.h>
 
 #include <linux/if.h>
 #include <linux/in.h>
@@ -266,17 +265,11 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 	 * empty enough to take the whole message immediately */
 
 	for (;;) {
-		struct iovec  iov = {
+		struct kvec  iov = {
 			.iov_base = buffer,
 			.iov_len  = nob
 		};
 		struct msghdr msg = {
-			.msg_name       = NULL,
-			.msg_namelen    = 0,
-			.msg_iov	= &iov,
-			.msg_iovlen     = 1,
-			.msg_control    = NULL,
-			.msg_controllen = 0,
 			.msg_flags      = (timeout == 0) ? MSG_DONTWAIT : 0
 		};
 
@@ -298,11 +291,9 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 			}
 		}
 
-		set_fs (KERNEL_DS);
 		then = jiffies;
-		rc = sock_sendmsg (sock, &msg, iov.iov_len);
+		rc = kernel_sendmsg(sock, &msg, &iov, 1, nob);
 		ticks -= jiffies - then;
-		set_fs (oldmm);
 
 		if (rc == nob)
 			return 0;
@@ -339,17 +330,11 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
 	LASSERT (ticks > 0);
 
 	for (;;) {
-		struct iovec  iov = {
+		struct kvec  iov = {
 			.iov_base = buffer,
 			.iov_len  = nob
 		};
 		struct msghdr msg = {
-			.msg_name       = NULL,
-			.msg_namelen    = 0,
-			.msg_iov	= &iov,
-			.msg_iovlen     = 1,
-			.msg_control    = NULL,
-			.msg_controllen = 0,
 			.msg_flags      = 0
 		};
 
@@ -368,11 +353,9 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
 			return rc;
 		}
 
-		set_fs(KERNEL_DS);
 		then = jiffies;
-		rc = sock_recvmsg(sock, &msg, iov.iov_len, 0);
+		rc = kernel_recvmsg(sock, &msg, &iov, 1, nob, 0);
 		ticks -= jiffies - then;
-		set_fs(oldmm);
 
 		if (rc < 0)
 			return rc;
@@ -641,8 +624,8 @@ libcfs_sock_connect (struct socket **sockp, int *fatal,
 	*fatal = !(rc == -EADDRNOTAVAIL);
 
 	CDEBUG_LIMIT(*fatal ? D_NETERROR : D_NET,
-	       "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
-	       HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip), peer_port);
+	       "Error %d connecting %pI4h/%d -> %pI4h/%d\n", rc,
+	       &local_ip, local_port, &peer_ip, peer_port);
 
 	sock_release(*sockp);
 	return rc;

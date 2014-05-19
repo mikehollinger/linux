@@ -333,9 +333,9 @@ int ccw_device_set_offline(struct ccw_device *cdev)
 		if (ret != 0)
 			return ret;
 	}
-	cdev->online = 0;
 	spin_lock_irq(cdev->ccwlock);
 	sch = to_subchannel(cdev->dev.parent);
+	cdev->online = 0;
 	/* Wait until a final state or DISCONNECTED is reached */
 	while (!dev_fsm_final_state(cdev) &&
 	       cdev->private->state != DEV_STATE_DISCONNECTED) {
@@ -446,7 +446,10 @@ int ccw_device_set_online(struct ccw_device *cdev)
 		ret = cdev->drv->set_online(cdev);
 	if (ret)
 		goto rollback;
+
+	spin_lock_irq(cdev->ccwlock);
 	cdev->online = 1;
+	spin_unlock_irq(cdev->ccwlock);
 	return 0;
 
 rollback:
@@ -546,17 +549,12 @@ static ssize_t online_store (struct device *dev, struct device_attribute *attr,
 	if (!dev_fsm_final_state(cdev) &&
 	    cdev->private->state != DEV_STATE_DISCONNECTED) {
 		ret = -EAGAIN;
-		goto out_onoff;
+		goto out;
 	}
 	/* Prevent conflict between pending work and on-/offline processing.*/
 	if (work_pending(&cdev->private->todo_work)) {
 		ret = -EAGAIN;
-		goto out_onoff;
-	}
-
-	if (cdev->drv && !try_module_get(cdev->drv->driver.owner)) {
-		ret = -EINVAL;
-		goto out_onoff;
+		goto out;
 	}
 	if (!strncmp(buf, "force\n", count)) {
 		force = 1;
@@ -564,10 +562,12 @@ static ssize_t online_store (struct device *dev, struct device_attribute *attr,
 		ret = 0;
 	} else {
 		force = 0;
-		ret = strict_strtoul(buf, 16, &i);
+		ret = kstrtoul(buf, 16, &i);
 	}
 	if (ret)
 		goto out;
+
+	device_lock(dev);
 	switch (i) {
 	case 0:
 		ret = online_store_handle_offline(cdev);
@@ -578,10 +578,9 @@ static ssize_t online_store (struct device *dev, struct device_attribute *attr,
 	default:
 		ret = -EINVAL;
 	}
+	device_unlock(dev);
+
 out:
-	if (cdev->drv)
-		module_put(cdev->drv->driver.owner);
-out_onoff:
 	atomic_set(&cdev->private->onoff, 0);
 	return (ret < 0) ? ret : count;
 }
@@ -1572,11 +1571,26 @@ out:
 	return rc;
 }
 
-#ifdef CONFIG_CCW_CONSOLE
-static int ccw_device_console_enable(struct ccw_device *cdev,
-				     struct subchannel *sch)
+static void ccw_device_set_int_class(struct ccw_device *cdev)
 {
+	struct ccw_driver *cdrv = cdev->drv;
+
+	/* Note: we interpret class 0 in this context as an uninitialized
+	 * field since it translates to a non-I/O interrupt class. */
+	if (cdrv->int_class != 0)
+		cdev->private->int_class = cdrv->int_class;
+	else
+		cdev->private->int_class = IRQIO_CIO;
+}
+
+#ifdef CONFIG_CCW_CONSOLE
+int __init ccw_device_enable_console(struct ccw_device *cdev)
+{
+	struct subchannel *sch = to_subchannel(cdev->dev.parent);
 	int rc;
+
+	if (!cdev->drv || !cdev->handler)
+		return -EINVAL;
 
 	io_subchannel_init_fields(sch);
 	rc = cio_commit_config(sch);
@@ -1610,12 +1624,11 @@ out_unlock:
 	return rc;
 }
 
-struct ccw_device *ccw_device_probe_console(void)
+struct ccw_device * __init ccw_device_create_console(struct ccw_driver *drv)
 {
 	struct io_subchannel_private *io_priv;
 	struct ccw_device *cdev;
 	struct subchannel *sch;
-	int ret;
 
 	sch = cio_probe_console();
 	if (IS_ERR(sch))
@@ -1632,16 +1645,21 @@ struct ccw_device *ccw_device_probe_console(void)
 		kfree(io_priv);
 		return cdev;
 	}
+	cdev->drv = drv;
 	set_io_private(sch, io_priv);
-	ret = ccw_device_console_enable(cdev, sch);
-	if (ret) {
-		set_io_private(sch, NULL);
-		put_device(&sch->dev);
-		put_device(&cdev->dev);
-		kfree(io_priv);
-		return ERR_PTR(ret);
-	}
+	ccw_device_set_int_class(cdev);
 	return cdev;
+}
+
+void __init ccw_device_destroy_console(struct ccw_device *cdev)
+{
+	struct subchannel *sch = to_subchannel(cdev->dev.parent);
+	struct io_subchannel_private *io_priv = to_io_private(sch);
+
+	set_io_private(sch, NULL);
+	put_device(&sch->dev);
+	put_device(&cdev->dev);
+	kfree(io_priv);
 }
 
 /**
@@ -1727,15 +1745,8 @@ ccw_device_probe (struct device *dev)
 	int ret;
 
 	cdev->drv = cdrv; /* to let the driver call _set_online */
-	/* Note: we interpret class 0 in this context as an uninitialized
-	 * field since it translates to a non-I/O interrupt class. */
-	if (cdrv->int_class != 0)
-		cdev->private->int_class = cdrv->int_class;
-	else
-		cdev->private->int_class = IRQIO_CIO;
-
+	ccw_device_set_int_class(cdev);
 	ret = cdrv->probe ? cdrv->probe(cdev) : -ENODEV;
-
 	if (ret) {
 		cdev->drv = NULL;
 		cdev->private->int_class = IRQIO_CIO;
@@ -1745,8 +1756,7 @@ ccw_device_probe (struct device *dev)
 	return 0;
 }
 
-static int
-ccw_device_remove (struct device *dev)
+static int ccw_device_remove(struct device *dev)
 {
 	struct ccw_device *cdev = to_ccwdev(dev);
 	struct ccw_driver *cdrv = cdev->drv;
@@ -1754,9 +1764,10 @@ ccw_device_remove (struct device *dev)
 
 	if (cdrv->remove)
 		cdrv->remove(cdev);
+
+	spin_lock_irq(cdev->ccwlock);
 	if (cdev->online) {
 		cdev->online = 0;
-		spin_lock_irq(cdev->ccwlock);
 		ret = ccw_device_offline(cdev);
 		spin_unlock_irq(cdev->ccwlock);
 		if (ret == 0)
@@ -1769,10 +1780,12 @@ ccw_device_remove (struct device *dev)
 				      cdev->private->dev_id.devno);
 		/* Give up reference obtained in ccw_device_set_online(). */
 		put_device(&cdev->dev);
+		spin_lock_irq(cdev->ccwlock);
 	}
 	ccw_device_set_timeout(cdev, 0);
 	cdev->drv = NULL;
 	cdev->private->int_class = IRQIO_CIO;
+	spin_unlock_irq(cdev->ccwlock);
 	return 0;
 }
 

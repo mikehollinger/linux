@@ -304,7 +304,7 @@ MODULE_DEVICE_TABLE(of, at91ether_dt_ids);
 /* Detect MAC & PHY and perform ethernet interface initialization */
 static int __init at91ether_probe(struct platform_device *pdev)
 {
-	struct macb_platform_data *board_data = pdev->dev.platform_data;
+	struct macb_platform_data *board_data = dev_get_platdata(&pdev->dev);
 	struct resource *regs;
 	struct net_device *dev;
 	struct phy_device *phydev;
@@ -341,6 +341,9 @@ static int __init at91ether_probe(struct platform_device *pdev)
 		goto err_free_dev;
 	}
 	clk_enable(lp->pclk);
+
+	lp->hclk = ERR_PTR(-ENOENT);
+	lp->tx_clk = ERR_PTR(-ENOENT);
 
 	/* Install the interrupt handler */
 	dev->irq = platform_get_irq(pdev, 0);

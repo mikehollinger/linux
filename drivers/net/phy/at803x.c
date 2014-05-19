@@ -27,6 +27,9 @@
 #define AT803X_MMD_ACCESS_CONTROL		0x0D
 #define AT803X_MMD_ACCESS_CONTROL_DATA		0x0E
 #define AT803X_FUNC_DATA			0x4003
+#define AT803X_INER				0x0012
+#define AT803X_INER_INIT			0xec00
+#define AT803X_INSR				0x0013
 #define AT803X_DEBUG_ADDR			0x1D
 #define AT803X_DEBUG_DATA			0x1E
 #define AT803X_DEBUG_SYSTEM_MODE_CTRL		0x05
@@ -100,6 +103,45 @@ static void at803x_get_wol(struct phy_device *phydev,
 		wol->wolopts |= WAKE_MAGIC;
 }
 
+static int at803x_suspend(struct phy_device *phydev)
+{
+	int value;
+	int wol_enabled;
+
+	mutex_lock(&phydev->lock);
+
+	value = phy_read(phydev, AT803X_INTR_ENABLE);
+	wol_enabled = value & AT803X_WOL_ENABLE;
+
+	value = phy_read(phydev, MII_BMCR);
+
+	if (wol_enabled)
+		value |= BMCR_ISOLATE;
+	else
+		value |= BMCR_PDOWN;
+
+	phy_write(phydev, MII_BMCR, value);
+
+	mutex_unlock(&phydev->lock);
+
+	return 0;
+}
+
+static int at803x_resume(struct phy_device *phydev)
+{
+	int value;
+
+	mutex_lock(&phydev->lock);
+
+	value = phy_read(phydev, MII_BMCR);
+	value &= ~(BMCR_PDOWN | BMCR_ISOLATE);
+	phy_write(phydev, MII_BMCR, value);
+
+	mutex_unlock(&phydev->lock);
+
+	return 0;
+}
+
 static int at803x_config_init(struct phy_device *phydev)
 {
 	int val;
@@ -152,6 +194,31 @@ static int at803x_config_init(struct phy_device *phydev)
 	return 0;
 }
 
+static int at803x_ack_interrupt(struct phy_device *phydev)
+{
+	int err;
+
+	err = phy_read(phydev, AT803X_INSR);
+
+	return (err < 0) ? err : 0;
+}
+
+static int at803x_config_intr(struct phy_device *phydev)
+{
+	int err;
+	int value;
+
+	value = phy_read(phydev, AT803X_INER);
+
+	if (phydev->interrupts == PHY_INTERRUPT_ENABLED)
+		err = phy_write(phydev, AT803X_INER,
+				value | AT803X_INER_INIT);
+	else
+		err = phy_write(phydev, AT803X_INER, 0);
+
+	return err;
+}
+
 static struct phy_driver at803x_driver[] = {
 {
 	/* ATHEROS 8035 */
@@ -161,10 +228,12 @@ static struct phy_driver at803x_driver[] = {
 	.config_init	= at803x_config_init,
 	.set_wol	= at803x_set_wol,
 	.get_wol	= at803x_get_wol,
+	.suspend	= at803x_suspend,
+	.resume		= at803x_resume,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
-	.config_aneg	= &genphy_config_aneg,
-	.read_status	= &genphy_read_status,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.driver		= {
 		.owner = THIS_MODULE,
 	},
@@ -176,10 +245,12 @@ static struct phy_driver at803x_driver[] = {
 	.config_init	= at803x_config_init,
 	.set_wol	= at803x_set_wol,
 	.get_wol	= at803x_get_wol,
+	.suspend	= at803x_suspend,
+	.resume		= at803x_resume,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
-	.config_aneg	= &genphy_config_aneg,
-	.read_status	= &genphy_read_status,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.driver		= {
 		.owner = THIS_MODULE,
 	},
@@ -191,10 +262,14 @@ static struct phy_driver at803x_driver[] = {
 	.config_init	= at803x_config_init,
 	.set_wol	= at803x_set_wol,
 	.get_wol	= at803x_get_wol,
+	.suspend	= at803x_suspend,
+	.resume		= at803x_resume,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
-	.config_aneg	= &genphy_config_aneg,
-	.read_status	= &genphy_read_status,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
+	.ack_interrupt  = &at803x_ack_interrupt,
+	.config_intr    = &at803x_config_intr,
 	.driver		= {
 		.owner = THIS_MODULE,
 	},
