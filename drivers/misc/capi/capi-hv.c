@@ -160,7 +160,7 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
 			elem->sixtyFourBit = 1;
 		cred = get_current_cred();
-		elem->isPrivilegedProcess = cred->euid == 0;
+		elem->isPrivilegedProcess = uid_eq(cred->euid, GLOBAL_ROOT_UID);
 		put_cred(cred);
 		elem->common.processId = cpu_to_be32(current->pid);
 	} else { /* Initialise for kernel */
