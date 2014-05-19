@@ -160,7 +160,7 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 
 	adapter->err_hwirq = err_hwirq;
 	pr_devel("capi_err_ivte: %#lx\n", adapter->err_hwirq);
-	adapter->err_virq = capi_map_irq(adapter->err_hwirq, capi_irq_err, (void*)adapter);
+	adapter->err_virq = capi_map_irq(adapter, adapter->err_hwirq, capi_irq_err, (void*)adapter);
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq);
 
 	return 0;

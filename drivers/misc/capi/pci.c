@@ -238,9 +238,39 @@ static int init_implementation_afu_regs(struct capi_afu_t *afu)
 	return 0;
 }
 
+/* Defined in powernv pci-ioda.c */
+int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
+		unsigned int hwirq, unsigned int virq,
+		unsigned int pe_number);
+
+static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned int virq)
+{
+	struct capi_pci_t *wrap = container_of(adapter, struct capi_pci_t, adapter);
+	struct pci_dev *dev = wrap->pdev;
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+
+	return pnv_capi_ioda_msi_setup(phb, dev, hwirq, virq, 0);
+}
+
+static int alloc_hwirqs(struct pci_dev *dev, int num)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
+	if (hwirq < 0) {
+		dev_warn(&dev->dev, "Failed to find a free MSI\n");
+		return -ENOSPC;
+	}
+
+	return phb->msi_base + hwirq;
+}
+
+
 static struct capi_driver_ops capi_pci_driver_ops = {
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
+	.setup_irq = setup_capi_msi,
 };
 
 
@@ -352,19 +382,6 @@ int enable_capi_protocol(struct pci_dev *dev)
 		return rc;
 
 	return rc;
-}
-
-static int alloc_hwirqs(struct pci_dev *dev, int num)
-{
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-	struct pnv_phb *phb = hose->private_data;
-	int hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
-	if (hwirq < 0) {
-		dev_warn(&dev->dev, "Failed to find a free MSI\n");
-		return -ENOSPC;
-	}
-
-	return phb->msi_base + hwirq;
 }
 
 #if 0

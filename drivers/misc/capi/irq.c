@@ -189,7 +189,8 @@ static irq_handler_t capi_irq_handlers[] = {
 };
 
 unsigned int
-capi_map_irq(irq_hw_number_t hwirq, irq_handler_t handler, void *cookie)
+capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq,
+		irq_handler_t handler, void *cookie)
 {
 	unsigned int virq;
 	int result;
@@ -200,6 +201,9 @@ capi_map_irq(irq_hw_number_t hwirq, irq_handler_t handler, void *cookie)
 		pr_warning("capi_map_irq: irq_create_mapping failed\n");
 		return 0;
 	}
+
+	if (adapter->driver->setup_irq)
+		adapter->driver->setup_irq(adapter, hwirq, virq);
 
 	pr_devel("hwirq %#lx mapped to virq %u\n", hwirq, virq);
 
@@ -228,7 +232,7 @@ void afu_register_irqs(struct capi_afu_t *afu, u32 start, u32 count)
 	for (ivt_off = start, idx = 0; idx < afu->irq_count; ivt_off++, idx++) {
 		afu->hwirq[idx] = ivt_off;
 		pr_devel("capi_afu_hwirq[%i]: %#x\n", idx, ivt_off);
-		afu->virq[idx] = capi_map_irq(afu->hwirq[idx],
+		afu->virq[idx] = capi_map_irq(afu->adapter, afu->hwirq[idx],
 					      capi_irq_handlers[idx],
 					      (void*)afu);
 	}
