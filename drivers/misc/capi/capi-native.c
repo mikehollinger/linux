@@ -95,7 +95,7 @@ static int afu_disable(struct capi_afu_t *afu)
 
 static int psl_purge(struct capi_afu_t *afu)
 {
-	u64 PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
+	u64 PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	u64 start, end;
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
@@ -110,26 +110,26 @@ static int psl_purge(struct capi_afu_t *afu)
 		afu_disable(afu);
 	}
 
-	capi_p1n_write(afu, CAPI_PSL_CNTL_An,
-		       PSL_CNTL | CAPI_PSL_CNTL_An_Pc);
+	capi_p1n_write(afu, CAPI_PSL_SCNTL_An,
+		       PSL_CNTL | CAPI_PSL_SCNTL_An_Pc);
 	start = mftb();
-	PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
-	while ((PSL_CNTL &  CAPI_PSL_CNTL_An_Ps_MASK)
-			== CAPI_PSL_CNTL_An_Ps_Pending) {
+	PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
+	while ((PSL_CNTL &  CAPI_PSL_SCNTL_An_Ps_MASK)
+			== CAPI_PSL_SCNTL_An_Ps_Pending) {
 		if (time_after_eq(jiffies, timeout)) {
 			pr_warn("WARNING: PSL Purge timed out!\n");
 			return -EBUSY;
 		}
 		pr_devel_ratelimited("PSL purging... (0x%.16llx)\n", PSL_CNTL);
 		cpu_relax();
-		PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
+		PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
 		BUG_ON(PSL_CNTL == ~0ULL); /* FIXME: eeh path */
 	};
 	end = mftb();
 	pr_devel("PSL purged in %lld 512MHz tb ticks\n", end - start);
 	/* FIXME: Should this be re-enabled here, or after resetting the AFU? */
-	capi_p1n_write(afu, CAPI_PSL_CNTL_An,
-		       PSL_CNTL & ~CAPI_PSL_CNTL_An_Pc);
+	capi_p1n_write(afu, CAPI_PSL_SCNTL_An,
+		       PSL_CNTL & ~CAPI_PSL_SCNTL_An_Pc);
 	return 0;
 }
 
@@ -325,7 +325,7 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	/* TODO: Find free entry */
 	elem = &afu->spa[0];
 
-	capi_p1n_write(afu, CAPI_PSL_CNTL_An, CAPI_PSL_CNTL_An_PM_AFU);
+	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
 
 	elem->ctxtime = cpu_to_be64(0); /* disable */
@@ -394,7 +394,7 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 	if ((result = psl_purge(afu)))
 		return result;
 
-	capi_p1n_write(afu, CAPI_PSL_CNTL_An, CAPI_PSL_CNTL_An_PM_Process);
+	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_Process);
 
 	/* Hypervisor initialise: */
 	capi_p1n_write(afu, CAPI_PSL_CtxTime_An, 0); /* disable */
@@ -531,15 +531,15 @@ static int load_afu_image_native(struct capi_afu_t *afu, u64 vaddress, u64 lengt
 
 	/* 2a Write PSL_CNTL_An[Pc]='1' */
 	/* 2b Wait for PSL_CNTL_An[Ps]='11' */
-	reg = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
-	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_Pc);
-	while((capi_p1n_read(afu, CAPI_PSL_CNTL_An) & CAPI_PSL_CNTL_An_Ps_MASK) != CAPI_PSL_CNTL_An_Ps_Complete) {
+	reg = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
+	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, reg | CAPI_PSL_SCNTL_An_Pc);
+	while((capi_p1n_read(afu, CAPI_PSL_SCNTL_An) & CAPI_PSL_SCNTL_An_Ps_MASK) != CAPI_PSL_SCNTL_An_Ps_Complete) {
 		cpu_relax();
 	}
 
 	/* 3. Set PSL_CNTL_AN[CR] bit */
-	reg = capi_p1n_read(afu, CAPI_PSL_CNTL_An);
-	capi_p1n_write(afu, CAPI_PSL_CNTL_An, reg | CAPI_PSL_CNTL_An_CR);
+	reg = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
+	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, reg | CAPI_PSL_SCNTL_An_CR);
 
 	/* Write the AFU image a page at a time. */
 	while(length) {

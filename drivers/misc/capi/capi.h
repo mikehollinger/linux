@@ -88,7 +88,7 @@ static const capi_p1n_reg_t CAPI_HAURP_An           = {0x80};
 static const capi_p1n_reg_t CAPI_PSL_SPAP_An        = {0x88};
 static const capi_p1n_reg_t CAPI_PSL_LLCMD_An       = {0x90};
 /* Control Area */
-static const capi_p1n_reg_t CAPI_PSL_CNTL_An        = {0xA0};
+static const capi_p1n_reg_t CAPI_PSL_SCNTL_An       = {0xA0};
 static const capi_p1n_reg_t CAPI_PSL_CtxTime_An     = {0xA8};
 static const capi_p1n_reg_t CAPI_PSL_IVTE_Offset_An = {0xB0};
 static const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An  = {0xB8};
@@ -160,27 +160,27 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_LLCMD_UPDATE      0x0006000000000000ULL
 #define CAPI_LLCMD_HANDLE_MASK 0x000000000000ffffULL
 
-/****** CAPI_PSL_CNTL_An *****************************************************/
-#define CAPI_PSL_CNTL_An_CR          (0x1ull << (63-15))
+/****** CAPI_PSL_SCNTL_An ****************************************************/
+#define CAPI_PSL_SCNTL_An_CR          (0x1ull << (63-15))
 /* Programming Mode: */
-#define CAPI_PSL_CNTL_An_PM_MASK     (0xffffull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_Shared   (0x0000ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_OS       (0x0001ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_Process  (0x0002ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_AFU      (0x0004ull << (63-31))
-#define CAPI_PSL_CNTL_An_PM_AFU_PBT  (0x0104ull << (63-31))
+#define CAPI_PSL_SCNTL_An_PM_MASK     (0xffffull << (63-31))
+#define CAPI_PSL_SCNTL_An_PM_Shared   (0x0000ull << (63-31))
+#define CAPI_PSL_SCNTL_An_PM_OS       (0x0001ull << (63-31))
+#define CAPI_PSL_SCNTL_An_PM_Process  (0x0002ull << (63-31))
+#define CAPI_PSL_SCNTL_An_PM_AFU      (0x0004ull << (63-31))
+#define CAPI_PSL_SCNTL_An_PM_AFU_PBT  (0x0104ull << (63-31))
 /* Purge Status (ro) */
-#define CAPI_PSL_CNTL_An_Ps_MASK     (0x3ull << (63-39))
-#define CAPI_PSL_CNTL_An_Ps_Pending  (0x1ull << (63-39))
-#define CAPI_PSL_CNTL_An_Ps_Complete (0x3ull << (63-39))
+#define CAPI_PSL_SCNTL_An_Ps_MASK     (0x3ull << (63-39))
+#define CAPI_PSL_SCNTL_An_Ps_Pending  (0x1ull << (63-39))
+#define CAPI_PSL_SCNTL_An_Ps_Complete (0x3ull << (63-39))
 /* Purge */
-#define CAPI_PSL_CNTL_An_Pc          (0x1ull << (63-48))
+#define CAPI_PSL_SCNTL_An_Pc          (0x1ull << (63-48))
 /* Suspend Status (ro) */
-#define CAPI_PSL_CNTL_An_Ss_MASK     (0x3ull << (63-55))
-#define CAPI_PSL_CNTL_An_Ss_Pending  (0x1ull << (63-55))
-#define CAPI_PSL_CNTL_An_Ss_Complete (0x3ull << (63-55))
+#define CAPI_PSL_SCNTL_An_Ss_MASK     (0x3ull << (63-55))
+#define CAPI_PSL_SCNTL_An_Ss_Pending  (0x1ull << (63-55))
+#define CAPI_PSL_SCNTL_An_Ss_Complete (0x3ull << (63-55))
 /* Suspend Control */
-#define CAPI_PSL_CNTL_An_Sc          (0x1ull << (63-63))
+#define CAPI_PSL_SCNTL_An_Sc          (0x1ull << (63-63))
 
 /* AFU Slice Enable Status (ro) */
 #define CAPI_AFU_Cntl_An_ES_MASK     (0x3ull << (63-1))
