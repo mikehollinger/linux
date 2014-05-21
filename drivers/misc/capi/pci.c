@@ -19,7 +19,10 @@
 
 #define CAPI_PCI_VSEC_ID	0x1280
 
-#define CAPI_PROTOCOL_256TB	(1ull << 7)
+#define CAPI_PROTOCOL_MASK	(7ull << 21)
+#define CAPI_PROTOCOL_256TB	(1ull << 23) /* Power 8 uses this */
+#define CAPI_PROTOCOL_512TB	(1ull << 22)
+#define CAPI_PROTOCOL_1024TB	(1ull << 21)
 #define CAPI_PROTOCOL_ENABLE	(1ull << 16)
 
 #define CAPI_VSEC_LENGTH(vsec)		(vsec + 0x6) /* WORD */
@@ -371,7 +374,7 @@ static int switch_card_to_capi(struct pci_dev *dev)
 		dev_err(&dev->dev, "failed to read current mode control: %i", rc);
 		return rc;
 	}
-	/* FIXME: Clear other protocol size bits */
+	val &= ~CAPI_PROTOCOL_MASK;
 	val |= CAPI_PROTOCOL_256TB | CAPI_PROTOCOL_ENABLE;
 	if ((rc = pci_write_config_dword(dev, vsec + 0x8, val))) {
 		dev_err(&dev->dev, "failed to enable capi protocol: %i", rc);
