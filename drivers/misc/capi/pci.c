@@ -22,6 +22,7 @@
 #define CAPI_PROTOCOL_256TB	(1ull << 7)
 #define CAPI_PROTOCOL_ENABLE	(1ull << 16)
 
+#define CAPI_VSEC_LENGTH(vsec)		(vsec + 0x6) /* WORD */
 #define CAPI_VSEC_NAFUS(vsec)		(vsec + 0x8) /* BYTE */
 #define CAPI_VSEC_AFU_DESC_OFF(vsec)	(vsec + 0x20)
 #define CAPI_VSEC_AFU_DESC_SIZE(vsec)	(vsec + 0x24)
@@ -444,6 +445,7 @@ int init_capi_pci(struct pci_dev *dev)
 	u32 afu_desc_off, afu_desc_size;
 	u32 ps_off, ps_size;
 	u32 nIRQs;
+	u16 vseclen;
 	u8 nAFUs;
 	int slice;
 	int rc = -EBUSY;
@@ -472,7 +474,13 @@ int init_capi_pci(struct pci_dev *dev)
 	if (vsec) {
 		dev_info(&dev->dev, "capi vsec found at offset %#x\n", vsec);
 
+		pci_read_config_word(dev, CAPI_VSEC_LENGTH(vsec), &vseclen);
+		vseclen = vseclen >> 4;
 		pci_read_config_byte(dev, CAPI_VSEC_NAFUS(vsec), &nAFUs);
+		if ((nAFUs == 0) && (vseclen == 0x40)) {
+			dev_info(&dev->dev, "***** WORKAROUND capi vsec length 0x40 and  nAFU=0.  Making nAFUs = 1.\n");
+			nAFUs = 1;
+		}
 		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
 		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
 		pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
