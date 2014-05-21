@@ -95,13 +95,16 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Num AFUs",	(val >>  0) & 0xff);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Status",		(val >>  8) & 0xff);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Mode Control",	(val >> 16) & 0xff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PS_area_size",	(val >> 24) & 0xff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PS_area_size",	(val >> 24) & 0xff); /* Reserved >= 0.12 */
 	pci_read_config_dword(dev, vsec + 0xc, &val);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Rev",	(val >>  0) & 0xffff);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "CAIA Ver",	(val >> 16) & 0xffff);
 	pci_read_config_dword(dev, vsec + 0x10, &val);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Base Image Rev",	(val >>  0) & 0xffff); /* Reserved < 0.11 */
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	(val >> 16) & 0xffff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	(val >> 16) & 0x0fff);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Image Control",	(val >> 28) & 0x3); /* Reserved < 0.12 */
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	(val >> 30) & 0x1); /* Reserved < 0.12 */
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Image Loaded",	(val >> 31) & 0x1); /* Reserved < 0.12 */
 	pci_read_config_dword(dev, vsec + 0x14, &val);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	val);
 
@@ -113,13 +116,13 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	dev_info(&dev->dev, "capi vsec: end of v0.09 defintion");
 
 	pci_read_config_dword(dev, vsec + 0x20, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Address Register (v0.10) / AFU Descriptor Offset (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Address Register (v0.10) / AFU Descriptor Offset (v0.11+)", val);
 	pci_read_config_dword(dev, vsec + 0x24, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Size Register (v0.10) / AFU Descriptor Size (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Size Register (v0.10) / AFU Descriptor Size (v0.11+)", val);
 	pci_read_config_dword(dev, vsec + 0x28, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register (v0.10) / Problem State Offset (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register (v0.10) / Problem State Offset (v0.11+)", val);
 	pci_read_config_dword(dev, vsec + 0x2c, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port (v0.10) / Problem State Size (v0.11)", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port (v0.10) / Problem State Size (v0.11+)", val);
 
 	dev_info(&dev->dev, "capi vsec: end of v0.10 defintion");
 
@@ -137,13 +140,20 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	pci_read_config_dword(dev, vsec + 0x44, &val);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Programming Control", val);
 	pci_read_config_dword(dev, vsec + 0x48, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Address Register", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Address Register (v0.11)", val); /* Reserved >= 0.12 */
 	pci_read_config_dword(dev, vsec + 0x4c, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Size Register", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Size Register (v0.11)", val); /* Reserved >= 0.12 */
 	pci_read_config_dword(dev, vsec + 0x50, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register (v0.11) / Flash Address Register (v0.12)", val);
 	pci_read_config_dword(dev, vsec + 0x54, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port", val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port (v0.11) / Flash Size Register (v0.12)", val);
+
+	dev_info(&dev->dev, "capi vsec: end of v0.11 defintion");
+
+	pci_read_config_dword(dev, vsec + 0x58, &val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register (v0.12)", val); /* Reserved < 0.12 */
+	pci_read_config_dword(dev, vsec + 0x58, &val);
+	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port (v0.12)", val); /* Reserved < 0.12 */
 
 	/* TODO: Dump AFU Descriptor & AFU Configuration Record if present */
 }
