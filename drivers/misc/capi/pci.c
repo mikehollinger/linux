@@ -28,7 +28,6 @@
 #define CAPI_VSEC_AFU_DESC_SIZE(vsec)	(vsec + 0x24)
 #define CAPI_VSEC_PS_OFF(vsec)		(vsec + 0x28)
 #define CAPI_VSEC_PS_SIZE(vsec)		(vsec + 0x2c)
-#define CAPI_VSEC_PS_SIZE_V10(vsec)	(vsec + 0xb) /* BYTE - removed in CAIA v0.11*/
 
 DEFINE_PCI_DEVICE_TABLE(capi_pci_tbl) = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0477), },
@@ -492,24 +491,13 @@ int init_capi_pci(struct pci_dev *dev)
 			dev_info(&dev->dev, "***** WORKAROUND capi vsec length 0x40 and  nAFU=0.  Making nAFUs = 1.\n");
 			nAFUs = 1;
 		}
-		if (vseclen == 0x40) {
-			u8 tmp;
-			dev_info(&dev->dev, "***** WORKAROUND capi vsec length 0x40, reading alternate problem state size.\n");
-			pci_read_config_byte(dev, CAPI_VSEC_PS_SIZE_V10(vsec), &tmp);
-			ps_size = (1*1024*1024) << tmp;
-			ps_off = p2_base + ps_size;
-			afu_desc_off = ps_off;
-			afu_desc_size = 0x16;
-		} else {
-			pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
-			pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
-			pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
-			pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
-
-		}
+		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
+		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
+		pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
+		pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
 
 		if (ps_size > p2_size - ps_off) {
-			dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%llx\n",
+			dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%x\n",
 					ps_size, p2_size - ps_off);
 			ps_size = p2_size - ps_off;
 		}
