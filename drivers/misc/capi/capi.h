@@ -17,7 +17,7 @@
 
 /* Valid setting for this are 7 and 11 */
 /* FIXME do this dynamically, or just only support 11 and above */
-#define CAIA_VERSION 7
+#define CAIA_VERSION 12
 
 #define CAPI_TIMEOUT 5
 
@@ -223,7 +223,6 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_PSL_DSISR_An_PE (1ull << (63-4))  /* PSL Error (implementation specific) */
 #define CAPI_PSL_DSISR_An_AE (1ull << (63-5))  /* AFU Error */
 #define CAPI_PSL_DSISR_An_OC (1ull << (63-6))  /* OS Context Warning */
-#define CAPI_PSL_DSISR_An_PC (1ull << (63-7))  /* Process Complete XXX TODO: Notify application */
 /* NOTE: Bits 32:63 are undefined if DSISR[DS] = 1 */
 #define CAPI_PSL_DSISR_An_M  DSISR_NOHPTE      /* PTE not found */
 #define CAPI_PSL_DSISR_An_P  DSISR_PROTFAULT   /* Storage protection violation */
