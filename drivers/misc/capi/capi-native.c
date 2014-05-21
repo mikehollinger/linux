@@ -155,7 +155,7 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 			return rc;
 	}
 
-	pr_devel("capi implementation specific PSL_VERSION: %llu\n",
+	pr_devel("capi implementation specific PSL_VERSION: 0x%llx\n",
 			capi_p1_read(adapter, CAPI_PSL_VERSION));
 
 	adapter->err_hwirq = err_hwirq;
