@@ -496,6 +496,12 @@ int init_capi_pci(struct pci_dev *dev)
 		pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
 		pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
 
+		if (ps_size > p2_size - ps_off) {
+			dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%x\n",
+					ps_size, p2_size - ps_off);
+			ps_size = p2_size - ps_off;
+		}
+
 	} else { /* XXX Bringup only */
 		dev_warn(&dev->dev, "capi vsec not found! Using bringup values!\n");
 
