@@ -496,8 +496,13 @@ int init_capi_pci(struct pci_dev *dev)
 		pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
 		pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
 
+		ps_off  *= 64 * 1024;
+		ps_size *= 64 * 1024;
+		afu_desc_off *= 64 * 1024;
+		afu_desc_size *= 64 * 1024;
+
 		if (ps_size > p2_size - ps_off) {
-			dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%x\n",
+			dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%llx\n",
 					ps_size, p2_size - ps_off);
 			ps_size = p2_size - ps_off;
 		}
@@ -507,8 +512,8 @@ int init_capi_pci(struct pci_dev *dev)
 
 		nAFUs = 1;
 		nIRQs = 3;
-		ps_off  = 0x2000000 / 64 / 1024;
-		ps_size = 0x2000000 / 64 / 1024;
+		ps_off  = 0x2000000;
+		ps_size = 0x2000000;
 	}
 
 	err_hwirq = alloc_hwirqs(dev, 1);
@@ -527,10 +532,10 @@ int init_capi_pci(struct pci_dev *dev)
 
 		p1n_base = p1_base + 0x10000 + (slice * p1n_size);
 		p2n_base = p2_base + (slice * p2n_size);
-		psn_base = p2_base + (ps_off + (slice * ps_size)) * 64 * 1024;
+		psn_base = p2_base + (ps_off + (slice * ps_size));
 
 		if (vsec) {
-			afu_desc = (afu_desc_off + (slice * afu_desc_size)) * 64 * 1024;
+			afu_desc = (afu_desc_off + (slice * afu_desc_size));
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		}
@@ -540,7 +545,7 @@ int init_capi_pci(struct pci_dev *dev)
 		if ((rc = capi_init_afu(adapter, afu, slice, 0,
 			      p1n_base, p1n_size,
 			      p2n_base, p2n_size,
-			      psn_base, ps_size * 64 * 1024,
+			      psn_base, ps_size,
 			      afu_irq_base, nIRQs + 1))) {
 			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 			goto err4;
