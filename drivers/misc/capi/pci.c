@@ -522,9 +522,6 @@ int init_capi_pci(struct pci_dev *dev)
 		ps_off  = 0x2000000 / 64 / 1024;
 		ps_size = 0x2000000 / 64 / 1024;
 	}
-	/* FIXME workaround for build11_20140512_p015_r181_mcp000d.rbf only */
-	ps_off  = 0x2000000 / 64 / 1024;
-	ps_size = 0x2000000 / 64 / 1024;
 
 	err_hwirq = alloc_hwirqs(dev, 1);
 
