@@ -161,6 +161,47 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	/* TODO: Dump AFU Descriptor & AFU Configuration Record if present */
 }
 
+static void dump_afu_descriptor(struct pci_dev *dev, void __iomem *afu_desc)
+{
+	u64 val;
+
+	val = _capi_reg_read(afu_desc + 0x0);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_ints_per_process", (val & 0xffff000000000000ULL >> (63-15)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_processes",     (val & 0x0000ffff00000000ULL >> (63-31)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_afu_CRs",       (val & 0x00000000ffff0000ULL >> (63-48)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "req_prog_model",       (val & 0x000000000000ffffULL));
+
+	val = _capi_reg_read(afu_desc + 0x8);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
+	val = _capi_reg_read(afu_desc + 0x10);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
+	val = _capi_reg_read(afu_desc + 0x18);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
+
+	val = _capi_reg_read(afu_desc + 0x20);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_format (v0.11)", (val & 0xff00000000000000ULL >> (63-7))); /* Reserved >= 0.12 */
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_len",            (val & 0x00ffffffffffffffULL));
+
+	val = _capi_reg_read(afu_desc + 0x28);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_offset", val);
+
+	val = _capi_reg_read(afu_desc + 0x30);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_control", (val & 0xff00000000000000ULL >> (63-7)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_length",  (val & 0x00ffffffffffffffULL));
+
+	val = _capi_reg_read(afu_desc + 0x38);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_offset", val);
+
+	val = _capi_reg_read(afu_desc + 0x40);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved",   (val & 0xff00000000000000ULL >> (63-7)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_len", (val & 0x00ffffffffffffffULL));
+
+	val = _capi_reg_read(afu_desc + 0x48);
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_offset", val);
+
+	/* TODO: Dump AFU Configuration record if it exists */
+}
+
 static int cmpbar(const void *p1, const void *p2)
 {
 	struct resource *r1 = *(struct resource **)p1;
@@ -485,7 +526,8 @@ int init_capi_pci(struct pci_dev *dev)
 
 	for (slice = 0; slice < nAFUs; slice++) {
 		struct capi_afu_t *afu = &(adapter->slice[slice]);
-		u64 afu_desc, p1n_base, p2n_base, psn_base;
+		u64 p1n_base, p2n_base, psn_base;
+		void __iomem *afu_desc;
 
 		const u64 p1n_size = 0x100;
 		const u64 p2n_size = 0x1000;
@@ -494,8 +536,16 @@ int init_capi_pci(struct pci_dev *dev)
 		p2n_base = p2_base + (slice * p2n_size);
 		psn_base = p2_base + (ps_off + (slice * ps_size));
 
+		if ((rc = capi_map_slice_regs(afu,
+				p1n_base, p1n_size,
+				p2n_base, p2n_size,
+				psn_base, ps_size))) {
+			return rc;
+		}
+
 		if (vsec) {
-			afu_desc = (afu_desc_off + (slice * afu_desc_size));
+			afu_desc = (afu->p2n_mmio + afu_desc_off + (slice * afu_desc_size));
+			dump_afu_descriptor(dev, afu_desc);
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		}
@@ -503,9 +553,6 @@ int init_capi_pci(struct pci_dev *dev)
 		afu_irq_base = alloc_hwirqs(dev, nIRQs + 1);
 
 		if ((rc = capi_init_afu(adapter, afu, slice, 0,
-			      p1n_base, p1n_size,
-			      p2n_base, p2n_size,
-			      psn_base, ps_size,
 			      afu_irq_base, nIRQs + 1))) {
 			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 			goto err4;

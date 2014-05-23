@@ -44,6 +44,7 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	u64 p2n_base, p2n_size;
 	u64 psn_base, psn_size;
 	u32 irq_start, irq_count;
+	int rc;
 
 	afu = &(adapter->slice[slice]);
 
@@ -65,10 +66,14 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	irq_start = be32_to_cpu(prop[0]);
 	irq_count = be32_to_cpu(prop[1]);
 
-	return capi_init_afu(adapter, afu, slice, handle,
+	if ((rc = capi_map_slice_regs(afu,
 			p1n_base, p1n_size,
 			p2n_base, p2n_size,
-			psn_base, psn_size,
+			psn_base, psn_size))) {
+		return rc;
+	}
+
+	return capi_init_afu(adapter, afu, slice, handle,
 			irq_start, irq_count);
 }
 

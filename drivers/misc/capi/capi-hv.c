@@ -23,21 +23,12 @@ init_adapter_hv(struct capi_t *adapter, u64 handle,
 
 static int
 init_afu_hv(struct capi_afu_t *afu, u64 handle,
-	    u64 p1n_base, u64 p1n_size, /* unused */
-	    u64 p2n_base, u64 p2n_size,
-	    u64 psn_base, u64 psn_size,
 	    irq_hw_number_t irq_start, irq_hw_number_t irq_count)
 
 {
 	int result;
 
 	afu->handle = handle;
-	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
-		goto err1;
-	if (!(afu->psn_mmio = ioremap(psn_base, psn_size)))
-		goto err2;
-	afu->psn_phys = psn_base;
-	afu->psn_size = psn_size;
 
 	if ((result = capi_h_full_reset(afu->handle)) != H_SUCCESS) {
 		WARN(1, "Unable to reset AFU: %i\n", result);
@@ -48,12 +39,6 @@ init_afu_hv(struct capi_afu_t *afu, u64 handle,
 	afu_disable_irqs(afu);
 
 	return 0;
-
-err2:
-	iounmap(afu->p2n_mmio);
-err1:
-	WARN(1, "Error mapping AFU MMIO regions\n");
-	return -EFAULT;
 }
 
 static void release_afu_hv(struct capi_afu_t *afu)

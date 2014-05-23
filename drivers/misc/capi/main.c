@@ -166,15 +166,40 @@ int capi_init_adapter(struct capi_t *adapter,
 	return 0;
 }
 
-int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
-		  int slice, u64 handle,
+int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
-		  u64 psn_base, u64 psn_size,
+		  u64 psn_base, u64 psn_size)
+{
+	pr_devel("capi_map_slice_regs: p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx\n",
+			p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size);
+
+	if (p1n_base)
+		if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
+			goto err;
+	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
+		goto err1;
+	if (!(afu->psn_mmio = ioremap(psn_base, psn_size)))
+		goto err2;
+	afu->psn_phys = psn_base;
+	afu->psn_size = psn_size;
+
+	return 0;
+err2:
+	iounmap(afu->p2n_mmio);
+err1:
+	iounmap(afu->p1n_mmio);
+err:
+	WARN(1, "Error mapping AFU MMIO regions\n");
+	return -EFAULT;
+}
+
+int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
+		  int slice, u64 handle,
 		  irq_hw_number_t irq_start, irq_hw_number_t irq_count)
 {
-	pr_devel("capi_init_afu: slice: %i, handle: %#llx, p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx, irqs: %#lx %#lx\n",
-			slice, handle, p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size, irq_start, irq_count);
+	pr_devel("capi_init_afu: slice: %i, handle: %#llx, irqs: %#lx %#lx\n",
+			slice, handle, irq_start, irq_count);
 
 	afu->adapter = adapter;
 
@@ -190,9 +215,6 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 
 	/* FIXME: Do this first, and only then create the char dev */
 	return capi_ops->init_afu(afu, handle,
-			p1n_base, p1n_size,
-			p2n_base, p2n_size,
-			psn_base, psn_size,
 			irq_start, irq_count);
 }
 
