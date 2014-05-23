@@ -986,14 +986,17 @@ static void set_msi_irq_chip(struct pnv_phb *phb, unsigned int virq)
 }
 
 int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
-		unsigned int hwirq, unsigned int virq,
-		unsigned int pe_number)
+		unsigned int hwirq, unsigned int virq)
 {
 	unsigned int xive_num = hwirq - phb->msi_base;
+	struct pnv_ioda_pe *pe;
 	int rc;
 
+	if (!(pe = pnv_ioda_get_pe(dev)))
+		return = -ENODEV;
+
 	/* Assign XIVE to PE */
-	rc = opal_pci_set_xive_pe(phb->opal_id, pe_number, xive_num);
+	rc = opal_pci_set_xive_pe(phb->opal_id, pe->pe_number, xive_num);
 	if (rc) {
 		pr_warn("%s: OPAL error %d setting XIVE %d PE\n",
 			pci_name(dev), rc, xive_num);
