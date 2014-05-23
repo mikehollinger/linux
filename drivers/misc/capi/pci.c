@@ -281,9 +281,8 @@ static int init_implementation_afu_regs(struct capi_afu_t *afu)
 }
 
 /* Defined in powernv pci-ioda.c */
-int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
-		unsigned int hwirq, unsigned int virq,
-		unsigned int pe_number);
+extern int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
+		unsigned int hwirq, unsigned int virq);
 
 static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned int virq)
 {
@@ -292,7 +291,7 @@ static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned i
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
 
-	return pnv_capi_ioda_msi_setup(phb, dev, hwirq, virq, 0);
+	return pnv_capi_ioda_msi_setup(phb, dev, hwirq, virq);
 }
 
 static int alloc_hwirqs(struct pci_dev *dev, int num)
