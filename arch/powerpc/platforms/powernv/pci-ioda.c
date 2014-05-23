@@ -993,7 +993,7 @@ int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 	int rc;
 
 	if (!(pe = pnv_ioda_get_pe(dev)))
-		return = -ENODEV;
+		return -ENODEV;
 
 	/* Assign XIVE to PE */
 	rc = opal_pci_set_xive_pe(phb->opal_id, pe->pe_number, xive_num);
