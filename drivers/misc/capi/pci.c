@@ -173,27 +173,7 @@ static int cmpbar(const void *p1, const void *p2)
 	return l1 - l2;
 }
 
-static struct device_node * get_capi_phb_node(struct pci_dev *dev)
-{
-	struct device_node *np;
-	struct property *prop = NULL;
-
-	np = of_node_get(pci_device_to_OF_node(dev));
-
-	/* Scan up the tree looking for the PHB node */
-	while (np) {
-		if ((prop = of_find_property(np, "ibm,opal-phbid", NULL)))
-			break;
-		np = of_get_next_parent(np);
-	}
-
-	if (!prop) {
-		of_node_put(np);
-		return NULL;
-	}
-
-	return np;
-}
+extern struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev);
 
 static int init_implementation_adapter_regs(struct capi_t *adapter)
 {
@@ -205,7 +185,7 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 
 	dev_info(&dev->dev, "capi: **** Setup PSL Implementation Specific Registers ****\n");
 
-	if (!(np = get_capi_phb_node(dev)))
+	if (!(np = pnv_pci_to_phb_node(dev)))
 		return -ENODEV;
 
 	while (np && !(prop = of_get_property(np, "ibm,chip-id", NULL)))
@@ -278,7 +258,7 @@ static void reassign_capi_bars(struct pci_dev *dev)
 
 	dev_warn(&dev->dev, "Reassign CAPI BARs\n");
 
-	if (!(np = get_capi_phb_node(dev))) {
+	if (!(np = pnv_pci_to_phb_node(dev))) {
 		dev_warn(&dev->dev, "WARNING: Unable to get capi phb node, using BAR assignment from Linux\n");
 		return;
 	}
@@ -323,31 +303,6 @@ static void reassign_capi_bars(struct pci_dev *dev)
 	dev_info(&dev->dev, "wrote BAR4/5\n");
 }
 
-static int switch_phb_to_capi(struct pci_dev *dev)
-{
-	struct device_node *np;
-	const u64 *prop64;
-	u64 phb_id;
-	int rc;
-
-	dev_info(&dev->dev, "switch phb to capi\n");
-
-	if (!(np = get_capi_phb_node(dev)))
-		return -ENODEV;
-
-	prop64 = of_get_property(np, "ibm,opal-phbid", NULL);
-
-	dev_info(&dev->dev, "device tree name: %s\n", np->name);
-	phb_id = be64_to_cpup(prop64);
-	dev_info(&dev->dev, "PHB-ID  : 0x%016llx\n", phb_id);
-
-	rc = opal_pci_set_phb_capi_mode(phb_id, 1, 0);
-	dev_info(&dev->dev, "opal_pci_set_phb_capi_mode: %i", rc);
-
-	of_node_put(np);
-	return rc;
-}
-
 /*
  *  pciex node: ibm,opal-m64-window = <0x3d058 0x0 0x3d058 0x0 0x8 0x0>;
  */
@@ -384,6 +339,8 @@ static int switch_card_to_capi(struct pci_dev *dev)
 	return 0;
 }
 
+extern int pnv_phb_to_capi(struct pci_dev *dev);
+
 int enable_capi_protocol(struct pci_dev *dev)
 {
 	int rc;
@@ -391,7 +348,7 @@ int enable_capi_protocol(struct pci_dev *dev)
 	if ((rc = switch_card_to_capi(dev)))
 		return rc;
 
-	if ((rc = switch_phb_to_capi(dev)))
+	if ((rc = pnv_phb_to_capi(dev)))
 		return rc;
 
 	return rc;

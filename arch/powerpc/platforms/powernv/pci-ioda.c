@@ -132,6 +132,61 @@ static struct pnv_ioda_pe *pnv_ioda_get_pe(struct pci_dev *dev)
 		return NULL;
 	return &phb->ioda.pe_array[pdn->pe_number];
 }
+
+struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev)
+{
+	struct device_node *np;
+	struct property *prop = NULL;
+
+	np = of_node_get(pci_device_to_OF_node(dev));
+
+	/* Scan up the tree looking for the PHB node */
+	while (np) {
+		if ((prop = of_find_property(np, "ibm,opal-phbid", NULL)))
+			break;
+		np = of_get_next_parent(np);
+	}
+
+	if (!prop) {
+		of_node_put(np);
+		return NULL;
+	}
+
+	return np;
+}
+
+int pnv_phb_to_capi(struct pci_dev *dev)
+{
+	struct device_node *np;
+	struct pnv_ioda_pe *pe;
+	const u64 *prop64;
+	u64 phb_id;
+	int rc;
+
+	dev_info(&dev->dev, "switch phb to capi\n");
+
+	if (!(np = pnv_pci_to_phb_node(dev)))
+		return -ENODEV;
+
+	prop64 = of_get_property(np, "ibm,opal-phbid", NULL);
+
+	dev_info(&dev->dev, "device tree name: %s\n", np->name);
+	phb_id = be64_to_cpup(prop64);
+	dev_info(&dev->dev, "PHB-ID  : 0x%016llx\n", phb_id);
+
+	if (!(pe = pnv_ioda_get_pe(dev))) {
+		rc = -ENODEV;
+		goto out;
+	}
+	dev_info(&dev->dev, "     pe : %i\n", pe->pe_number);
+
+	rc = opal_pci_set_phb_capi_mode(phb_id, 1, pe->pe_number);
+	dev_info(&dev->dev, "opal_pci_set_phb_capi_mode: %i", rc);
+
+out:
+	of_node_put(np);
+	return rc;
+}
 #endif /* CONFIG_PCI_MSI */
 
 static int pnv_ioda_configure_pe(struct pnv_phb *phb, struct pnv_ioda_pe *pe)
