@@ -15,6 +15,7 @@
 
 #include "capi.h"
 
+static DEFINE_SPINLOCK(adapter_list_lock);
 static LIST_HEAD(adapter_list);
 const struct capi_backend_ops *capi_ops;
 
@@ -96,13 +97,18 @@ struct capi_t * get_capi_adapter(int num)
 {
 	struct capi_t *adapter;
 	int i = 0;
+	struct capi_t * ret = NULL;
 
+	spin_lock(&adapter_list_lock);
 	list_for_each_entry(adapter, &adapter_list, list) {
-		if (i++ == num)
-			return adapter;
+		if (i++ == num) {
+			ret = adapter;
+			break;
+		}
 	}
+	spin_unlock(&adapter_list_lock);
 
-	return NULL;
+	return ret;
 }
 
 int capi_get_num_adapters(void)
@@ -125,14 +131,14 @@ int capi_init_adapter(struct capi_t *adapter,
 		     u64 p2_base, u64 p2_size,
 		     irq_hw_number_t err_hwirq)
 {
-	int result;
 	int adapter_num;
+	int rc = 0;
 
 	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx err: %#lx",
 			handle, p1_base, p1_size, p2_base, p2_size, err_hwirq);
 
 
-	/* FIXME TODO: Ensure this can't change until the adapter is added to the list! */
+	spin_lock(&adapter_list_lock);
 	adapter_num = capi_get_num_adapters();
 
 	adapter->driver = driver;
@@ -141,29 +147,34 @@ int capi_init_adapter(struct capi_t *adapter,
 	adapter->device.bus = &capi_bus_type;
 	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);
 
-	if ((result = device_register(&adapter->device)))
-		return result;
+	if ((rc = device_register(&adapter->device)))
+		goto out_unlock;
 
-	if ((result = capi_ops->init_adapter(adapter, handle,
+	if ((rc = capi_ops->init_adapter(adapter, handle,
 					p1_base, p1_size,
 					p2_base, p2_size,
 					err_hwirq)))
-		return result;
-
+		goto out_unlock;
 
 	adapter->slices = slices;
 	pr_devel("%i slices\n", adapter->slices);
-	if (!adapter->slices)
-		return -1;
+	if (!adapter->slices) {
+		rc = -1;
+		goto out_unlock;
+	}
 
-	if (add_capi_dev(adapter, adapter_num))
-		return -1;
+	if (add_capi_dev(adapter, adapter_num)) {
+		rc = -1;
+		goto out_unlock;
+	}
 
 	list_add_tail(&(adapter)->list, &adapter_list);
+out_unlock:
+	spin_unlock(&adapter_list_lock);
 
-	pr_devel("capi_init_adapter done\n");
+	pr_devel("capi_init_adapter: %i\n", rc);
 
-	return 0;
+	return rc;
 }
 
 int capi_map_slice_regs(struct capi_afu_t *afu,
@@ -263,6 +274,7 @@ static void exit_capi(void)
 	struct capi_t *adapter, *tmp;
 	int adapter_num = 0, slice;
 
+	spin_lock(&adapter_list_lock);
 	list_for_each_entry_safe(adapter, tmp, &adapter_list, list) {
 		for (slice = 0; slice < adapter->slices; slice++) {
 			afu_release_irqs(&(adapter->slice[slice]));
@@ -274,6 +286,7 @@ static void exit_capi(void)
 			capi_ops->release_adapter(adapter);
 		list_del(&adapter->list);
 	}
+	spin_unlock(&adapter_list_lock);
 
 	unregister_capi_dev();
 
