@@ -56,10 +56,14 @@ static irqreturn_t handle_psl_slice_error(struct capi_afu_t *afu, u64 dsisr, u64
 irqreturn_t capi_irq_err(int irq, void *data)
 {
 	struct capi_t *adapter = (struct capi_t *)data;
-	u64 fir1, fir2, fir_slice, fir_recov_slice;
+	u64 fir1, fir2, fir_slice, fir_recov_slice, err_ivte;
 	int slice;
 
 	WARN(1, "CAPI ERROR interrupt %i\n", irq);
+
+	err_ivte = capi_p1_read(adapter, CAPI_PSL_ErrIVTE);
+
+	pr_warn("PSL_ErrIVTE: 0x%.16llx\n", err_ivte);
 
 	pr_crit("STOPPING CAPI TRACE\n");
 	capi_stop_trace(adapter);
