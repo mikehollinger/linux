@@ -158,6 +158,11 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	u64 len = vm->vm_end - vm->vm_start;
 	len = min(len, afu->psn_size);
 
+	/* Can't mmap until the AFU is enabled
+	   FIXME: check on teardown */
+	if (!afu->enabled)
+		return -EBUSY;
+
 	pr_devel("%s: afu mmio physical: %lx\n", __FUNCTION__, afu->psn_phys);
 	/* FIXME: Return error if virtualised AFU */
 	vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
