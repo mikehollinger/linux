@@ -9,3 +9,20 @@ config CAPI
 	help
 	  Select this option to enable support for adapters that follow the
 	  Coherent Accelerator Interface Architecture (CAIA).
+
+config CAPI_PCI
+	tristate "Support for CAPI devices via PCI"
+	depends on CAPI && PPC_POWERNV
+	default y
+	help
+	  Select this option to support CAPI devices detected via PCI, e.g.
+	  when running under Sapphire. This has no effect on CAPI devices
+	  detected via the device tree, such as when running under PowerVM.
+
+config CAPI_OF
+	tristate "Support for CAPI devices on PowerVM"
+	depends on CAPI
+	default y
+	help
+	  Select this option to support CAPI devices detected via the device
+	  tree, such as when running under PowerVM.

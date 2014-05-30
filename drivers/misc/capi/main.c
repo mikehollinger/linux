@@ -176,6 +176,7 @@ out_unlock:
 
 	return rc;
 }
+EXPORT_SYMBOL(capi_init_adapter);
 
 int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
@@ -204,6 +205,7 @@ err:
 	WARN(1, "Error mapping AFU MMIO regions\n");
 	return -EFAULT;
 }
+EXPORT_SYMBOL(capi_map_slice_regs);
 
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
@@ -228,6 +230,7 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	return capi_ops->init_afu(afu, handle,
 			irq_start, irq_count);
 }
+EXPORT_SYMBOL(capi_init_afu);
 
 struct bus_type capi_bus_type = {
 	.name = "capi",

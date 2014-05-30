@@ -32,6 +32,7 @@ int msi_bitmap_alloc_hwirqs(struct msi_bitmap *bmp, int num)
 
 	return offset;
 }
+EXPORT_SYMBOL(msi_bitmap_alloc_hwirqs);
 
 void msi_bitmap_free_hwirqs(struct msi_bitmap *bmp, unsigned int offset,
 			    unsigned int num)
