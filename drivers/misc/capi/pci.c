@@ -240,9 +240,10 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 
 	/* cappid 0:2 nodeid 3:5 chipid */
 	/* psl_dsnctl = 0x02e8100000000000ULL | (node << (63-2)) | (pos << (63-5)); */
-	psl_dsnctl = 0x02e8100000000000ULL | (chipid << (63-5));
+	psl_dsnctl = 0x02E8900003400000ULL | (chipid << (63-5));
 
 	capi_p1_write(adapter, CAPI_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
+	capi_p1_write(adapter, CAPI_PSL_RESLCKTO, 0x20000000200);
 	capi_p1_write(adapter, CAPI_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL); /* snoop write mask */
 	capi_p1_write(adapter, CAPI_PSL_FIR_CNTL, 0x0800000000000000ULL); /* set fir_accum */
 
@@ -274,7 +275,7 @@ static int init_implementation_afu_regs(struct capi_afu_t *afu)
 	capi_p1n_write(afu, CAPI_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
 
 	dev_info(&dev->dev, "capi: **** Workaround to lower croom value to avoid bug in AFX - PSL_RXCTL - HW252777 ****\n");
-	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0x000F000000000000ULL); /* HW252777 */
+	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0x900F000000000000ULL); /* HW252777 */
 
 	return 0;
 }

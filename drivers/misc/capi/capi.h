@@ -67,6 +67,7 @@ static const capi_p1_reg_t CAPI_PSL_AFUSEL  = {0x00B0};
 static const capi_p1_reg_t CAPI_PSL_FIR1      = {0x0100};
 static const capi_p1_reg_t CAPI_PSL_FIR2      = {0x0108};
 static const capi_p1_reg_t CAPI_PSL_VERSION   = {0x0118};
+static const capi_p1_reg_t CAPI_PSL_RESLCKTO  = {0x0128};
 static const capi_p1_reg_t CAPI_PSL_FIR_CNTL  = {0x0148};
 static const capi_p1_reg_t CAPI_PSL_DSNDCTL   = {0x0150};
 static const capi_p1_reg_t CAPI_PSL_SNWRALLOC = {0x0158};
