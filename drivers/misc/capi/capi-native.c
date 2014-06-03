@@ -590,7 +590,7 @@ out:
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
-	.init_dedicated_process = init_dedicated_process_native,
+	.init_dedicated_process = init_afu_directed_native,
 	.init_afu_directed = init_afu_directed_native,
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
