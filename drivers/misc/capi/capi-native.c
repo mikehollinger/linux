@@ -375,12 +375,11 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 
 
 	add_process_element(afu, elem);
-#if 0	/* Not clear if I still need to enable the AFU in directed mode */
+
 	if ((result = afu_reset(afu)))
 		return result;
 	if ((result = afu_enable(afu)))
 		return result;
-#endif
 
 	return 0;
 }
