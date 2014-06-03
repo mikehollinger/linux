@@ -543,8 +543,7 @@ int init_capi_pci(struct pci_dev *dev)
 
 	for (slice = 0; slice < nAFUs; slice++) {
 		struct capi_afu_t *afu = &(adapter->slice[slice]);
-		u64 p1n_base, p2n_base, psn_base;
-		void __iomem *afu_desc;
+		u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
 
 		const u64 p1n_size = 0x100;
 		const u64 p2n_size = 0x1000;
@@ -552,17 +551,20 @@ int init_capi_pci(struct pci_dev *dev)
 		p1n_base = p1_base + 0x10000 + (slice * p1n_size);
 		p2n_base = p2_base + (slice * p2n_size);
 		psn_base = p2_base + (ps_off + (slice * ps_size));
+		if (vsec) {
+			afu_desc = p2_base + afu_desc_off + (slice * afu_desc_size);
+		}
 
 		if ((rc = capi_map_slice_regs(afu,
 				p1n_base, p1n_size,
 				p2n_base, p2n_size,
-				psn_base, ps_size))) {
+				psn_base, ps_size,
+				afu_desc, afu_desc_size))) {
 			return rc;
 		}
 
-		if (vsec) {
-			afu_desc = (afu->p2n_mmio + afu_desc_off + (slice * afu_desc_size));
-			dump_afu_descriptor(dev, afu_desc);
+		if (afu->afu_desc_mmio) {
+			dump_afu_descriptor(dev, afu->afu_desc_mmio);
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		}

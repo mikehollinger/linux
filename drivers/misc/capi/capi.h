@@ -298,7 +298,9 @@ struct capi_afu_t {
 	void __iomem *p2n_mmio;
 	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
-	u64 psn_size;
+	u32 psn_size;
+	void __iomem *afu_desc_mmio;
+	u32 afu_desc_size;
 	u32 irq_count;
 	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
 	unsigned int virq[CAPI_SLICE_IRQS];
@@ -456,7 +458,8 @@ int capi_init_adapter(struct capi_t *adapter,
 int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
-		  u64 psn_base, u64 psn_size);
+		  u64 psn_base, u64 psn_size,
+		  u64 afu_desc, u64 afu_desc_size);
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
 		  irq_hw_number_t irq_start, irq_hw_number_t irq_count);

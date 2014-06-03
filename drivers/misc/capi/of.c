@@ -69,7 +69,8 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	if ((rc = capi_map_slice_regs(afu,
 			p1n_base, p1n_size,
 			p2n_base, p2n_size,
-			psn_base, psn_size))) {
+			psn_base, psn_size,
+			0, 0))) {
 		return rc;
 	}
 
