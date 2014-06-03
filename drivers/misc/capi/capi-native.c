@@ -359,9 +359,11 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1)))
 		return result;
 
+	printk("%s 10\n", __FUNCTION__);
 	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
 	capi_prefault(afu, wed);
 
+	printk("%s 20\n", __FUNCTION__);
 	elem->common.sstp0 = cpu_to_be64(sstp0);
 	elem->common.sstp1 = cpu_to_be64(sstp1);
 
@@ -374,13 +376,17 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	elem->common.wed = cpu_to_be64(wed);
 
 
+	printk("%s 30\n", __FUNCTION__);
 	add_process_element(afu, elem);
+	printk("%s 40\n", __FUNCTION__);
 
 	if ((result = afu_reset(afu)))
 		return result;
+	printk("%s 50\n", __FUNCTION__);
 	if ((result = afu_enable(afu)))
 		return result;
 
+	printk("%s 60\n", __FUNCTION__);
 	return 0;
 }
 
