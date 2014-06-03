@@ -62,8 +62,9 @@ irqreturn_t capi_irq_err(int irq, void *data)
 	WARN(1, "CAPI ERROR interrupt %i\n", irq);
 
 	err_ivte = capi_p1_read(adapter, CAPI_PSL_ErrIVTE);
-
 	pr_warn("PSL_ErrIVTE: 0x%.16llx\n", err_ivte);
+	err_ivte = capi_p1n_read(adapter, CAPI_PSL_SERR_An);
+	pr_warn("PSL_SERR: 0x%.16llx\n", err_ivte);
 
 	pr_crit("STOPPING CAPI TRACE\n");
 	capi_stop_trace(adapter);

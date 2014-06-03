@@ -81,6 +81,7 @@ static const capi_p1n_reg_t CAPI_PSL_LPID_An        = {0x08};
 static const capi_p1n_reg_t CAPI_PSL_AMBAR_An       = {0x10};
 static const capi_p1n_reg_t CAPI_PSL_SPOffset_An    = {0x18};
 static const capi_p1n_reg_t CAPI_PSL_PSL_ID_An      = {0x20};
+static const capi_p1n_reg_t CAPI_PSL_SERR_An	    = {0x28};
 /* Memory Management and Lookaside Buffer Management */
 static const capi_p1n_reg_t CAPI_PSL_SDR_An         = {0x30};
 static const capi_p1n_reg_t CAPI_PSL_AMOR_An        = {0x38};
