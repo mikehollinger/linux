@@ -274,9 +274,10 @@ static int alloc_spa(struct capi_afu_t *afu, int max_procs)
 	return 0;
 }
 
-static inline u64 pe_handle(struct capi_process_element *elem)
+static inline u64 pe_handle(struct capi_afu_t *afu,
+			    struct capi_process_element *elem)
 {
-	return ((u64)elem >> 7) & CAPI_LLCMD_HANDLE_MASK;
+	return ((u64)elem - (u64)&afu->spa[0]) >> 7;
 }
 
 /* TODO: Make sure all operations on the linked list are serialised to prevent
@@ -291,7 +292,7 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 	elem->software_state = CAPI_PE_SOFTWARE_STATE_V;
 	*afu->sw_command_status = 0; /* XXX: Not listed in CAIA procedure */
 	smp_mb();
-	capi_p1n_write(afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | pe_handle(elem));
+	capi_p1n_write(afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | pe_handle(afu, elem));
 	printk("%s 20\n", __FUNCTION__);
 
 	while (1) {
@@ -301,7 +302,7 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 			return -1;
 		}
 		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
-			     (CAPI_SPA_SW_CMD_ADD  | CAPI_SPA_SW_STATE_ADDED | pe_handle(elem))) {
+		    (CAPI_SPA_SW_CMD_ADD  | CAPI_SPA_SW_STATE_ADDED | pe_handle(afu, elem))) {
 			break;
 		}
 		cpu_relax();
