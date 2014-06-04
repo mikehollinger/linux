@@ -242,7 +242,7 @@ static int alloc_spa(struct capi_afu_t *afu, int max_procs)
 	 */
 	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
 
-	afu->sw_command_status = (__be64 *)(afu->spa + (afu->max_procs * 128) + 16);
+	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->max_procs + 3) * 128));
 
 	spap = virt_to_phys(afu->spa) & CAPI_PSL_SPAP_Addr;
 	spap |= ((afu->spa_size >> (12 - CAPI_PSL_SPAP_Size_Shift)) - 1) & CAPI_PSL_SPAP_Size;
