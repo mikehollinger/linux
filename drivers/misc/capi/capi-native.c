@@ -378,7 +378,7 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	return 0;
 }
 
-static int
+static int __maybe_unused
 init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 			      u64 wed, u64 amr)
 {
