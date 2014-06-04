@@ -154,6 +154,7 @@ struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev)
 
 	return np;
 }
+EXPORT_SYMBOL(pnv_pci_to_phb_node);
 
 int pnv_phb_to_capi(struct pci_dev *dev)
 {
@@ -187,6 +188,7 @@ out:
 	of_node_put(np);
 	return rc;
 }
+EXPORT_SYMBOL(pnv_phb_to_capi);
 #endif /* CONFIG_PCI_MSI */
 
 static int pnv_ioda_configure_pe(struct pnv_phb *phb, struct pnv_ioda_pe *pe)

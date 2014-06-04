@@ -67,6 +67,7 @@ static const capi_p1_reg_t CAPI_PSL_AFUSEL  = {0x00B0};
 static const capi_p1_reg_t CAPI_PSL_FIR1      = {0x0100};
 static const capi_p1_reg_t CAPI_PSL_FIR2      = {0x0108};
 static const capi_p1_reg_t CAPI_PSL_VERSION   = {0x0118};
+static const capi_p1_reg_t CAPI_PSL_RESLCKTO  = {0x0128};
 static const capi_p1_reg_t CAPI_PSL_FIR_CNTL  = {0x0148};
 static const capi_p1_reg_t CAPI_PSL_DSNDCTL   = {0x0150};
 static const capi_p1_reg_t CAPI_PSL_SNWRALLOC = {0x0158};
@@ -298,7 +299,9 @@ struct capi_afu_t {
 	void __iomem *p2n_mmio;
 	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
-	u64 psn_size;
+	u32 psn_size;
+	void __iomem *afu_desc_mmio;
+	u32 afu_desc_size;
 	u32 irq_count;
 	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
 	unsigned int virq[CAPI_SLICE_IRQS];
@@ -453,11 +456,13 @@ int capi_init_adapter(struct capi_t *adapter,
 		      u64 p1_base, u64 p1_size,
 		      u64 p2_base, u64 p2_size,
 		      irq_hw_number_t err_hwirq);
-int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
-		  int slice, u64 handle,
+int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
 		  u64 psn_base, u64 psn_size,
+		  u64 afu_desc, u64 afu_desc_size);
+int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
+		  int slice, u64 handle,
 		  irq_hw_number_t irq_start, irq_hw_number_t irq_count);
 
 int register_capi_dev(void);
@@ -511,9 +516,6 @@ struct capi_backend_ops {
 			     irq_hw_number_t err_hwirq);
 	/* FIXME: Clean this up */
 	int (*init_afu) (struct capi_afu_t *afu, u64 handle,
-			 u64 p1n_base, u64 p1n_size,
-			 u64 p2n_base, u64 p2n_size,
-			 u64 psn_base, u64 psn_size,
 			 irq_hw_number_t irq_start, irq_hw_number_t irq_count);
 
 	int (*init_dedicated_process) (struct capi_afu_t *afu, bool kernel,
