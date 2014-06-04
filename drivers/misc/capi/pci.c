@@ -161,7 +161,7 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	/* TODO: Dump AFU Descriptor & AFU Configuration Record if present */
 }
 
-static void dump_afu_descriptor(struct pci_dev *dev, void __iomem *afu_desc)
+static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, void __iomem *afu_desc)
 {
 	u64 val;
 
@@ -563,16 +563,20 @@ int init_capi_pci(struct pci_dev *dev)
 			return rc;
 		}
 
+#if 0 /* PSL bug doesn't allow us to read the AFU descriptor until the AFU is enabled, supposed to be fixed in PSL 185 */
 		if (afu->afu_desc_mmio) {
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		}
+#endif
+
+		err_hwirq = alloc_hwirqs(dev, 1);
 
 		afu_irq_base = alloc_hwirqs(dev, nIRQs + 1);
 
 		if ((rc = capi_init_afu(adapter, afu, slice, 0,
-			      afu_irq_base, nIRQs + 1))) {
+			      afu_irq_base, nIRQs + 1, err_hwirq))) {
 			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 			goto err4;
 		}

@@ -293,7 +293,11 @@ struct capi_sste {
 /* TODO: Pack structure */
 struct capi_afu_t {
 	union {
-		void __iomem *p1n_mmio;
+		struct { /* hv */
+			void __iomem *p1n_mmio;
+			irq_hw_number_t err_hwirq;
+			unsigned int err_virq;
+		};
 		u64 handle;
 	};
 	void __iomem *p2n_mmio;
@@ -463,7 +467,8 @@ int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 afu_desc, u64 afu_desc_size);
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
-		  irq_hw_number_t irq_start, irq_hw_number_t irq_count);
+		  irq_hw_number_t irq_start, irq_hw_number_t irq_count,
+		  irq_hw_number_t err_irq);
 
 int register_capi_dev(void);
 void unregister_capi_dev(void);
@@ -478,6 +483,7 @@ void afu_enable_irqs(struct capi_afu_t *afu);
 void afu_disable_irqs(struct capi_afu_t *afu);
 void afu_release_irqs(struct capi_afu_t *afu);
 irqreturn_t capi_irq_err(int irq, void *data);
+irqreturn_t capi_slice_irq_err(int irq, void *data);
 
 int capi_handle_segment_miss(struct capi_afu_t *afu, u64 ea);
 void capi_handle_page_fault(struct work_struct *work);
@@ -516,7 +522,8 @@ struct capi_backend_ops {
 			     irq_hw_number_t err_hwirq);
 	/* FIXME: Clean this up */
 	int (*init_afu) (struct capi_afu_t *afu, u64 handle,
-			 irq_hw_number_t irq_start, irq_hw_number_t irq_count);
+			 irq_hw_number_t irq_start, irq_hw_number_t irq_count,
+			 irq_hw_number_t err_irq);
 
 	int (*init_dedicated_process) (struct capi_afu_t *afu, bool kernel,
 			               u64 wed, u64 amr);

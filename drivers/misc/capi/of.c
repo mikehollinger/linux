@@ -75,7 +75,7 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	}
 
 	return capi_init_afu(adapter, afu, slice, handle,
-			irq_start, irq_count);
+			irq_start, irq_count, 0);
 }
 
 static int __init init_capi_of(void)

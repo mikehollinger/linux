@@ -53,10 +53,29 @@ static irqreturn_t handle_psl_slice_error(struct capi_afu_t *afu, u64 dsisr, u64
 	return IRQ_NONE;
 }
 
+irqreturn_t capi_slice_irq_err(int irq, void *data)
+{
+	WARN(irq, "CAPI SLICE ERROR interrupt %i\n", irq);
+
+	struct capi_afu_t *afu = (struct capi_afu_t *)data;
+	u64 fir_slice, fir_recov_slice, serr;
+
+	if (afu->pid)
+		freeze_afu_owner(afu);
+	serr = capi_p1n_read(afu, CAPI_PSL_SERR_An);
+	fir_slice = capi_p1n_read(afu, CAPI_PSL_FIR_SLICE_An);
+	fir_recov_slice = capi_p1n_read(afu, CAPI_PSL_R_FIR_SLICE_An);
+	pr_warn("PSL_SERR_An: 0x%.16llx\n", serr);
+	pr_warn("PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
+	pr_warn("PSL_FIR_RECOV_SLICE_An: 0x%.16llx\n", fir_recov_slice);
+
+	return IRQ_NONE;
+}
+
 irqreturn_t capi_irq_err(int irq, void *data)
 {
 	struct capi_t *adapter = (struct capi_t *)data;
-	u64 fir1, fir2, fir_slice, fir_recov_slice, err_ivte, serr;
+	u64 fir1, fir2, err_ivte;
 	int slice;
 
 	WARN(1, "CAPI ERROR interrupt %i\n", irq);
@@ -73,14 +92,8 @@ irqreturn_t capi_irq_err(int irq, void *data)
 	pr_warn("PSL_FIR1: 0x%.16llx\nPSL_FIR2: 0x%.16llx\n", fir1, fir2);
 
 	for (slice = 0; slice < adapter->slices; slice++) {
-		if (adapter->slice[slice].pid)
-			freeze_afu_owner(&adapter->slice[slice]);
-		serr = capi_p1n_read(&adapter->slice[slice], CAPI_PSL_SERR_An);
-		fir_slice = capi_p1n_read(&adapter->slice[slice], CAPI_PSL_FIR_SLICE_An);
-		fir_recov_slice = capi_p1n_read(&adapter->slice[slice], CAPI_PSL_R_FIR_SLICE_An);
-		pr_warn("PSL_SERR_%in: 0x%.16llx\n", slice, serr);
-		pr_warn("PSL_FIR_SLICE_%in: 0x%.16llx\n", slice, fir_slice);
-		pr_warn("PSL_FIR_RECOV_SLICE_%in: 0x%.16llx\n", slice, fir_recov_slice);
+		pr_warn("SLICE %i\n", slice);
+		capi_slice_irq_err(0, (void *)(&adapter->slice[slice]));
 	}
 
 	return IRQ_NONE;
