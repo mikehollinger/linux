@@ -56,15 +56,13 @@ static irqreturn_t handle_psl_slice_error(struct capi_afu_t *afu, u64 dsisr, u64
 irqreturn_t capi_irq_err(int irq, void *data)
 {
 	struct capi_t *adapter = (struct capi_t *)data;
-	u64 fir1, fir2, fir_slice, fir_recov_slice, err_ivte;
+	u64 fir1, fir2, fir_slice, fir_recov_slice, err_ivte, serr;
 	int slice;
 
 	WARN(1, "CAPI ERROR interrupt %i\n", irq);
 
 	err_ivte = capi_p1_read(adapter, CAPI_PSL_ErrIVTE);
 	pr_warn("PSL_ErrIVTE: 0x%.16llx\n", err_ivte);
-	err_ivte = capi_p1n_read(adapter, CAPI_PSL_SERR_An);
-	pr_warn("PSL_SERR: 0x%.16llx\n", err_ivte);
 
 	pr_crit("STOPPING CAPI TRACE\n");
 	capi_stop_trace(adapter);
@@ -77,8 +75,10 @@ irqreturn_t capi_irq_err(int irq, void *data)
 	for (slice = 0; slice < adapter->slices; slice++) {
 		if (adapter->slice[slice].pid)
 			freeze_afu_owner(&adapter->slice[slice]);
+		serr = capi_p1n_read(&adapter->slice[slice], CAPI_PSL_SERR_An);
 		fir_slice = capi_p1n_read(&adapter->slice[slice], CAPI_PSL_FIR_SLICE_An);
 		fir_recov_slice = capi_p1n_read(&adapter->slice[slice], CAPI_PSL_R_FIR_SLICE_An);
+		pr_warn("PSL_SERR_%in: 0x%.16llx\n", slice, serr);
 		pr_warn("PSL_FIR_SLICE_%in: 0x%.16llx\n", slice, fir_slice);
 		pr_warn("PSL_FIR_RECOV_SLICE_%in: 0x%.16llx\n", slice, fir_recov_slice);
 	}
