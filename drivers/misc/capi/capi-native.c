@@ -244,11 +244,10 @@ static int alloc_spa(struct capi_afu_t *afu, int max_procs)
 
 	afu->sw_command_status = (__be64 *)(afu->spa + (afu->max_procs * 128) + 16);
 
-	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p\n", afu->spa, afu->max_procs, afu->sw_command_status);
-
 	spap = virt_to_phys(afu->spa) & CAPI_PSL_SPAP_Addr;
 	spap |= ((afu->spa_size >> (12 - CAPI_PSL_SPAP_Size_Shift)) - 1) & CAPI_PSL_SPAP_Size;
 	spap |= CAPI_PSL_SPAP_V;
+	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->max_procs, afu->sw_command_status, spap);
 	capi_p1n_write(afu, CAPI_PSL_SPAP_An, spap);
 
 	return 0;
