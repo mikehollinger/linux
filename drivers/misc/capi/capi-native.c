@@ -288,7 +288,7 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 
 	elem->software_state = CAPI_PE_SOFTWARE_STATE_V;
 	*afu->sw_command_status = 0; /* XXX: Not listed in CAIA procedure */
-	lwsync();
+	smp_mb();
 	capi_p1n_write(afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | pe_handle(elem));
 
 	while (1) {
