@@ -286,10 +286,13 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 {
 	u64 state;
 
+	printk("%s Adding pe_handle=%llx\n", __FUNCTION__, pe_handle(elem));
+
 	elem->software_state = CAPI_PE_SOFTWARE_STATE_V;
 	*afu->sw_command_status = 0; /* XXX: Not listed in CAIA procedure */
 	smp_mb();
 	capi_p1n_write(afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | pe_handle(elem));
+	printk("%s 20\n", __FUNCTION__);
 
 	while (1) {
 		state = be64_to_cpup(afu->sw_command_status);
@@ -303,6 +306,7 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 		}
 		cpu_relax();
 	}
+	printk("%s 30\n", __FUNCTION__);
 
 	return 0;
 }
