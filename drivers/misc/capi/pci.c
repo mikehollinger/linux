@@ -274,8 +274,7 @@ static int init_implementation_afu_regs(struct capi_afu_t *afu)
 	/* changes recommended per JT and Yoanna 11/15/2013 */
 	capi_p1n_write(afu, CAPI_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
 
-	dev_info(&dev->dev, "capi: **** Workaround to lower croom value to avoid bug in AFX - PSL_RXCTL - HW252777 ****\n");
-	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0x900F000000000000ULL); /* HW252777 */
+	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0xF000000000000000ULL);
 
 	return 0;
 }
