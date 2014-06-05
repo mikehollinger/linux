@@ -81,7 +81,7 @@ static const capi_p1n_reg_t CAPI_PSL_SR_An          = {0x00};
 static const capi_p1n_reg_t CAPI_PSL_LPID_An        = {0x08};
 static const capi_p1n_reg_t CAPI_PSL_AMBAR_An       = {0x10};
 static const capi_p1n_reg_t CAPI_PSL_SPOffset_An    = {0x18};
-static const capi_p1n_reg_t CAPI_PSL_PSL_ID_An      = {0x20};
+static const capi_p1n_reg_t CAPI_PSL_ID_An	    = {0x20};
 static const capi_p1n_reg_t CAPI_PSL_SERR_An	    = {0x28};
 /* Memory Management and Lookaside Buffer Management */
 static const capi_p1n_reg_t CAPI_PSL_SDR_An         = {0x30};
@@ -162,6 +162,10 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_LLCMD_ADD         0x0005000000000000ULL
 #define CAPI_LLCMD_UPDATE      0x0006000000000000ULL
 #define CAPI_LLCMD_HANDLE_MASK 0x000000000000ffffULL
+
+/****** CAPI_PSL_ID_An ****************************************************/
+#define CAPI_PSL_ID_An_F	(1ull << (63-31))
+#define CAPI_PSL_ID_An_L	(1ull << (63-30))
 
 /****** CAPI_PSL_SCNTL_An ****************************************************/
 #define CAPI_PSL_SCNTL_An_CR          (0x1ull << (63-15))

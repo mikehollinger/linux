@@ -276,8 +276,6 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 
 	printk("%s Adding pe_handle=0x%llx\n", __FUNCTION__, pe_handle(afu, elem));
 
-	BUG_ON(capi_p1n_read(afu, CAPI_PSL_PSL_ID_An) != 0);
-
 	printk_ratelimited("%s SERR: %016llx\n",
 			   __FUNCTION__, capi_p1n_read(afu, CAPI_PSL_SERR_An));
 
@@ -330,6 +328,7 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 
 	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
+	capi_p1n_write(afu, CAPI_PSL_ID_An, CAPI_PSL_ID_An_F | CAPI_PSL_ID_An_L);
 
 	elem->ctxtime = cpu_to_be64(0); /* disable */
 	elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
