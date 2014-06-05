@@ -378,7 +378,6 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	printk("%s 30\n", __FUNCTION__);
 	if ((result = afu_reset(afu)))
 		return result;
-	printk("%s 40\n", __FUNCTION__);
 	if ((result = afu_enable(afu)))
 		return result;
 
