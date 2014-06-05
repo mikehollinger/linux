@@ -230,11 +230,11 @@ static int alloc_spa(struct capi_afu_t *afu, int max_procs)
 	 * allocate enough contiguous pages to support it, but fall back to
 	 * less pages if allocation is not possible.
 	 */
-	if (!(afu->spa = (struct capi_process_element *)get_zeroed_page(GFP_KERNEL))) {
+	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, 3))) {
 		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
 		return -ENOMEM;
 	}
-	afu->spa_size = PAGE_SIZE;
+	afu->spa_size = PAGE_SIZE * 8;
 
 	/* From the CAIA:
 	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
