@@ -383,7 +383,10 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	if ((result = afu_enable(afu)))
 		return result;
 
-
+	pr_devel("Reading AFU \n");
+	if (afu->afu_desc_mmio)
+		printk("\t0x%016llx = 0x%016llx\n",
+		       afu->afu_desc_mmio, _capi_reg_read(afu->afu_desc_mmio));
 	printk("%s 50\n", __FUNCTION__);
 	add_process_element(afu, elem);
 
