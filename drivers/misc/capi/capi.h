@@ -307,9 +307,9 @@ struct capi_afu_t {
 	void __iomem *p2n_mmio;
 	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
-	u32 psn_size;
+	u64 psn_size;
 	void __iomem *afu_desc_mmio;
-	u32 afu_desc_size;
+	u64 afu_desc_size;
 	u32 irq_count;
 	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
 	unsigned int virq[CAPI_SLICE_IRQS];

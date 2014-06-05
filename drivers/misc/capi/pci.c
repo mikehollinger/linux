@@ -266,8 +266,6 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 
 static int init_implementation_afu_regs(struct capi_afu_t *afu)
 {
-	struct pci_dev *dev = container_of(afu->adapter, struct capi_pci_t, adapter)->pdev;
-
 	capi_p1n_write(afu, CAPI_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL); /* read/write masks for this slice */
 	capi_p1n_write(afu, CAPI_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL); /* APC read/write masks for this slice */
 
