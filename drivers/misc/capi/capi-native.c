@@ -324,7 +324,7 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 		return -ENOMEM;
 
 	/* TODO: Find free entry */
-	elem = &afu->spa[1];
+	elem = &afu->spa[0];
 
 	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
