@@ -279,7 +279,7 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 	printk_ratelimited("%s SERR: %016llx\n",
 			   __FUNCTION__, capi_p1n_read(afu, CAPI_PSL_SERR_An));
 
-	elem->software_state = cpu_to_be64(CAPI_PE_SOFTWARE_STATE_V);
+	elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
 	smp_wmb();
 	*afu->sw_command_status = cpu_to_be64(CAPI_SPA_SW_CMD_ADD | 0 | pe_handle(afu, elem));
 	smp_mb();
@@ -287,7 +287,7 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 	printk("%s 20\n", __FUNCTION__);
 
 	while (1) {
-		state = be64_to_cpup(afu->sw_command_status);
+		state = be32_to_cpu(afu->sw_command_status);
 		printk_ratelimited("%s 30 state: %016llx  SERR: %016llx\n",
 				   __FUNCTION__, state, capi_p1n_read(afu, CAPI_PSL_SERR_An));
 		if (state == ~0ULL) {
