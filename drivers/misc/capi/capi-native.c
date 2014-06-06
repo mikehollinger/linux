@@ -329,6 +329,7 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
 	capi_p1n_write(afu, CAPI_PSL_ID_An, CAPI_PSL_ID_An_F | CAPI_PSL_ID_An_L);
+	pr_devel("PSL_ID: %016llx\n", capi_p1n_read(afu, CAPI_PSL_ID_An));
 
 	elem->ctxtime = cpu_to_be64(0); /* disable */
 	elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
@@ -381,10 +382,14 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	if ((result = afu_enable(afu)))
 		return result;
 
-	pr_devel("Reading AFU \n");
+	pr_devel("Reading AFU descriptor\n");
 	if (afu->afu_desc_mmio)
 		printk("\t0x%016llx = 0x%016llx\n",
 		       afu->afu_desc_mmio, _capi_reg_read(afu->afu_desc_mmio));
+	pr_devel("Reading AFU problem state\n");
+	if (afu->psn_phys)
+		printk("\t0x%016llx = 0x%016llx\n",
+		       afu->psn_phys, capi_afu_ps_read(afu, 0));
 	printk("%s 50\n", __FUNCTION__);
 	add_process_element(afu, elem);
 
