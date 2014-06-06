@@ -287,7 +287,7 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 	printk("%s 20\n", __FUNCTION__);
 
 	while (1) {
-		state = be32_to_cpu(afu->sw_command_status);
+		state = be64_to_cpup(afu->sw_command_status);
 		printk_ratelimited("%s 30 state: %016llx  SERR: %016llx\n",
 				   __FUNCTION__, state, capi_p1n_read(afu, CAPI_PSL_SERR_An));
 		if (state == ~0ULL) {
