@@ -55,10 +55,10 @@ static irqreturn_t handle_psl_slice_error(struct capi_afu_t *afu, u64 dsisr, u64
 
 irqreturn_t capi_slice_irq_err(int irq, void *data)
 {
-	WARN(irq, "CAPI SLICE ERROR interrupt %i\n", irq);
-
 	struct capi_afu_t *afu = (struct capi_afu_t *)data;
 	u64 fir_slice, fir_recov_slice, serr;
+
+	WARN(irq, "CAPI SLICE ERROR interrupt %i\n", irq);
 
 	if (afu->pid)
 		freeze_afu_owner(afu);
