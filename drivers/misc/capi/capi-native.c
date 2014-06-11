@@ -274,22 +274,15 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 {
 	u64 state;
 
-	printk("%s Adding pe_handle=0x%llx\n", __FUNCTION__, pe_handle(afu, elem));
-
-	printk_ratelimited("%s SERR: %016llx\n",
-			   __FUNCTION__, capi_p1n_read(afu, CAPI_PSL_SERR_An));
+	pr_devel("%s Adding pe_handle=0x%llx\n", __FUNCTION__, pe_handle(afu, elem));
 
 	elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
 	smp_wmb();
 	*afu->sw_command_status = cpu_to_be64(CAPI_SPA_SW_CMD_ADD | 0 | pe_handle(afu, elem));
 	smp_mb();
 	capi_p1n_write(afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | pe_handle(afu, elem));
-	printk("%s 20\n", __FUNCTION__);
-
 	while (1) {
 		state = be64_to_cpup(afu->sw_command_status);
-		printk_ratelimited("%s 30 state: %016llx  SERR: %016llx\n",
-				   __FUNCTION__, state, capi_p1n_read(afu, CAPI_PSL_SERR_An));
 		if (state == ~0ULL) {
 			pr_err("capi: Error adding process element to AFU\n");
 			return -1;
@@ -300,7 +293,6 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 		}
 		cpu_relax();
 	}
-	printk("%s 40\n", __FUNCTION__);
 
 	return 0;
 }
@@ -359,11 +351,9 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1)))
 		return result;
 
-	printk("%s 10\n", __FUNCTION__);
 	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
 	capi_prefault(afu, wed);
 
-	printk("%s 20\n", __FUNCTION__);
 	elem->common.sstp0 = cpu_to_be64(sstp0);
 	elem->common.sstp1 = cpu_to_be64(sstp1);
 
@@ -376,24 +366,13 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	elem->common.wed = cpu_to_be64(wed);
 
 
-	printk("%s 30\n", __FUNCTION__);
 	if ((result = afu_reset(afu)))
 		return result;
 	if ((result = afu_enable(afu)))
 		return result;
 
-	pr_devel("Reading AFU descriptor\n");
-	if (afu->afu_desc_mmio)
-		printk("\t0x%016llx = 0x%016llx\n",
-		       afu->afu_desc_mmio, _capi_reg_read(afu->afu_desc_mmio));
-	pr_devel("Reading AFU problem state\n");
-	if (afu->psn_phys)
-		printk("\t0x%016llx = 0x%016llx\n",
-		       afu->psn_phys, capi_afu_ps_read(afu, 0));
-	printk("%s 50\n", __FUNCTION__);
 	add_process_element(afu, elem);
 
-	printk("%s 60\n", __FUNCTION__);
 	return 0;
 }
 
