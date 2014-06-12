@@ -42,7 +42,7 @@ afu_open(struct inode *inode, struct file *file)
 		return -ENODEV;
 	afu = &adapter->slice[slice];
 
-	file->private_data = (void *)afu;
+	file->private_data = (void *)afu; // FIXME: point to per context data
 
 	afu->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
