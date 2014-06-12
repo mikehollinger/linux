@@ -97,6 +97,7 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	pr_devel("afu_ioctl\n");
 	switch (cmd) {
+#if 0
 		case CAPI_OPEN_AND_RUN:
 		{
 			/* FIXME: If already run[ing], make sure it's stopped
@@ -107,6 +108,7 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			afu->enabled = true;
 			return 0;
 		}
+#endif
 		case CAPI_IOCTL_START_WORK:
 		{
 			struct capi_ioctl_start_work __user *uwork =
