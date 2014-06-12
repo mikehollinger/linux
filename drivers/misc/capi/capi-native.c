@@ -97,6 +97,7 @@ static int psl_purge(struct capi_afu_t *afu)
 {
 	u64 PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
+	u64 PSL_DSISR;
 	u64 start, end;
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
@@ -120,7 +121,8 @@ static int psl_purge(struct capi_afu_t *afu)
 			pr_warn("WARNING: PSL Purge timed out!\n");
 			return -EBUSY;
 		}
-		pr_devel_ratelimited("PSL purging... (0x%.16llx)\n", PSL_CNTL);
+		PSL_DSISR = capi_p2n_read(afu, CAPI_PSL_DSISR_An);
+		pr_devel_ratelimited("PSL purging... PSL_CNTL: 0x%.16llx  PSL_DSISR: 0x%.16llx\n", PSL_CNTL, PSL_DSISR);
 		cpu_relax();
 		PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
 		BUG_ON(PSL_CNTL == ~0ULL); /* FIXME: eeh path */
