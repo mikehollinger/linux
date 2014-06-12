@@ -7,15 +7,12 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
-#include <linux/idr.h>
 #include <asm/synch.h>
 #include <linux/mm.h>
 #include <asm/uaccess.h>
 
 #include "capi.h"
 #include "capi_hcalls.h"
-
-static DEFINE_IDA(pe_index_ida);
 
 static int afu_reset(struct capi_afu_t *afu)
 {
@@ -320,12 +317,8 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	if (alloc_spa(afu, 1))
 		return -ENOMEM;
 
-	i = ida_simple_get(&pe_index_ida, 0 afu->max_procs, GFP_KERNEL);
-	if (i < 0)
-		goto out;
-
 	/* TODO: Find free entry */
-	elem = &afu->spa[i];
+	elem = &afu->spa[0];
 
 	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
@@ -477,7 +470,6 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 static int detach_process_native(struct capi_afu_t *afu)
 {
 	afu_disable(afu);
-	ida_simple_remove(&pe_index_ida, 0);
 	psl_purge(afu);
 	return 0;
 }
