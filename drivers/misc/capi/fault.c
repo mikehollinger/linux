@@ -180,6 +180,7 @@ static int capi_load_segment(struct capi_afu_t *afu, u64 esid_data, u64 vsid_dat
 	bool sec_hash = 1;
 	struct capi_sste *sste;
 	unsigned int hash;
+	int i;
 
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		sec_hash = !!(capi_p1n_read(afu, CAPI_PSL_SR_An) & CAPI_PSL_SR_An_SC);
@@ -208,6 +209,15 @@ static int capi_load_segment(struct capi_afu_t *afu, u64 esid_data, u64 vsid_dat
 
 	sste->vsid_data = vsid_data;
 	sste->esid_data = esid_data;
+
+	sste = afu->sstp;
+	for (i = 0; i < (afu->sst_size/16); i++){
+		pr_devel("HACK: CAPI Populating SST[%i]: %#llx %#llx\n",
+			 i, vsid_data, esid_data);
+		sste->vsid_data = vsid_data;
+		sste->esid_data = esid_data;
+		sste++;
+	}
 
 	return 0;
 }
