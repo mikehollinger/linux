@@ -241,7 +241,7 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 
 	/* cappid 0:2 nodeid 3:5 chipid */
 	/* psl_dsnctl = 0x02e8100000000000ULL | (node << (63-2)) | (pos << (63-5)); */
-	psl_dsnctl = 0x02E8900000000000ULL | (chipid << (63-5));
+	psl_dsnctl = 0x02E8900002000000ULL | (chipid << (63-5));
 
 	capi_p1_write(adapter, CAPI_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
 	capi_p1_write(adapter, CAPI_PSL_RESLCKTO, 0x20000000200);
@@ -257,10 +257,6 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 
 	dev_info(&dev->dev, "capi: **** Workaround to disable PSL QuickTag to fix miscompares - PSL_SNWRALLOC - HW249157 ****\n");
 	capi_p1_write(adapter, CAPI_PSL_SNWRALLOC, 0x80000000FFFFFFFFULL); /* HW249157 */
-
-	dev_info(&dev->dev, "capi: **** Workaround to gate off PSL sending interrupts for bug in PHB - PSL_DSNDCTL(39) - DD1.3 will be fixed****\n");
-	dev_info(&dev->dev, "capi: **** Workaround to gate off TLBWait on interrupts - PSL_DSNDCTL(41) - DD1.3 will be fixed****\n");
-	capi_p1_write(adapter, CAPI_PSL_DSNDCTL, psl_dsnctl); /* Set to same value again? Is this necessary? */
 
 	return 0;
 }
