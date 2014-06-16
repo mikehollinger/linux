@@ -275,6 +275,10 @@ static int init_implementation_afu_regs(struct capi_afu_t *afu)
 
 	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0xF000000000000000ULL);
 
+	/* FIXME: mask the MMIO timeout IRQ for now.  need to fix this long
+	 * term */
+	capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
+
 	return 0;
 }
 
