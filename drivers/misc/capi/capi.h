@@ -355,7 +355,7 @@ struct capi_afu_t {
 /* This is a capi context.  If the PSL is in dedicated mode, there will be one
  * of these per AFU.  If in AFU directed there can be lots of these. */
 struct capi_context_t {
-	struct capi_afu t *afu;
+	struct capi_afu_t *afu;
 
 	bool master;
 
@@ -378,9 +378,8 @@ struct capi_context_t {
 	u64 afu_err;
 	bool pending_afu_err;
 
-	struct capi_process_element *elem
-}
-
+	struct capi_process_element *elem;
+};
 
 struct capi_driver_ops;
 
