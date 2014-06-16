@@ -52,16 +52,16 @@ static void release_afu_hv(struct capi_afu_t *afu)
 		iounmap(afu->psn_mmio);
 }
 
-static int get_irq_hv(struct capi_afu_t *afu, struct capi_irq_info *info)
+static int get_irq_hv(struct capi_context_t *ctx, struct capi_irq_info *info)
 {
-	return capi_h_collect_int_info(afu->handle, afu->process_token, info);
+	return capi_h_collect_int_info(ctx->afu->handle, ctx->process_token, info);
 }
 
-static int ack_irq_hv(struct capi_afu_t *afu, u64 tfc, u64 psl_reset_mask)
+static int ack_irq_hv(struct capi_context_t *ctx, u64 tfc, u64 psl_reset_mask)
 {
 	u64 ret; /* Indicates pending state - may be useful for debugging */
 
-	return capi_h_control_faults(afu->handle, afu->process_token,
+	return capi_h_control_faults(ctx->afu->handle, ctx->process_token,
 				     tfc >> 32,
 				     !!psl_reset_mask, /* XXX: PAPR describes
 							  this as a mask, yet
@@ -70,51 +70,51 @@ static int ack_irq_hv(struct capi_afu_t *afu, u64 tfc, u64 psl_reset_mask)
 				     &ret);
 }
 
-static int clear_pending_irqs(struct capi_afu_t *afu)
+static int clear_pending_irqs(struct capi_context_t *ctx)
 {
 	struct capi_irq_info info;
 	int result;
 
 	pr_warn("Attempting to clear any pending PSL interrupts...\n");
-	if ((result = capi_ops->get_irq(afu, &info))) {
+	if ((result = capi_ops->get_irq(ctx, &info))) {
 		pr_warn("Unable to get CAPI IRQ Info: %i\n", result);
 		return result;
 	}
 
 	if (info.dsisr & CAPI_PSL_DSISR_TRANS) {
 		pr_warn("Clearing PSL translation fault 0x%.16llx...\n", info.dsisr);
-		return ack_irq_hv(afu, CAPI_PSL_TFC_An_AE, 0);
+		return ack_irq_hv(ctx, CAPI_PSL_TFC_An_AE, 0);
 	}
 	if (info.dsisr & CAPI_PSL_DSISR_An_PE) {
 		pr_warn("Clearing implementation specific PSL error 0x%.16llx 0x%.16llx...\n",
 				info.dsisr, info.fir_r_slice);
-		return ack_irq_hv(afu, CAPI_PSL_TFC_An_A, 1);
+		return ack_irq_hv(ctx, CAPI_PSL_TFC_An_A, 1);
 	}
 	pr_warn("Clearing non-translation PSL fault... 0x%.16llx\n", info.dsisr);
-	return ack_irq_hv(afu, CAPI_PSL_TFC_An_A, 0);
+	return ack_irq_hv(ctx, CAPI_PSL_TFC_An_A, 0);
 }
 
-static int detach_process_hv(struct capi_afu_t *afu)
+static int detach_process_hv(struct capi_context_t *ctx)
 {
 	int ret;
 
-	if (!afu->process_token) {
+	if (!ctx->process_token) {
 		pr_devel("capi: Attempted to detach non-attached process\n");
 		return -1;
 	}
-	afu_disable_irqs(afu);
-	ret = capi_h_detach_process(afu->handle, afu->process_token);
+	afu_disable_irqs(ctx);
+	ret = capi_h_detach_process(ctx->afu->handle, ctx->process_token);
 	if (ret == -EIO) {
-		clear_pending_irqs(afu);
-		ret = capi_h_detach_process(afu->handle, afu->process_token);
+		clear_pending_irqs(ctx);
+		ret = capi_h_detach_process(ctx->afu->handle, ctx->process_token);
 	}
-	afu->process_token = 0;
+	ctx->process_token = 0;
 
 	return ret;
 }
 
 static int
-init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
+init_dedicated_process_hv(struct capi_context_t *ctx, bool kernel,
 		          u64 wed, u64 amr)
 {
 	struct capi_process_element_hcall *elem;
@@ -122,9 +122,9 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 	int rc = 0, result;
 	const struct cred *cred;
 
-	if (afu->process_token) {
+	if (ctx->process_token) {
 		pr_info("capi: init dedicated process while attached, detaching...\n");
-		if ((result = detach_process_hv(afu))) {
+		if ((result = detach_process_hv(ctx))) {
 			WARN(1, "Unable to detach existing process\n");
 			return result;
 		}
@@ -134,7 +134,7 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 	if (!(elem = (struct capi_process_element_hcall*)get_zeroed_page(GFP_KERNEL)))
 		return -ENOMEM;
 
-	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1))) {
+	if ((result = capi_alloc_sst(ctx, &sstp0, &sstp1))) {
 		rc = result;
 		goto out;
 	}
@@ -175,14 +175,14 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 	elem->common.sstp0          = cpu_to_be64(sstp0);
 	elem->common.sstp1          = cpu_to_be64(sstp1);
 	elem->common.amr            = cpu_to_be64(amr);
-	elem->pslVirtualIsn         = cpu_to_be32(afu->hwirq[0]);
+	elem->pslVirtualIsn         = cpu_to_be32(ctx->hwirq[0]);
 	elem->applicationVirtualIsnBitmap[0] = 0x70; /* Initially use three (after the PSL irq), for compatibility with old CAIA */
 	elem->common.wed = cpu_to_be64(wed);
 
-	if ((rc = capi_h_attach_process(afu->handle, elem, &afu->process_token)))
+	if ((rc = capi_h_attach_process(ctx->afu->handle, elem, &ctx->process_token)))
 		goto out;
 
-	afu_enable_irqs(afu);
+	afu_enable_irqs(ctx);
 
 out:
 	free_page((u64)elem);
@@ -192,7 +192,7 @@ out:
 static const struct capi_backend_ops capi_hv_ops = {
 	.init_adapter = init_adapter_hv,
 	.init_afu = init_afu_hv,
-//	.init_dedicated_process = init_dedicated_process_hv,
+	.init_process = init_dedicated_process_hv,
 	.detach_process = detach_process_hv,
 	.get_irq = get_irq_hv,
 	.ack_irq = ack_irq_hv,

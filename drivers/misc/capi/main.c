@@ -19,7 +19,7 @@ static DEFINE_SPINLOCK(adapter_list_lock);
 static LIST_HEAD(adapter_list);
 const struct capi_backend_ops *capi_ops;
 
-int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1)
+int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
 	u64 rt = 0;
 	unsigned long vsid;
@@ -30,16 +30,16 @@ int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1)
 	*sstp0 = 0;
 	*sstp1 = 0;
 
-	afu->sst_size = PAGE_SIZE;
-	afu->sst_lru = 0;
-	if (!afu->sstp) {
-		afu->sstp = (struct capi_sste*)get_zeroed_page(GFP_KERNEL);
-		pr_devel("SSTP allocated at 0x%p\n", afu->sstp);
+	ctx->sst_size = PAGE_SIZE;
+	ctx->sst_lru = 0;
+	if (!ctx->sstp) {
+		ctx->sstp = (struct capi_sste*)get_zeroed_page(GFP_KERNEL);
+		pr_devel("SSTP allocated at 0x%p\n", ctx->sstp);
 	} else {
-		pr_devel("Zeroing and reusing SSTP already allocated at 0x%p\n", afu->sstp);
-		memset(afu->sstp, 0, PAGE_SIZE);
+		pr_devel("Zeroing and reusing SSTP already allocated at 0x%p\n", ctx->sstp);
+		memset(ctx->sstp, 0, PAGE_SIZE);
 	}
-	if (!afu->sstp) {
+	if (!ctx->sstp) {
 		pr_err("capi_alloc_sst: Unable to allocate segment table\n");
 		return -ENOMEM;
 	}
@@ -56,7 +56,7 @@ int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1)
 	 * always copy them into SSTP0 like I do below anyway.
 	 */
 
-	rt = slbfee((u64)afu->sstp);
+	rt = slbfee((u64)ctx->sstp);
 
 	ssize = (rt & SLB_VSID_B) >> SLB_VSID_SSIZE_SHIFT;
 	/* FIXME: Did I need to handle 1TB segments? I have a vague
@@ -67,7 +67,7 @@ int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1)
 	*sstp0 |= (rt & (SLB_VSID_KS | SLB_VSID_KP | SLB_VSID_N | SLB_VSID_L
 		       | SLB_VSID_C | SLB_VSID_TA | SLB_VSID_LP)) << 50;
 
-	size = (((u64)afu->sst_size >> 8) - 1) << CAPI_SSTP0_An_SegTableSize_SHIFT;
+	size = (((u64)ctx->sst_size >> 8) - 1) << CAPI_SSTP0_An_SegTableSize_SHIFT;
 	BUG_ON(size & ~CAPI_SSTP0_An_SegTableSize_MASK);
 	*sstp0 |= size;
 
@@ -77,18 +77,18 @@ int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1)
 		ea_mask = 0xffffffff00;
 	else {
 		WARN(1, "CAPI: Unsupported segment size\n");
-		free_page((u64)afu->sstp);
-		afu->sstp = NULL;
+		free_page((u64)ctx->sstp);
+		ctx->sstp = NULL;
 		return -EINVAL;
 	}
 
 	*sstp0 |=  vsid >>     (50-14);  /*   Top 14 bits of VSID */
 	*sstp1 |= (vsid << (64-(50-14))) & ~ea_mask;
-	*sstp1 |= (u64)afu->sstp & ea_mask;
+	*sstp1 |= (u64)ctx->sstp & ea_mask;
 	*sstp1 |= CAPI_SSTP1_An_V;
 
 	pr_devel("Looked up %#llx: slbfee. %#llx: %#llx (ssize: %#llx, vsid: %#lx), copied to SSTP0: %#llx, SSTP1: %#llx\n",
-			(u64)afu->sstp, (u64)afu->sstp & ESID_MASK, rt, ssize, vsid, *sstp0, *sstp1);
+			(u64)ctx->sstp, (u64)ctx->sstp & ESID_MASK, rt, ssize, vsid, *sstp0, *sstp1);
 
 	return 0;
 }
@@ -164,9 +164,6 @@ int capi_init_adapter(struct capi_t *adapter,
 		goto out_unlock;
 	}
 
-	for (i = 0; i < adapter->slices; i++)
-		capi_init_afu(&adapter->slice[i]);
-
 	if (add_capi_dev(adapter, adapter_num)) {
 		rc = -1;
 		goto out_unlock;
@@ -205,8 +202,6 @@ int capi_map_slice_regs(struct capi_afu_t *afu,
 			goto err3;
 	afu->psn_phys = psn_base;
 	afu->psn_size = psn_size;
-	BUG_ON(psn_size < (pp_offset + pp_size*max_procs));
-	BUG_ON(pp_size < PAGE_SIZE);
 	afu->afu_desc_size = afu_desc_size;
 
 	return 0;
@@ -307,7 +302,10 @@ static void exit_capi(void)
 	spin_lock(&adapter_list_lock);
 	list_for_each_entry_safe(adapter, tmp, &adapter_list, list) {
 		for (slice = 0; slice < adapter->slices; slice++) {
-			afu_release_irqs(&(adapter->slice[slice]));
+			// FIXME: need back pointer from afu to contexts
+			// also, in theory, this shouldn't happen
+//			afu_release_irqs(&(adapter->slice[slice]));
+
 			capi_ops->release_afu(&(adapter->slice[slice]));
 			put_device(adapter->slice[slice].device.parent);
 		}

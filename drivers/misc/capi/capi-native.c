@@ -185,6 +185,55 @@ static void release_adapter_native(struct capi_t *adapter)
 	iounmap(adapter->p1_mmio);
 }
 
+static int alloc_spa(struct capi_afu_t *afu)
+{
+	u64 spap;
+
+// FIXME do this dynamically.  Now get atleast 512
+#ifdef CONFIG_PPC_64K_PAGES
+	int pages = 2;
+#else
+	int pages = 32;
+#endif
+
+	/* TODO: Calculate required size to fit that many procs and try to
+	 * allocate enough contiguous pages to support it, but fall back to
+	 * less pages if allocation is not possible.
+	 */
+	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, ilog2(pages)))) {
+		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
+		return -ENOMEM;
+	}
+	afu->spa_size = PAGE_SIZE + pages;
+
+	/* From the CAIA:
+	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
+	 * Most of that junk is really just an overly-complicated way of saying
+	 * the last 256 bytes are __aligned(128), so it's really:
+	 *    end_of_SPA_area = end_of_PSL_queue_area + __aligned(128) 255
+	 * and
+	 *    end_of_PSL_queue_area = SPA_Base + ((n+4) * 128) + (n*8) - 1
+	 * so
+	 *    sizeof(SPA) = ((n+4) * 128) + (n*8) + __aligned(128) 256
+	 * Ignore the alignment (which is safe in this case as long as we are
+	 * careful with our rounding) and solve for n:
+	 */
+	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
+	BUG_ON(afu->max_procs < afu->num_procs);
+
+	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->max_procs + 3) * 128));
+
+	spap = virt_to_phys(afu->spa) & CAPI_PSL_SPAP_Addr;
+	spap |= ((afu->spa_size >> (12 - CAPI_PSL_SPAP_Size_Shift)) - 1) & CAPI_PSL_SPAP_Size;
+	spap |= CAPI_PSL_SPAP_V;
+	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->max_procs, afu->sw_command_status, spap);
+	capi_p1n_write(afu, CAPI_PSL_SPAP_An, spap);
+
+	ida_init(&afu->pe_index_ida);
+
+	return 0;
+}
+
 static int
 init_afu_native(struct capi_afu_t *afu, u64 handle,
 		irq_hw_number_t err_hwirq)
@@ -203,25 +252,23 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 			return rc;
 	}
 
-	if (alloc_spa(afu)) // FIXME: check we are afu_directed
+	// FIXME: check we are afu_directed in this whole function
+	if (alloc_spa(afu))
 		return -ENOMEM;
 
-	init_afu_directed_native() afu specific bit in here;  leave ctx where it is
-
-	/* FIXME move this into afu init  */
 	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
 	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
 	capi_p1n_write(afu, CAPI_PSL_ID_An, CAPI_PSL_ID_An_F | CAPI_PSL_ID_An_L);
 
 	afu_disable(afu); /* FIXME: remove this */
-	if (rc = psl_purge(afu)) /* FIXME: remove this */
+	if ((rc = psl_purge(afu))) /* FIXME: remove this */
 		return rc;
 
-	if ((rc = afu_reset(ctx->afu)))
+	if ((rc = afu_reset(afu)))
 		return rc;
-	if ((rc = afu_enable(ctx->afu)))
+	if ((rc = afu_enable(afu)))
 		return rc;
-	ctx->afu->enabled = true;
+	afu->enabled = true;
 
 	return rc;
 }
@@ -249,55 +296,6 @@ static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
 	capi_p2n_write(afu, CAPI_SSTP1_An, sstp1);
 }
 
-static int alloc_spa(struct capi_afu_t *afu)
-{
-	u64 spap;
-
-// FIXME do this dynamically.  Now get atleast 512
-#ifdef CONFIG_PPC_64K_PAGES
-	int pages = 2;
-#else
-	int pages = 32;
-#endif
-
-	/* TODO: Calculate required size to fit that many procs and try to
-	 * allocate enough contiguous pages to support it, but fall back to
-	 * less pages if allocation is not possible.
-	 */
-	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, ilog2(pages))) {
-		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
-		return -ENOMEM;
-	}
-	afu->spa_size = PAGE_SIZE + pages;
-
-	/* From the CAIA:
-	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
-	 * Most of that junk is really just an overly-complicated way of saying
-	 * the last 256 bytes are __aligned(128), so it's really:
-	 *    end_of_SPA_area = end_of_PSL_queue_area + __aligned(128) 255
-	 * and
-	 *    end_of_PSL_queue_area = SPA_Base + ((n+4) * 128) + (n*8) - 1
-	 * so
-	 *    sizeof(SPA) = ((n+4) * 128) + (n*8) + __aligned(128) 256
-	 * Ignore the alignment (which is safe in this case as long as we are
-	 * careful with our rounding) and solve for n:
-	 */
-	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
-	BUG_ON(afu->max_proc < afu->num_procs);
-
-	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->max_procs + 3) * 128));
-
-	spap = virt_to_phys(afu->spa) & CAPI_PSL_SPAP_Addr;
-	spap |= ((afu->spa_size >> (12 - CAPI_PSL_SPAP_Size_Shift)) - 1) & CAPI_PSL_SPAP_Size;
-	spap |= CAPI_PSL_SPAP_V;
-	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->max_procs, afu->sw_command_status, spap);
-	capi_p1n_write(afu, CAPI_PSL_SPAP_An, spap);
-
-	IDA_INIT(afu->pe_index_ida);
-
-	return 0;
-}
-
 /* TODO: Make sure all operations on the linked list are serialised to prevent
  * races on SPA->sw_command_status */
 static int
@@ -307,7 +305,7 @@ add_process_element(struct capi_context_t *ctx)
 	int rc = 0;
 
 	spin_lock(&ctx->afu->spa_lock);
-	pr_devel("%s Adding pe=0x%llx\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Adding pe=0x%i\n", __FUNCTION__, ctx->ph);
 
 	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
 	smp_wmb();
@@ -337,14 +335,15 @@ out:
 static int
 terminate_process_element(struct capi_context_t *ctx)
 {
+	u64 state;
 	int rc = 0;
 
 	/* fast path terminate if it's already invalid */
-	if !(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V))
-	     return rc;
+	if (!(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V)))
+		return rc;
 
 	spin_lock(&ctx->afu->spa_lock);
-	pr_devel("%s Terminate pe=0x%llx\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Terminate pe=0x%i\n", __FUNCTION__, ctx->ph);
 	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V |
 						CAPI_PE_SOFTWARE_STATE_T);
 	smp_wmb();
@@ -377,14 +376,15 @@ slb_invalid(struct capi_context_t *ctx)
 {
 	/* FIXME use per slice version of SLBIA? */
 	struct capi_t *adapter = ctx->afu->adapter;
-	u64 slbia
+	u64 slbia;
 
-	capi_p1_write(adapter, CAPI_PSL_LBISEL, (ctx->pid << 32) | ctx->lpid);
+	capi_p1_write(adapter, CAPI_PSL_LBISEL,
+		      ((u64)be32_to_cpu(ctx->elem->common.pid) << 32) | be32_to_cpu(ctx->elem->lpid));
 	capi_p1_write(adapter, CAPI_PSL_SLBIA, CAPI_SLBIA_IQ_LPIDPID);
 
 	while (1) {
 		slbia = capi_p1_read(adapter, CAPI_PSL_SLBIA);
-		if !(slbia & CAPI_SLBIA_P)
+		if (!(slbia & CAPI_SLBIA_P))
 			break;
 		cpu_relax();
 	}
@@ -396,7 +396,10 @@ slb_invalid(struct capi_context_t *ctx)
 static int
 remove_process_element(struct capi_context_t *ctx)
 {
-	pr_devel("%s remove pe=0x%llx\n", __FUNCTION__, ctx->ph);
+	u64 state;
+	int rc;
+
+	pr_devel("%s remove pe=0x%i\n", __FUNCTION__, ctx->ph);
 
 	spin_lock(&ctx->afu->spa_lock);
 	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_REMOVE |
@@ -426,7 +429,7 @@ out:
 
 static int
 init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
-			 u64 amr)
+			  u64 amr)
 {
 
 	u64 sr, sstp0, sstp1;
@@ -445,7 +448,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	} else {
 		ctx->psn_phys = ctx->afu->psn_phys +
 			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
-		ctx->psn_size = ctx->afu->pp_psn_size;
+		ctx->psn_size = ctx->afu->pp_size;
 	}
 
 	ctx->elem->ctxtime = cpu_to_be64(0); /* disable */
@@ -461,20 +464,20 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 		sr |= CAPI_PSL_SR_An_PR | CAPI_PSL_SR_An_R;
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
 			sr |= CAPI_PSL_SR_An_SF;
-		ctx->elem->common->pid = cpu_to_be32(current->pid);
+		ctx->elem->common.pid = cpu_to_be32(current->pid);
 	} else { /* Initialise for kernel */
 		WARN_ONCE(1, "CAPI initialised for kernel, this won't work on GA1 hardware!\n");
 		sr |= (mfmsr() & MSR_SF) | CAPI_PSL_SR_An_HV;
-		ctx->elem->common->pid = cpu_to_be32(0);
+		ctx->elem->common.pid = cpu_to_be32(0);
 	}
-	ctx->elem->common->tid = cpu_to_be32(0);
+	ctx->elem->common.tid = cpu_to_be32(0);
 	ctx->elem->sr = cpu_to_be64(sr);
 
 	ctx->elem->common.csrp = cpu_to_be64(0); /* disable */
 	ctx->elem->common.aurp0 = cpu_to_be64(0); /* disable */
 	ctx->elem->common.aurp1 = cpu_to_be64(0); /* disable */
 
-	if ((result = capi_alloc_sst(ctx->afu, &sstp0, &sstp1)))
+	if ((result = capi_alloc_sst(ctx, &sstp0, &sstp1)))
 		return result;
 
 	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
@@ -484,7 +487,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	ctx->elem->common.sstp1 = cpu_to_be64(sstp1);
 
 	for (i = 0; i < 4; i++) {
-		ctx->elem->ivte.offsets[i] = cpu_to_be16(afu->hwirq[i] & 0xffff);
+		ctx->elem->ivte.offsets[i] = cpu_to_be16(ctx->hwirq[i] & 0xffff);
 		ctx->elem->ivte.ranges[i] = cpu_to_be16(1);
 	}
 
@@ -497,11 +500,13 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 }
 
 static int __maybe_unused
-init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
+init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 			      u64 wed, u64 amr)
 {
+	struct capi_afu_t * afu = ctx->afu;
 	u64 sr, sstp0, sstp1;
 	int result;
+
 
 	/* Ensure AFU is disabled */
 	afu_disable(afu);
@@ -540,36 +545,23 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 	capi_p2n_write(afu, CAPI_AURP0_An, 0);       /* disable */
 	capi_p2n_write(afu, CAPI_AURP1_An, 0);       /* disable */
 
-	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1)))
+	if ((result = capi_alloc_sst(ctx, &sstp0, &sstp1)))
 		return result;
 
 	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
-	capi_prefault(afu, wed);
+	capi_prefault(ctx, wed);
 
 	capi_write_sstp(afu, sstp0, sstp1);
-	if (CAIA_VERSION < 11) {
-		/* handle older versions of CAIA in the lab for now */
-		/* fixme remove this */
-		const capi_p1n_reg_t CAPI_PSL_IVTE_Limit_An_OLD = {0xA8};
-		const capi_p2n_reg_t CAPI_PSL_IVTE_An_OLD = {0x80};
-		capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An_OLD, 0);
-		capi_p2n_write(afu, CAPI_PSL_IVTE_An_OLD,
-			       ((afu->hwirq[0] & 0xffff) << 48) |
-			       ((afu->hwirq[1] & 0xffff) << 32) |
-			       ((afu->hwirq[2] & 0xffff) << 16) |
-			       (afu->hwirq[3] & 0xffff));
-	} else {
-		capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An,
-			       (1ULL << 48) |
-			       (1ULL << 32) |
-			       (1ULL << 16) |
-			       1ULL);
-		capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An,
-			       ((afu->hwirq[0] & 0xffff) << 48) |
-			       ((afu->hwirq[1] & 0xffff) << 32) |
-			       ((afu->hwirq[2] & 0xffff) << 16) |
-			       (afu->hwirq[3] & 0xffff));
-	}
+	capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An,
+		       (1ULL << 48) |
+		       (1ULL << 32) |
+		       (1ULL << 16) |
+		       1ULL);
+	capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An,
+		       ((ctx->hwirq[0] & 0xffff) << 48) |
+		       ((ctx->hwirq[1] & 0xffff) << 32) |
+		       ((ctx->hwirq[2] & 0xffff) << 16) |
+		       (ctx->hwirq[3] & 0xffff));
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 
@@ -591,21 +583,22 @@ static int detach_process_native(struct capi_context_t *ctx)
 		return -1;
 	if (remove_process_element(ctx))
 		return -1;
+
 //	psl_purge(afu); // ???
 	return 0;
 }
 
-static int get_irq_native(struct capi_afu_t *afu, struct capi_irq_info *info)
+static int get_irq_native(struct capi_context_t *ctx, struct capi_irq_info *info)
 {
 	u64 pidtid;
-	info->dsisr = capi_p2n_read(afu, CAPI_PSL_DSISR_An);
-	info->dar = capi_p2n_read(afu, CAPI_PSL_DAR_An);
-	info->dsr = capi_p2n_read(afu, CAPI_PSL_DSR_An);
-	pidtid = capi_p2n_read(afu, CAPI_PSL_PID_TID_An);
+	info->dsisr = capi_p2n_read(ctx->afu, CAPI_PSL_DSISR_An);
+	info->dar = capi_p2n_read(ctx->afu, CAPI_PSL_DAR_An);
+	info->dsr = capi_p2n_read(ctx->afu, CAPI_PSL_DSR_An);
+	pidtid = capi_p2n_read(ctx->afu, CAPI_PSL_PID_TID_An);
 	info->pid = pidtid >> 32;
 	info->tid = pidtid & 0xffffffff;
-	info->afu_err = capi_p2n_read(afu, CAPI_AFU_ERR_An);
-	info->fir_r_slice = capi_p1n_read(afu, CAPI_PSL_R_FIR_SLICE_An);
+	info->afu_err = capi_p2n_read(ctx->afu, CAPI_AFU_ERR_An);
+	info->fir_r_slice = capi_p1n_read(ctx->afu, CAPI_PSL_R_FIR_SLICE_An);
 	return 0;
 }
 
@@ -623,12 +616,12 @@ static void recover_psl_err(struct capi_afu_t *afu, u64 recov)
 	capi_p1n_write(afu, CAPI_PSL_R_FIR_SLICE_An, recov);
 }
 
-static int ack_irq_native(struct capi_afu_t *afu, u64 tfc, u64 psl_reset_mask)
+static int ack_irq_native(struct capi_context_t *ctx, u64 tfc, u64 psl_reset_mask)
 {
 	if (tfc)
-		capi_p2n_write(afu, CAPI_PSL_TFC_An, tfc);
+		capi_p2n_write(ctx->afu, CAPI_PSL_TFC_An, tfc);
 	if (psl_reset_mask)
-		recover_psl_err(afu, psl_reset_mask);
+		recover_psl_err(ctx->afu, psl_reset_mask);
 
 	return 0;
 }

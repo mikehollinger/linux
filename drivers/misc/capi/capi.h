@@ -338,9 +338,6 @@ struct capi_afu_t {
 
 	/* FIXME: Below items should be in a separate context struct for virtualisation */
 
-	/* Only used in PR mode */
-	u64 process_token;
-
 	struct ida pe_index_ida;
 	spinlock_t spa_lock;
 };
@@ -355,7 +352,7 @@ struct capi_context_t {
 	int ph; /* process handle/process element index */
 
 	/* Problem state MMIO */
-	phys_addr_t *psn_phys;
+	phys_addr_t psn_phys;
 	u64 psn_size;
 
 	struct capi_sste *sstp;
@@ -364,6 +361,8 @@ struct capi_context_t {
 	wait_queue_head_t wq;
 	struct pid *pid;
 	spinlock_t lock; /* Protects pending_irq_mask, pending_fault and fault_addr */
+	/* Only used in PR mode */
+	u64 process_token;
 
 	u8 pending_irq_mask; /* Accessed from IRQ context */
 	bool pending_fault;
@@ -381,7 +380,7 @@ struct capi_context_t {
 	u64 dsisr;
 	u64 dar;
 
-	struct capi_process_element *elem
+	struct capi_process_element *elem;
 };
 
 struct capi_driver_ops;
@@ -400,7 +399,7 @@ struct capi_t {
 	struct capi_afu_t slice[CAPI_MAX_SLICES];
 	struct cdev cdev;
 	struct cdev afu_cdev;
-	struct cdev afu_ctx_cdev;
+	struct cdev afu_master_cdev;
 	struct device device;
 	int slices;
 	struct dentry *trace;
@@ -412,7 +411,7 @@ struct capi_t {
 struct capi_driver_ops {
 	int (*init_adapter) (struct capi_t *adapter);
 	int (*init_afu) (struct capi_afu_t *afu);
-	int (*alloc_irq) (struct capi_t *adapter, unsigned int num);
+	int (*alloc_irqs) (struct capi_t *adapter, unsigned int num);
 	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
 };
 
@@ -421,6 +420,7 @@ struct capi_ivte_ranges {
 	__be16 ranges[4];
 };
 
+/* common == phyp + powernv */
 struct capi_process_element_common {
 	__be32 tid;
 	__be32 pid;
@@ -434,6 +434,7 @@ struct capi_process_element_common {
 	__be64 wed;
 } __packed;
 
+/* just powernv */
 struct capi_process_element {
 	__be64 sr;
 	__be64 SPOffset;
@@ -514,19 +515,19 @@ void del_capi_dev(struct capi_t *capi, int adapter_num);
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void capi_unmap_irq(unsigned int virq, void *cookie);
-void afu_register_irqs(struct capi_afu_t *afu, u32 start, u32 count);
-void afu_enable_irqs(struct capi_afu_t *afu);
-void afu_disable_irqs(struct capi_afu_t *afu);
-void afu_release_irqs(struct capi_afu_t *afu);
+void afu_register_irqs(struct capi_context_t *ctx, u32 start, u32 count);
+void afu_enable_irqs(struct capi_context_t *ctx);
+void afu_disable_irqs(struct capi_context_t *ctx);
+void afu_release_irqs(struct capi_context_t *ctx);
 irqreturn_t capi_irq_err(int irq, void *data);
 irqreturn_t capi_slice_irq_err(int irq, void *data);
 
-int capi_handle_segment_miss(struct capi_afu_t *afu, u64 ea);
+int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea);
 void capi_handle_page_fault(struct work_struct *work);
-void capi_prefault(struct capi_afu_t *afu, u64 wed);
+void capi_prefault(struct capi_context_t *ctx, u64 wed);
 
 struct capi_t * get_capi_adapter(int num);
-int capi_alloc_sst(struct capi_afu_t *afu, u64 *sstp0, u64 *sstp1);
+int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1);
 
 void init_capi_hv(void);
 void init_capi_native(void);
@@ -562,10 +563,10 @@ struct capi_backend_ops {
 
 	int (*init_process) (struct capi_context_t *ctx, bool kernel,
 			               u64 wed, u64 amr);
-	int (*detach_process) (struct capi_afu_t *afu);
+	int (*detach_process) (struct capi_context_t *ctx);
 
-	int (*get_irq) (struct capi_afu_t *afu, struct capi_irq_info *info);
-	int (*ack_irq) (struct capi_afu_t *afu, u64 tfc, u64 psl_reset_mask);
+	int (*get_irq) (struct capi_context_t *ctx, struct capi_irq_info *info);
+	int (*ack_irq) (struct capi_context_t *ctx, u64 tfc, u64 psl_reset_mask);
 
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);

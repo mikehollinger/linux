@@ -35,6 +35,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	struct capi_context_t *ctx;
 	int i;
 	int irq_count = CAPI_SLICE_IRQS; /* FIXME - minimum provided in afu descriptor, userspace may request more */
+	irq_hw_number_t irq_start;
 
 	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
 
@@ -50,27 +51,28 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 
 	file->private_data = (void *)ctx;
 
-	ctx->afu->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
+	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
 	/* FIXME: Move these to afu context initialiser */
-	init_waitqueue_head(&ctx->afu->wq);
-	spin_lock_init(&ctx->afu->lock);
+	init_waitqueue_head(&ctx->wq);
+	spin_lock_init(&ctx->lock);
 	ctx->pending_irq_mask = 0;
 
 	ctx->pending_fault = false;
 	ctx->pending_afu_err = false;
 
-	i = ida_simple_get(&ctx->afu->pe_index_ida, 0, afu->max_procs, GFP_KERNEL);
+	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
+			   ctx->afu->max_procs, GFP_KERNEL);
 	if (i < 0)
 		return i;
 	ctx->ph = i;
-	ctx->elem = &afu->spa[i];
+	ctx->elem = &ctx->afu->spa[i];
 
 	/* FIXME: Use capi_alloc_hwirqs() to allocate four ranges instead...
 	 * FIXME: Assign all PSL IRQs to same IRQ to reduce wastage
 	 * FIXME: Will be completely broken on phyp & BML/Mambo until we add an irq allocator for them */
 	BUG_ON(!ctx->afu->adapter->driver);
-	irq_start = ctx->afu->adapter->driver->alloc_hwirqs(ctx->afu->adapter, irq_count);
+	irq_start = ctx->afu->adapter->driver->alloc_irqs(ctx->afu->adapter, irq_count);
 	afu_register_irqs(ctx, irq_start, irq_count);
 
 	return 0;
@@ -78,13 +80,13 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 static int
 afu_open(struct inode *inode, struct file *file)
 {
-	__afu_open(inode, file, true);
+	return __afu_open(inode, file, true);
 }
 
 static int
 afu_ctx_open(struct inode *inode, struct file *file)
 {
-	__afu_open(inode, file, false);
+	return __afu_open(inode, file, false);
 }
 
 
@@ -156,10 +158,8 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
                         if (copy_from_user(&work, uwork, sizeof(struct capi_ioctl_load_afu_image)))
                                 return -EFAULT;
 
-			result = capi_ops->load_afu_image(afu, work.vaddress, work.length);
-			if(result)
-				afu->enabled = false;
-			return result;
+			// FIXME: check no one is using this
+			return capi_ops->load_afu_image(ctx->afu, work.vaddress, work.length);
 		}
 	}
 	return -EINVAL;
@@ -188,7 +188,7 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	pr_devel("%s: mmio physical: %llx\n", __FUNCTION__, ctx->psn_phys);
 	/* FIXME: Return error if virtualised AFU */
 	vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
-	return vm_iomap_memory(vm, atx->psn_phys, len);
+	return vm_iomap_memory(vm, ctx->psn_phys, len);
 }
 
 static unsigned int
@@ -200,15 +200,15 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 
 	pr_devel("afu_poll\n");
 
-	poll_wait(file, &ctx->wq, poll); fixme per context wq/lock/below?;
+	poll_wait(file, &ctx->wq, poll);
 
 	pr_devel("afu_poll wait done\n");
 
 	spin_lock_irqsave(&ctx->lock, flags);
-	if (ctx->pending_irq_mask || ctx>pending_fault ||
+	if (ctx->pending_irq_mask || ctx->pending_fault ||
 	    ctx->pending_afu_err)
 		mask |= POLLIN | POLLRDNORM;
-	spin_unlock_irqrestore(&ctx>lock, flags);
+	spin_unlock_irqrestore(&ctx->lock, flags);
 
 	pr_devel("afu_poll returning %#x\n", mask);
 

@@ -52,7 +52,7 @@ void capi_handle_page_fault(struct work_struct *work)
 	if (result) {
 		pr_devel("Page fault failed: %#x\n", result);
 		/* Any situation where we should write C to retry later? */
-		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_AE, 0);
+		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
 
 		spin_lock_irqsave(&ctx->lock, flags);
 		ctx->pending_fault = true;
@@ -78,7 +78,7 @@ void capi_handle_page_fault(struct work_struct *work)
 	up_read(&mm->mmap_sem);
 
 	pr_devel("Page fault successfully handled!\n");
-	capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_R, 0);
+	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
 
 	/* TODO: Accounting */
 out:
@@ -338,7 +338,7 @@ int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea)
 	pr_devel("CAPI interrupt: Segment not found, ea %#llx\n", ea);
 
 	if (rc) {
-		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_AE, 0);
+		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
 
 		spin_lock_irqsave(&ctx->lock, flags);
 		ctx->pending_fault = true;
@@ -350,7 +350,7 @@ int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea)
 		capi_load_segment(ctx, esid_data, vsid_data);
 
 		mb(); /* Not sure if I need this */
-		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_R, 0);
+		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
 
 		/* TODO: possibly hash_preload ea */
 	}

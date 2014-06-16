@@ -22,15 +22,15 @@ static irqreturn_t handle_psl_slice_error(struct capi_context_t *ctx, u64 dsisr,
 	pr_devel("CAPI interrupt: PSL Error (implementation specific, recoverable: %#.16llx)\n", fir_recov_slice);
 
 	if (fir_recov_slice)
-		return capi_ops->ack_irq(ctx->afu, 0, fir_recov_slice);
+		return capi_ops->ack_irq(ctx, 0, fir_recov_slice);
 
 	if (cpu_has_feature(CPU_FTR_HVMODE)) { /* TODO: Refactor */
 		pr_crit("STOPPING CAPI TRACE\n");
 		capi_stop_trace(ctx->afu->adapter);
 
-		fir1 = capi_p1_read(afu->adapter, CAPI_PSL_FIR1);
-		fir2 = capi_p1_read(afu->adapter, CAPI_PSL_FIR2);
-		fir_slice = capi_p1n_read(afu, CAPI_PSL_FIR_SLICE_An);
+		fir1 = capi_p1_read(ctx->afu->adapter, CAPI_PSL_FIR1);
+		fir2 = capi_p1_read(ctx->afu->adapter, CAPI_PSL_FIR2);
+		fir_slice = capi_p1n_read(ctx->afu, CAPI_PSL_FIR_SLICE_An);
 
 		pr_warn("PSL_FIR1: 0x%.16llx\nPSL_FIR2: 0x%.16llx\nPSL_FIR_SLICE_An: 0x%.16llx\nPSL_FIR_RECOV_SLICE_An: 0x%.16llx\n",
 				fir1, fir2, fir_slice, fir_recov_slice);
@@ -48,8 +48,6 @@ irqreturn_t capi_slice_irq_err(int irq, void *data)
 
 	WARN(irq, "CAPI SLICE ERROR interrupt %i\n", irq);
 
-	if (afu->pid)
-		freeze_afu_owner(afu);
 	serr = capi_p1n_read(afu, CAPI_PSL_SERR_An);
 	fir_slice = capi_p1n_read(afu, CAPI_PSL_FIR_SLICE_An);
 	fir_recov_slice = capi_p1n_read(afu, CAPI_PSL_R_FIR_SLICE_An);
@@ -94,7 +92,7 @@ static irqreturn_t capi_irq(int irq, void *data)
 	u64 dsisr, dar;
 	int result;
 
-	if ((result = capi_ops->get_irq(ctx->afu, &irq_info))) {
+	if ((result = capi_ops->get_irq(ctx, &irq_info))) {
 		WARN(1, "Unable to get CAPI IRQ Info: %i\n", result);
 		return IRQ_NONE;
 	}
@@ -137,7 +135,7 @@ static irqreturn_t capi_irq(int irq, void *data)
 		spin_unlock(&ctx->lock);
 
 		wake_up_all(&ctx->wq);
-		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_A, 0);
+		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_A, 0);
 	}
 	if (dsisr & CAPI_PSL_DSISR_An_OC)
 		pr_devel("CAPI interrupt: OS Context Warning\n");
@@ -163,7 +161,6 @@ static irqreturn_t capi_irq(int irq, void *data)
 static irqreturn_t capi_irq_afu(int irq, void *data, int ivte)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)data;
-	int ivte = 0;
 
 	/* FIXME calculate AFU irq number from IVTE ranges */
 

@@ -305,7 +305,7 @@ static int _alloc_hwirqs(struct pci_dev *dev, int num)
 	return phb->msi_base + hwirq;
 }
 
-static int alloc_hwirqs(struct capi_t *adapter, int num)
+static int alloc_hwirqs(struct capi_t *adapter, unsigned int num)
 {
 	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
 	return _alloc_hwirqs(dev, num);
@@ -314,7 +314,7 @@ static int alloc_hwirqs(struct capi_t *adapter, int num)
 static struct capi_driver_ops capi_pci_driver_ops = {
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
-	.alloc_irq = alloc_hwirqs,
+	.alloc_irqs = alloc_hwirqs,
 	.setup_irq = setup_capi_msi,
 };
 
@@ -581,6 +581,9 @@ int init_capi_pci(struct pci_dev *dev)
 					0x00FFFFFFFFFFFFFFUL) * 4096;
 			/* FIXME check PerProcessPSA_control to see if above
 			 * needed */
+			WARN_ON(afu->psn_size < (afu->pp_offset +
+						afu->pp_size*afu->max_procs));
+			WARN_ON(afu->pp_size < PAGE_SIZE);
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		} else
