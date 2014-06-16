@@ -90,7 +90,7 @@ afu_release(struct inode *inode, struct file *file)
 	 * finished and no more interrupts are possible */
 	/* FIXME: If we opened it but never started it, this will WARN */
 	/* FIXME: check this is the last context to shut down */
-	capi_ops->detach_process(afu);
+	WARN_ON(capi_ops->detach_process(ctx));
 
 	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
 

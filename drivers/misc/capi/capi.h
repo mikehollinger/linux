@@ -221,6 +221,12 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_SSTP1_An_STVA_L_MASK (~((1ull << (63-55))-1))
 #define CAPI_SSTP1_An_V              (1ull << (63-63))
 
+/****** CAPI_SLBIA ******************************************************/
+#define CAPI_SLBIA_IQ_ALL		(0ull) /* Inv qualifier (write) */
+#define CAPI_SLBIA_IQ_LPID		(1ull) /* Inv qualifier (write) */
+#define CAPI_SLBIA_IQ_LPIDPID		(3ull) /* Inv qualifier (write) */
+#define CAPI_SLBIA_P			(1ull) /* Pending (read) */
+
 /****** CAPI_PSL_DSISR_An ****************************************************/
 #define CAPI_PSL_DSISR_An_DS (1ull << (63-0))  /* Segment not found */
 #define CAPI_PSL_DSISR_An_DM (1ull << (63-1))  /* PTE not found (See also: M) or protection fault */

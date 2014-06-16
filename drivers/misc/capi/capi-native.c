@@ -297,11 +297,12 @@ add_process_element(struct capi_context_t *ctx)
 {
 	u64 state;
 
-	pr_devel("%s Adding pe_handle=0x%llx\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Adding pe=0x%llx\n", __FUNCTION__, ctx->ph);
 
 	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
 	smp_wmb();
-	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_ADD | 0 | ctx->ph);
+	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_ADD |
+						     0 | ctx->ph);
 	smp_mb();
 	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | ctx->ph);
 	while (1) {
@@ -311,13 +312,88 @@ add_process_element(struct capi_context_t *ctx)
 			return -1;
 		}
 		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
-		    (CAPI_SPA_SW_CMD_ADD  | CAPI_SPA_SW_STATE_ADDED | pe_handle(afu, elem))) {
+		    (CAPI_SPA_SW_CMD_ADD  | CAPI_SPA_SW_STATE_ADDED | ctx->ph))
+			break;
+		cpu_relax();
+	}
+
+	return 0;
+}
+
+static int
+terminate_process_element(struct capi_context_t *ctx)
+{
+
+	/* fast path terminate if it's already invalid */
+	if !(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V))
+	     return 0;
+
+	pr_devel("%s Terminate pe=0x%llx\n", __FUNCTION__, ctx->ph);
+	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V |
+						CAPI_PE_SOFTWARE_STATE_T);
+	smp_wmb();
+	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_TERMINATE |
+						     0 | ctx->ph);
+	smp_mb();
+	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_TERMINATE | ctx->ph);
+	while (1) {
+		state = be64_to_cpup(ctx->afu->sw_command_status);
+		if (state == ~0ULL) {
+			pr_err("capi: Error adding process element to AFU\n");
+			return -1;
+		}
+		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
+		    (CAPI_SPA_SW_CMD_TERMINATE | CAPI_SPA_SW_STATE_TERMINATED | ctx->ph))
+			break;
+		cpu_relax();
+	}
+	ctx->elem->software_state = cpu_to_be32(0);
+}
+
+static void
+slb_invalid(struct capi_context_t *ctx)
+{
+	/* FIXME use per slice version of SLBIA? */
+	struct capi_t *adapter = ctx->afu->adapter;
+	u64 slbia
+
+	capi_p1_write(adapter, CAPI_PSL_LBISEL, (ctx->pid << 32) | ctx->lpid);
+	capi_p1_write(adapter, CAPI_PSL_SLBIA, CAPI_SLBIA_IQ_LPIDPID);
+
+	while (1) {
+		slbia = capi_p1_read(adapter, CAPI_PSL_SLBIA);
+		if !(slbia & CAPI_SLBIA_P)
+			break;
+		cpu_relax();
+	}
+	/* TODO: assume TLB is already invalidated via broadcast tlbie */
+}
+
+/* TODO: Make sure all operations on the linked list are serialised to prevent
+ * races on SPA->sw_command_status */
+static int
+remove_process_element(struct capi_context_t *ctx)
+{
+	pr_devel("%s remove pe=0x%llx\n", __FUNCTION__, ctx->ph);
+
+	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_REMOVE |
+						     0 | ctx->ph);
+	smp_mb();
+	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_REMOVE | ctx->ph);
+	while (1) {
+		state = be64_to_cpup(ctx->afu->sw_command_status);
+		if (state == ~0ULL) {
+			pr_err("capi: Error adding process element to AFU\n");
+			return -1;
+		}
+		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
+		    (CAPI_SPA_SW_CMD_REMOVE | CAPI_SPA_SW_STATE_REMOVED | ctx->ph)) {
 			break;
 		}
 		cpu_relax();
 	}
 
-	return 0;
+	slb_invalid(ctx);
 }
 
 static int
@@ -481,11 +557,13 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 	return 0;
 }
 
-static int detach_process_native(struct capi_afu_t *afu)
+static int detach_process_native(struct capi_context_t *ctx)
 {
- FIXME: LLCMD remove the PE
+	if (terminate_process_element(ctx))
+		return -1;
+	if (remove_process_element(ctx))
+		return -1;
 //	psl_purge(afu); // ???
-		
 	return 0;
 }
 
