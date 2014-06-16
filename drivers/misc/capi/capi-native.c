@@ -14,7 +14,7 @@
 #include "capi.h"
 #include "capi_hcalls.h"
 
-static int afu_reset(struct capi_afu_t *afu)
+int afu_reset(struct capi_afu_t *afu)
 {
 	u64 AFU_Cntl;
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);

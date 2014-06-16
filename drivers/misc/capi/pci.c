@@ -467,6 +467,8 @@ fail:
 }
 #endif
 
+extern int afu_reset(struct capi_afu_t *afu); // FIXME remove
+
 int init_capi_pci(struct pci_dev *dev)
 {
 	u64 p1_base, p1_size;
@@ -568,8 +570,12 @@ int init_capi_pci(struct pci_dev *dev)
 			return rc;
 		}
 
+
 #if 1 /* PSL bug doesn't allow us to read the AFU descriptor until the AFU is enabled, supposed to be fixed in PSL 185 */
 		if (afu->afu_desc_mmio) {
+			pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
+//			capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_Process);
+			afu_reset(afu); // HACK should be fixed in 185 but isn't 
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
 			afu->pp_irqs = _capi_reg_read(afu_desc + 0x0) >> (63-15);
 			afu->num_procs = _capi_reg_read(afu_desc + 0x0) >> (63-31) & 0xffffull;
