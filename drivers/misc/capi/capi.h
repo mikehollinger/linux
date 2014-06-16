@@ -122,7 +122,7 @@ static const capi_p2n_reg_t CAPI_PSL_DAR_An     = {0x068};
 static const capi_p2n_reg_t CAPI_PSL_DSR_An     = {0x070};
 static const capi_p2n_reg_t CAPI_PSL_TFC_An     = {0x078};
 static const capi_p2n_reg_t CAPI_PSL_PEHandle_An = {0x080};
-static const capi_p2n_reg_t CAPI_PSL_ErrStat_An = {0x088};
+static const capi_p2n_reg_t CAPI_PSL_ErrStat_An = {0x088}; /* TODO: Print out this register on PSL error */
 /* AFU Registers */
 static const capi_p2n_reg_t CAPI_AFU_Cntl_An    = {0x090};
 static const capi_p2n_reg_t CAPI_AFU_ERR_An     = {0x098};
@@ -279,7 +279,8 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_SPA_SW_LINK_MASK        0x000000000000ffffULL
 
 #define CAPI_MAX_SLICES 4
-#define CAPI_SLICE_IRQS 4
+#define CAPI_SLICE_IRQS 4 /* FIXME: DELETE THIS AND USE AFU DESCRIPTOR VALUE */
+#define CAPI_IRQ_RANGES 4
 #define MAX_AFU_MMIO_REGS 3
 
 /* CAPI character device info */
@@ -320,9 +321,6 @@ struct capi_afu_t {
 	u64 pp_size;
 	void __iomem *afu_desc_mmio;
 	u64 afu_desc_size;
-	u32 irq_count;
-	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
-	unsigned int virq[CAPI_SLICE_IRQS];
 	struct capi_t *adapter;
 	struct device device, device_master;
 
@@ -339,11 +337,6 @@ struct capi_afu_t {
 	__be64 *sw_command_status;
 
 	/* FIXME: Below items should be in a separate context struct for virtualisation */
-
-	/* XXX: Is it possible to need multiple work items at once? */
-	struct work_struct work;
-	u64 dsisr;
-	u64 dar;
 
 	/* Only used in PR mode */
 	u64 process_token;
@@ -378,6 +371,16 @@ struct capi_context_t {
 	u64 afu_err;
 	bool pending_afu_err;
 
+	/* FIXME: The IRQs need to be reworked to support > 4 per context */
+	u32 irq_count;
+	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
+	unsigned int virq[CAPI_SLICE_IRQS];
+
+	/* XXX: Is it possible to need multiple work items at once? */
+	struct work_struct work;
+	u64 dsisr;
+	u64 dar;
+
 	struct capi_process_element *elem
 }
 
@@ -410,6 +413,7 @@ struct capi_t {
 struct capi_driver_ops {
 	int (*init_adapter) (struct capi_t *adapter);
 	int (*init_afu) (struct capi_afu_t *afu);
+	int (*alloc_irq) (struct capi_t *adapter, unsigned int num);
 	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
 };
 
@@ -501,7 +505,6 @@ int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 afu_desc, u64 afu_desc_size);
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
-		  irq_hw_number_t irq_start, irq_hw_number_t irq_count,
 		  irq_hw_number_t err_irq);
 
 int register_capi_dev(void);
@@ -556,7 +559,6 @@ struct capi_backend_ops {
 			     irq_hw_number_t err_hwirq);
 	/* FIXME: Clean this up */
 	int (*init_afu) (struct capi_afu_t *afu, u64 handle,
-			 irq_hw_number_t irq_start, irq_hw_number_t irq_count,
 			 irq_hw_number_t err_irq);
 
 	int (*init_process) (struct capi_context_t *ctx, bool kernel,

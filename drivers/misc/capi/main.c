@@ -225,11 +225,10 @@ EXPORT_SYMBOL(capi_map_slice_regs);
 
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
-		  irq_hw_number_t irq_start, irq_hw_number_t irq_count,
 		  irq_hw_number_t err_irq)
 {
-	pr_devel("capi_init_afu: slice: %i, handle: %#llx, irqs: %#lx %#lx, err_irq: %#lx\n",
-			slice, handle, irq_start, irq_count, err_irq);
+	pr_devel("capi_init_afu: slice: %i, handle: %#llx, err_irq: %#lx\n",
+			slice, handle, err_irq);
 
 	afu->adapter = adapter;
 
@@ -256,8 +255,7 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		return -EFAULT;
 	}
 	/* FIXME: Do this first, and only then create the char dev */
-	return capi_ops->init_afu(afu, handle,
-			irq_start, irq_count, err_irq);
+	return capi_ops->init_afu(afu, handle, err_irq);
 }
 EXPORT_SYMBOL(capi_init_afu);
 

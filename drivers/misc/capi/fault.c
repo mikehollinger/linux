@@ -23,26 +23,26 @@
 
 void capi_handle_page_fault(struct work_struct *work)
 {
-	struct capi_afu_t *afu = container_of(work, struct capi_afu_t, work);
-	u64 dsisr = afu->dsisr;
-	u64 dar = afu->dar;
+	struct capi_context_t *ctx = container_of(work, struct capi_context_t, work);
+	u64 dsisr = ctx->dsisr;
+	u64 dar = ctx->dar;
 	unsigned flt = 0;
 	int result;
 	unsigned long flags;
 	struct task_struct *task;
 	struct mm_struct *mm;
 
-	pr_devel("CAPI BOTTOM HALF handling page fault for afu %p. "
-		"DSISR: %#llx DAR: %#llx\n", afu, dsisr, dar);
+	pr_devel("CAPI BOTTOM HALF handling page fault for afu context %p. "
+		"DSISR: %#llx DAR: %#llx\n", ctx, dsisr, dar);
 
-	task = get_pid_task(afu->pid, PIDTYPE_PID);
+	task = get_pid_task(ctx->pid, PIDTYPE_PID);
 	if (!task) {
-		pr_devel("capi_handle_page_fault unable to get task %i\n", pid_nr(afu->pid));
+		pr_devel("capi_handle_page_fault unable to get task %i\n", pid_nr(ctx->pid));
 		return;
 	}
 	mm = get_task_mm(task);
 	if (!mm) {
-		pr_devel("capi_handle_page_fault unable to get mm %i\n", pid_nr(afu->pid));
+		pr_devel("capi_handle_page_fault unable to get mm %i\n", pid_nr(ctx->pid));
 		goto out1;
 	}
 
@@ -52,14 +52,14 @@ void capi_handle_page_fault(struct work_struct *work)
 	if (result) {
 		pr_devel("Page fault failed: %#x\n", result);
 		/* Any situation where we should write C to retry later? */
-		capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_AE, 0);
+		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_AE, 0);
 
-		spin_lock_irqsave(&afu->lock, flags);
-		afu->pending_fault = true;
-		afu->fault_addr = dar;
-		spin_unlock_irqrestore(&afu->lock, flags);
+		spin_lock_irqsave(&ctx->lock, flags);
+		ctx->pending_fault = true;
+		ctx->fault_addr = dar;
+		spin_unlock_irqrestore(&ctx->lock, flags);
 
-		wake_up_all(&afu->wq);
+		wake_up_all(&ctx->wq);
 
 		goto out;
 	}
@@ -78,7 +78,7 @@ void capi_handle_page_fault(struct work_struct *work)
 	up_read(&mm->mmap_sem);
 
 	pr_devel("Page fault successfully handled!\n");
-	capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_R, 0);
+	capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_R, 0);
 
 	/* TODO: Accounting */
 out:
@@ -174,15 +174,15 @@ find_free_sste(struct capi_sste *primary_group, bool sec_hash,
  *
  * XXX: check for existing segment? in a wrapper? for prefault?
  */
-static int capi_load_segment(struct capi_afu_t *afu, u64 esid_data, u64 vsid_data)
+static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid_data)
 {
-	unsigned int mask = (afu->sst_size >> 7)-1; /* SSTP0[SegTableSize] */
+	unsigned int mask = (ctx->sst_size >> 7)-1; /* SSTP0[SegTableSize] */
 	bool sec_hash = 1;
 	struct capi_sste *sste;
 	unsigned int hash;
 
 	if (cpu_has_feature(CPU_FTR_HVMODE))
-		sec_hash = !!(capi_p1n_read(afu, CAPI_PSL_SR_An) & CAPI_PSL_SR_An_SC);
+		sec_hash = !!(capi_p1n_read(ctx->afu, CAPI_PSL_SR_An) & CAPI_PSL_SR_An_SC);
 	/* else {
 	 *	It's the inverse of the high bit of the second non-length byte
 	 *	in the sixth optional vector passed in ibm_architecture_vec to
@@ -200,11 +200,11 @@ static int capi_load_segment(struct capi_afu_t *afu, u64 esid_data, u64 vsid_dat
 	else /* 256M */
 		hash = (esid_data >> SID_SHIFT) & mask;
 
-	sste = find_free_sste(afu->sstp + (  hash         << 3), sec_hash,
-			      afu->sstp + ((~hash & mask) << 3), &afu->sst_lru);
+	sste = find_free_sste(ctx->sstp + (  hash         << 3), sec_hash,
+			      ctx->sstp + ((~hash & mask) << 3), &ctx->sst_lru);
 
 	pr_devel("CAPI Populating SST[%li]: %#llx %#llx\n",
-			sste - afu->sstp, vsid_data, esid_data);
+			sste - ctx->sstp, vsid_data, esid_data);
 
 	sste->vsid_data = vsid_data;
 	sste->esid_data = esid_data;
@@ -212,21 +212,21 @@ static int capi_load_segment(struct capi_afu_t *afu, u64 esid_data, u64 vsid_dat
 	return 0;
 }
 
-static void capi_prefault_one(struct capi_afu_t *afu, u64 ea)
+static void capi_prefault_one(struct capi_context_t *ctx, u64 ea)
 {
 	u64 vsid_data, esid_data;
 	int rc;
 	struct task_struct *task;
 	struct mm_struct *mm;
 
-	task = get_pid_task(afu->pid, PIDTYPE_PID);
+	task = get_pid_task(ctx->pid, PIDTYPE_PID);
 	if (!task) {
-		pr_devel("capi_prefault_one unable to get task %i\n", pid_nr(afu->pid));
+		pr_devel("capi_prefault_one unable to get task %i\n", pid_nr(ctx->pid));
 		return;
 	}
 	mm = get_task_mm(task);
 	if (!mm) {
-		pr_devel("capi_prefault_one unable to get mm %i\n", pid_nr(afu->pid));
+		pr_devel("capi_prefault_one unable to get mm %i\n", pid_nr(ctx->pid));
 		put_task_struct(task);
 		return;
 	}
@@ -237,7 +237,7 @@ static void capi_prefault_one(struct capi_afu_t *afu, u64 ea)
 	if (rc)
 		return;
 
-	capi_load_segment(afu, esid_data, vsid_data);
+	capi_load_segment(ctx, esid_data, vsid_data);
 }
 
 static u64 next_segment(u64 ea, u64 vsid_data)
@@ -250,21 +250,21 @@ static u64 next_segment(u64 ea, u64 vsid_data)
 	return ea++;
 }
 
-static void capi_prefault_vma(struct capi_afu_t *afu)
+static void capi_prefault_vma(struct capi_context_t *ctx)
 {
 	u64 ea, vsid_data, esid_data, last_esid_data = 0;
 	struct vm_area_struct *vma;
 	int rc;
 	struct task_struct *task;
 	struct mm_struct *mm;
-	task = get_pid_task(afu->pid, PIDTYPE_PID);
+	task = get_pid_task(ctx->pid, PIDTYPE_PID);
 	if (!task) {
-		pr_devel("capi_prefault_vma unable to get task %i\n", pid_nr(afu->pid));
+		pr_devel("capi_prefault_vma unable to get task %i\n", pid_nr(ctx->pid));
 		return;
 	}
 	mm = get_task_mm(task);
 	if (!mm) {
-		pr_devel("capi_prefault_vm unable to get mm %i\n", pid_nr(afu->pid));
+		pr_devel("capi_prefault_vm unable to get mm %i\n", pid_nr(ctx->pid));
 		goto out1;
 	}
 
@@ -280,7 +280,7 @@ static void capi_prefault_vma(struct capi_afu_t *afu)
 			if (last_esid_data == esid_data)
 				continue;
 
-			capi_load_segment(afu, esid_data, vsid_data);
+			capi_load_segment(ctx, esid_data, vsid_data);
 			last_esid_data = esid_data;
 		}
 	}
@@ -303,33 +303,33 @@ MODULE_PARM_DESC(prefault_how, "How much to prefault on afu start: "
     "0 = none 1 = wed 2 = all currently mapped"
     /* "all wed segments cached (grub afu), all possible ea current slice" */);
 
-void capi_prefault(struct capi_afu_t *afu, u64 wed)
+void capi_prefault(struct capi_context_t *ctx, u64 wed)
 {
 	switch(prefault_how) {
 	case CAPI_PREFAULT_WED:
-		capi_prefault_one(afu, wed);
+		capi_prefault_one(ctx, wed);
 		break;
 	case CAPI_PREFAULT_MAPPED:
-		capi_prefault_vma(afu);
+		capi_prefault_vma(ctx);
 		break;
 	}
 }
 
-int capi_handle_segment_miss(struct capi_afu_t *afu, u64 ea)
+int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea)
 {
 	int rc;
 	unsigned long flags;
 	u64 vsid_data = 0, esid_data = 0;
 	struct task_struct *task;
 	struct mm_struct *mm;
-	task = get_pid_task(afu->pid, PIDTYPE_PID);
+	task = get_pid_task(ctx->pid, PIDTYPE_PID);
 	if (!task) {
-		pr_devel("capi_handle_segment_miss unable to get task %i\n", pid_nr(afu->pid));
+		pr_devel("capi_handle_segment_miss unable to get task %i\n", pid_nr(ctx->pid));
 		return IRQ_HANDLED;
 	}
 	mm = get_task_mm(task);
 	if (!mm) {
-		pr_devel("capi_handle_segment_miss unable to get mm %i\n", pid_nr(afu->pid));
+		pr_devel("capi_handle_segment_miss unable to get mm %i\n", pid_nr(ctx->pid));
 		goto out1;
 	}
 
@@ -338,19 +338,19 @@ int capi_handle_segment_miss(struct capi_afu_t *afu, u64 ea)
 	pr_devel("CAPI interrupt: Segment not found, ea %#llx\n", ea);
 
 	if (rc) {
-		capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_AE, 0);
+		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_AE, 0);
 
-		spin_lock_irqsave(&afu->lock, flags);
-		afu->pending_fault = true;
-		afu->fault_addr = ea;
-		spin_unlock_irqrestore(&afu->lock, flags);
+		spin_lock_irqsave(&ctx->lock, flags);
+		ctx->pending_fault = true;
+		ctx->fault_addr = ea;
+		spin_unlock_irqrestore(&ctx->lock, flags);
 
-		wake_up_all(&afu->wq);
+		wake_up_all(&ctx->wq);
 	} else {
-		capi_load_segment(afu, esid_data, vsid_data);
+		capi_load_segment(ctx, esid_data, vsid_data);
 
 		mb(); /* Not sure if I need this */
-		capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_R, 0);
+		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_R, 0);
 
 		/* TODO: possibly hash_preload ea */
 	}
