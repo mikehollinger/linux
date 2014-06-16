@@ -280,7 +280,7 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 extern dev_t capi_dev;
 extern struct bus_type capi_bus_type;
 #define CAPI_NUM_MINORS 256 /* Total to reserve */
-#define CAPI_DEV_MINORS 8   /* 1 control, up to 4 AFUs, 3 reserved for now */
+#define CAPI_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/slave) */
 
 #if CAIA_VERSION < 11
 struct capi_sste {
@@ -308,18 +308,20 @@ struct capi_afu_t {
 	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
 	u64 psn_size;
+	int pp_irqs;
+	int num_procs;
+	u64 pp_offset;
+	u64 pp_size;
 	void __iomem *afu_desc_mmio;
 	u64 afu_desc_size;
 	u32 irq_count;
 	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
 	unsigned int virq[CAPI_SLICE_IRQS];
 	struct capi_t *adapter;
-	struct device device;
+	struct device device, device_master;
 
-	/* FIXME: Below items should be in a separate context struct for virtualisation */
 
-	struct capi_sste *sstp;
-	unsigned int sst_size, sst_lru;
+	u64 enabled;
 
 	/* Only the first part of the SPA is used for the process element
 	 * linked list. The only other part that software needs to worry about
@@ -330,27 +332,47 @@ struct capi_afu_t {
 	int max_procs;
 	__be64 *sw_command_status;
 
+	/* FIXME: Below items should be in a separate context struct for virtualisation */
+
 	/* XXX: Is it possible to need multiple work items at once? */
 	struct work_struct work;
 	u64 dsisr;
 	u64 dar;
 
-	u64 enabled;
+	/* Only used in PR mode */
+	u64 process_token;
+
+	struct ida pe_index_ida;
+};
+
+/* This is a capi context.  If the PSL is in dedicated mode, there will be one
+ * of these per AFU.  If in AFU directed there can be lots of these. */
+struct capi_context_t {
+	struct capi_afu t *afu;
+
+	bool master;
+
+	int ph; /* process handle/process element index */
+
+	/* Problem state MMIO */
+	phys_addr_t *psn_phys;
+	u64 psn_size;
+
+	struct capi_sste *sstp;
+	unsigned int sst_size, sst_lru;
 
 	wait_queue_head_t wq;
-
 	struct pid *pid;
-
 	spinlock_t lock; /* Protects pending_irq_mask, pending_fault and fault_addr */
+
 	u8 pending_irq_mask; /* Accessed from IRQ context */
 	bool pending_fault;
 	u64 fault_addr;
 	u64 afu_err;
 	bool pending_afu_err;
 
-	/* Only used in PR mode */
-	u64 process_token;
-};
+	struct capi_process_element *elem
+}
 
 
 struct capi_driver_ops;
@@ -369,6 +391,7 @@ struct capi_t {
 	struct capi_afu_t slice[CAPI_MAX_SLICES];
 	struct cdev cdev;
 	struct cdev afu_cdev;
+	struct cdev afu_ctx_cdev;
 	struct device device;
 	int slices;
 	struct dentry *trace;
@@ -389,8 +412,8 @@ struct capi_ivte_ranges {
 };
 
 struct capi_process_element_common {
-	__be32 threadId;
-	__be32 processId;
+	__be32 tid;
+	__be32 pid;
 	__be64 csrp;
 	__be64 aurp0;
 	__be64 aurp1;
@@ -529,10 +552,8 @@ struct capi_backend_ops {
 			 irq_hw_number_t irq_start, irq_hw_number_t irq_count,
 			 irq_hw_number_t err_irq);
 
-	int (*init_dedicated_process) (struct capi_afu_t *afu, bool kernel,
+	int (*init_process) (struct capi_context_t *ctx, bool kernel,
 			               u64 wed, u64 amr);
-	int (*init_afu_directed) (struct capi_afu_t *afu, bool kernel,
-			          u64 wed, u64 amr);
 	int (*detach_process) (struct capi_afu_t *afu);
 
 	int (*get_irq) (struct capi_afu_t *afu, struct capi_irq_info *info);

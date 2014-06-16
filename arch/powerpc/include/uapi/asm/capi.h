@@ -8,11 +8,9 @@
 /* ioctls */
 
 /* Argument *is* WED (DEPRECATED: 32bit applications cannot set full 64bit WED) */
-#define CAPI_OPEN_AND_RUN 0
-#define CAPI_IOCTL_OPEN_AND_RUN    0
 /* Argument is a pointer to a struct capi_ioctl_start_work */
-#define CAPI_IOCTL_START_WORK      1
-#define CAPI_IOCTL_LOAD_AFU_IMAGE  2
+#define CAPI_IOCTL_START_WORK      0
+#define CAPI_IOCTL_LOAD_AFU_IMAGE  1
 
 struct capi_ioctl_start_work {
 	__u64 wed;

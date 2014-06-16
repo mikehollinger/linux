@@ -19,19 +19,20 @@
 #include <asm/copro.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
+#include <linux/idr.h>
 
 #include "capi.h"
 
 dev_t capi_dev;
 
 static int
-afu_open(struct inode *inode, struct file *file)
+__afu_open(struct inode *inode, struct file *file, bool master)
 {
 	int minor = MINOR(inode->i_rdev);
 	int adapter_num = minor / CAPI_DEV_MINORS;
 	int slice = minor % CAPI_DEV_MINORS - 1;
 	struct capi_t *adapter;
-	struct capi_afu_t *afu;
+	struct capi_context_t *afu;
 
 	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
 
@@ -40,43 +41,65 @@ afu_open(struct inode *inode, struct file *file)
 		return -ENODEV;
 	if (slice > adapter->slices)
 		return -ENODEV;
-	afu = &adapter->slice[slice];
 
-	file->private_data = (void *)afu;
+	if (!(ctx = kmalloc(sizeof(struct capi_context_t), GFP_KERNEL)))
+	    return -ENOMEM;
+	ctx->afu = &adapter->slice[slice];
 
-	afu->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
+	file->private_data = (void *)ctx;
+
+	ctx->afu->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
 	/* FIXME: Move these to afu context initialiser */
-	init_waitqueue_head(&afu->wq);
-	spin_lock_init(&afu->lock);
-	afu->pending_irq_mask = 0;
+	init_waitqueue_head(&ctx->afu->wq);
+	spin_lock_init(&ctx->afu->lock);
+	ctx->pending_irq_mask = 0;
 
-	afu->pending_fault = false;
-	afu->pending_afu_err = false;
-	afu->enabled = false;
+	ctx->pending_fault = false;
+	ctx->pending_afu_err = false;
+
+	i = ida_simple_get(&ctx->afu->pe_index_ida, 0, afu->max_procs, GFP_KERNEL);
+	ctx->ph = i;
+	if (i < 0)
+		goto out;
+	ctx->elem = &afu->spa[i];
 
 	return 0;
 }
+static int
+afu_open(struct inode *inode, struct file *file)
+{
+	__afu_open(inode, file, true);
+}
+
+static int
+afu_ctx_open(struct inode *inode, struct file *file)
+{
+	__afu_open(inode, file, false);
+}
+
 
 static int
 afu_release(struct inode *inode, struct file *file)
 {
-	struct capi_afu_t *afu = (struct capi_afu_t *)file->private_data;
+	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 
 	pr_devel("afu_release\n");
 
 	/* FIXME: Shut down AFU, ensure that any running interrupts are
 	 * finished and no more interrupts are possible */
 	/* FIXME: If we opened it but never started it, this will WARN */
-	afu->enabled = false;
-
+	/* FIXME: check this is the last context to shut down */
 	capi_ops->detach_process(afu);
 
-	/* FIXME: Ensure PSL_SSTP is disabled */
-	free_page((u64)afu->sstp);
-	afu->sstp = NULL;
+	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
 
-	put_pid(afu->pid);
+	free_page((u64)ctx->sstp);
+	ctx->sstp = NULL;
+
+	put_pid(ctx->pid);
+
+	kfree(ctx);
 
 	return 0;
 }
@@ -84,11 +107,11 @@ afu_release(struct inode *inode, struct file *file)
 static long
 afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct capi_afu_t *afu = (struct capi_afu_t *)file->private_data;
+	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 	int result;
 
 #if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
-	if (current->mm != afu->mm) {
+	if (current->mm != ctx->afu->mm) {
 		pr_err("CAPI: %s (%i) attempted to perform ioctl on AFU with "
 		       "other memory map!\n", current->comm, current->pid);
 		return -EPERM;
@@ -97,18 +120,6 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	pr_devel("afu_ioctl\n");
 	switch (cmd) {
-#if 0
-		case CAPI_OPEN_AND_RUN:
-		{
-			/* FIXME: If already run[ing], make sure it's stopped
-			 * first, no IRQs pending, etc */
-			pr_devel("afu_ioctl: CAPI_OPEN_AND_RUN: %lx\n", arg);
-			if ((result = capi_ops->init_dedicated_process(afu, false, arg, 0)))
-				return result;
-			afu->enabled = true;
-			return 0;
-		}
-#endif
 		case CAPI_IOCTL_START_WORK:
 		{
 			struct capi_ioctl_start_work __user *uwork =
@@ -122,9 +133,9 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				return -EFAULT;
 			amr = work.amr & mfspr(SPRN_UAMOR);
 
-			if ((result = capi_ops->init_dedicated_process(afu, false, work.wed, amr)))
+			/* fixme me: decide this based on the AFU */
+			if ((result = capi_ops->init_process(ctx, false, work.wed, amr)))
 				return result;
-			afu->enabled = true;
 			return 0;
 		}
 		case CAPI_IOCTL_LOAD_AFU_IMAGE:
@@ -156,38 +167,39 @@ afu_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int
 afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
-	struct capi_afu_t *afu = (struct capi_afu_t *)file->private_data;
+	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 	u64 len = vm->vm_end - vm->vm_start;
-	len = min(len, afu->psn_size);
+	len = min(len, ctx->psn_size);
 
 	/* Can't mmap until the AFU is enabled
 	   FIXME: check on teardown */
-	if (!afu->enabled)
+	if (!ctx->afu->enabled)
 		return -EBUSY;
 
-	pr_devel("%s: afu mmio physical: %llx\n", __FUNCTION__, afu->psn_phys);
+	pr_devel("%s: mmio physical: %llx\n", __FUNCTION__, ctx->psn_phys);
 	/* FIXME: Return error if virtualised AFU */
 	vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
-	return vm_iomap_memory(vm, afu->psn_phys, len);
+	return vm_iomap_memory(vm, atx->psn_phys, len);
 }
 
 static unsigned int
 afu_poll(struct file *file, struct poll_table_struct *poll)
 {
-	struct capi_afu_t *afu = (struct capi_afu_t *)file->private_data;
+	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 	int mask = 0;
 	unsigned long flags;
 
 	pr_devel("afu_poll\n");
 
-	poll_wait(file, &afu->wq, poll);
+	poll_wait(file, &ctx->wq, poll); fixme per context wq/lock/below?;
 
 	pr_devel("afu_poll wait done\n");
 
-	spin_lock_irqsave(&afu->lock, flags);
-	if (afu->pending_irq_mask || afu->pending_fault || afu->pending_afu_err)
+	spin_lock_irqsave(&ctx->lock, flags);
+	if (ctx->pending_irq_mask || ctx>pending_fault ||
+	    ctx->pending_afu_err)
 		mask |= POLLIN | POLLRDNORM;
-	spin_unlock_irqrestore(&afu->lock, flags);
+	spin_unlock_irqrestore(&ctx>lock, flags);
 
 	pr_devel("afu_poll returning %#x\n", mask);
 
@@ -197,7 +209,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 static ssize_t
 afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 {
-	struct capi_afu_t *afu = (struct capi_afu_t *)file->private_data;
+	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 	struct capi_event_uncast raw_event;
 	unsigned long flags;
 	ssize_t size;
@@ -207,64 +219,66 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		return -EINVAL;
 
 	while (1) {
-		spin_lock_irqsave(&afu->lock, flags);
-		if (afu->pending_irq_mask || afu->pending_fault || afu->pending_afu_err)
+		spin_lock_irqsave(&ctx->lock, flags);
+		if (ctx->pending_irq_mask || ctx->pending_fault ||
+		    ctx->pending_afu_err)
 			break;
-		spin_unlock_irqrestore(&afu->lock, flags);
+		spin_unlock_irqrestore(&ctx->lock, flags);
 
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
 
-		prepare_to_wait(&afu->wq, &wait, TASK_INTERRUPTIBLE);
-		if (!(afu->pending_irq_mask || afu->pending_fault || afu->pending_afu_err)) {
+		prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
+		if (!(ctx->pending_irq_mask || ctx->pending_fault ||
+		      ctx->pending_afu_err)) {
 			pr_devel("afu_read going to sleep...\n");
 			schedule();
 			pr_devel("afu_read woken up\n");
 		}
-		finish_wait(&afu->wq, &wait);
+		finish_wait(&ctx->wq, &wait);
 
 		if (signal_pending(current))
 			return -ERESTARTSYS;
 	}
 
 	memset(&raw_event, 0, sizeof(raw_event));
-	if (afu->pending_irq_mask) {
+	if (ctx->pending_irq_mask) {
 		struct capi_event_afu_interrupt *event =
 			(struct capi_event_afu_interrupt *)&raw_event;
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event->header.size = sizeof(struct capi_event_afu_interrupt);
 		event->header.type = CAPI_EVENT_AFU_INTERRUPT;
-		event->level = afu->pending_irq_mask;
+		event->level = ctx->pending_irq_mask;
 
 		/* Only clear the IRQ if we can send the whole event: */
 		if (count >= event->header.size) {
-			afu->pending_irq_mask = 0;
+			ctx->pending_irq_mask = 0;
 		}
-	} else if (afu->pending_fault) {
+	} else if (ctx->pending_fault) {
 		struct capi_event_data_storage *event =
 			(struct capi_event_data_storage *)&raw_event;
 		pr_devel("afu_read delivering data storage fault\n");
 		event->header.size = sizeof(struct capi_event_data_storage);
 		event->header.type = CAPI_EVENT_DATA_STORAGE;
-		event->address = afu->fault_addr;
+		event->address = ctx->fault_addr;
 
 		/* Only clear the fault if we can send the whole event: */
 		if (count >= event->header.size)
-			afu->pending_fault = false;
-	} else if (afu->pending_afu_err) {
+			ctx->pending_fault = false;
+	} else if (ctx->pending_afu_err) {
 		struct capi_event_afu_error *event =
 			(struct capi_event_afu_error *)&raw_event;
 		pr_devel("afu_read delivering afu error\n");
 		event->header.size = sizeof(struct capi_event_afu_error);
 		event->header.type = CAPI_EVENT_AFU_ERROR;
-		event->afu_err = afu->afu_err;
+		event->afu_err = ctx->afu_err;
 
 		/* Only clear the fault if we can send the whole event: */
 		if (count >= event->header.size)
-			afu->pending_afu_err = false;
+			ctx->pending_afu_err = false;
 	} else BUG();
 
-	spin_unlock_irqrestore(&afu->lock, flags);
+	spin_unlock_irqrestore(&ctx->lock, flags);
 
 	size = min(count, (size_t)raw_event.header.size);
 	copy_to_user(buf, &raw_event, size);
@@ -275,14 +289,15 @@ static int
 capi_open(struct inode *inode, struct file *file)
 {
 	int minor = MINOR(inode->i_rdev);
-	int adapter = minor / 8;
+	int adapter = minor / CAPI_DEV_MINORS;
 
 	pr_devel("STUB: capi_open adapter %i\n", adapter);
 	return -EPERM;
 }
 
 /*
- * FIXME TODO: This will eventually be used to enumerate and open the AFUs,
+ * FIXME TODO: This will eventually be used
+to enumerate and open the AFUs,
  * (possibly) reprogram them, etc. For now you have to open the AFUs directly
  * as /dev/capiN
  */
@@ -298,6 +313,17 @@ static const struct file_operations capi_fops = {
 static const struct file_operations afu_fops = {
 	.owner		= THIS_MODULE,
 	.open           = afu_open,
+	.poll		= afu_poll,
+	.read		= afu_read,
+	.release        = afu_release,
+	.unlocked_ioctl = afu_ioctl,
+	.compat_ioctl   = afu_compat_ioctl,
+	.mmap           = afu_mmap,
+};
+
+static const struct file_operations afu_master_fops = {
+	.owner		= THIS_MODULE,
+	.open           = afu_ctx_open,
 	.poll		= afu_poll,
 	.read		= afu_read,
 	.release        = afu_release,
@@ -574,23 +600,30 @@ void unregister_capi_dev(void)
 
 int add_capi_dev(struct capi_t *capi, int adapter_num)
 {
-	int result;
+	int rc;
 	int capi_major = MAJOR(capi_dev);
 	int capi_minor = adapter_num * CAPI_DEV_MINORS;
 	char tmp[32];
 
 	cdev_init(&(capi->cdev), &capi_fops);
+	cdev_init(&(capi->afu_master_cdev), &afu_master_fops);
 	cdev_init(&(capi->afu_cdev), &afu_fops);
 
-	result = cdev_add(&(capi->cdev), MKDEV(capi_major, capi_minor), 1);
-	if (result) {
-		pr_err("Unable to register CAPI character device: %i\n", result);
+	rc = cdev_add(&(capi->cdev), MKDEV(capi_major, capi_minor), 1);
+	if (rc) {
+		pr_err("Unable to register CAPI character device: %i\n", rc);
 		return -1;
 	}
 
-	result = cdev_add(&(capi->afu_cdev), MKDEV(capi_major, capi_minor + 1), capi->slices);
-	if (result) {
-		pr_err("Unable to register CAPI AFU character devices: %i\n", result);
+	rc = cdev_add(&(capi->afu_master_cdev), MKDEV(capi_major, capi_minor + 1), capi->slices);
+	if (rc) {
+		pr_err("Unable to register CAPI AFU master character devices: %i\n", rc);
+		return -1;
+	}
+
+	rc = cdev_add(&(capi->afu_cdev), MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1), capi->slices);
+	if (rc) {
+		pr_err("Unable to register CAPI AFU character devices: %i\n", rc);
 		return -1;
 	}
 
@@ -611,6 +644,7 @@ int add_capi_dev(struct capi_t *capi, int adapter_num)
 void del_capi_dev(struct capi_t *adapter, int adapter_num)
 {
 	cdev_del(&adapter->cdev);
+	cdev_del(&adapter->afu_master_cdev);
 	cdev_del(&adapter->afu_cdev);
 
 	debugfs_remove(adapter->trace);

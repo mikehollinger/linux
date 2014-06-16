@@ -122,6 +122,7 @@ int capi_get_num_adapters(void)
 	return i;
 }
 
+
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the caller fill in the struct and call us? */
 int capi_init_adapter(struct capi_t *adapter,
@@ -143,7 +144,7 @@ int capi_init_adapter(struct capi_t *adapter,
 
 	adapter->driver = driver;
 	adapter->device.parent = NULL; /* FIXME: Set to PHB on Sapphire? */
-	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
+	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num); FIXME;
 	adapter->device.bus = &capi_bus_type;
 	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);
 
@@ -162,6 +163,9 @@ int capi_init_adapter(struct capi_t *adapter,
 		rc = -1;
 		goto out_unlock;
 	}
+
+	for (i = 0; i < adapter->slices; i++)
+		capi_init_afu(&adapter->slice[i]);
 
 	if (add_capi_dev(adapter, adapter_num)) {
 		rc = -1;
@@ -201,6 +205,8 @@ int capi_map_slice_regs(struct capi_afu_t *afu,
 			goto err3;
 	afu->psn_phys = psn_base;
 	afu->psn_size = psn_size;
+	BUG_ON(psn_size < (pp_offset + pp_size*max_procs));
+	BUG_ON(pp_size < PAGE_SIZE);
 	afu->afu_desc_size = afu_desc_size;
 
 	return 0;
@@ -227,16 +233,26 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 
 	afu->adapter = adapter;
 
+	afu->device_master.parent = get_device(&adapter->device);
+	dev_set_name(&afu->device_master, "%s%i", dev_name(&adapter->device), slice + 1);
+	afu->device_master.bus = &capi_bus_type;
+	afu->device_master.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + 1 + slice);
+
+	if (device_register(&afu->device_master)) {
+		/* FIXME: chardev for this AFU should return errors */
+		return -EFAULT;
+	}
+
+
 	afu->device.parent = get_device(&adapter->device);
-	dev_set_name(&afu->device, "%s%i", dev_name(&adapter->device), slice + 1);
+	dev_set_name(&afu->device, "%s%is", dev_name(&adapter->device), slice + 1);
 	afu->device.bus = &capi_bus_type;
-	afu->device.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + 1 + slice);
+	afu->device.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + CAPI_MAX_SLICES + 1 + slice);
 
 	if (device_register(&afu->device)) {
 		/* FIXME: chardev for this AFU should return errors */
 		return -EFAULT;
 	}
-
 	/* FIXME: Do this first, and only then create the char dev */
 	return capi_ops->init_afu(afu, handle,
 			irq_start, irq_count, err_irq);

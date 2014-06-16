@@ -553,6 +553,7 @@ int init_capi_pci(struct pci_dev *dev)
 			afu_desc = p2_base + afu_desc_off + (slice * afu_desc_size);
 		}
 
+
 		if ((rc = capi_map_slice_regs(afu,
 				p1n_base, p1n_size,
 				p2n_base, p2n_size,
@@ -561,12 +562,23 @@ int init_capi_pci(struct pci_dev *dev)
 			return rc;
 		}
 
-#if 0 /* PSL bug doesn't allow us to read the AFU descriptor until the AFU is enabled, supposed to be fixed in PSL 185 */
+#if 1 /* PSL bug doesn't allow us to read the AFU descriptor until the AFU is enabled, supposed to be fixed in PSL 185 */
 		if (afu->afu_desc_mmio) {
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
+			afu->pp_irqs = _capi_reg_read(afu_desc + 0x0) >> (63-15);
+			afu->num_procs = _capi_reg_read(afu_desc + 0x0) >> (63-31) & 0xffffull;
+			// FIXME : check req_prog_model and bugon
+
+
+			afu->pp_offset = _capi_reg_read(afu_desc + 0x38) * 4096;
+			afu->pp_size = (_capi_reg_read(afu_desc + 0x30) &
+					0x00FFFFFFFFFFFFFFUL) * 4096;
+			/* FIXME check PerProcessPSA_control to see if above
+			 * needed */
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
-		}
+		} else
+			BUG(); /* no afu descriptor */
 #endif
 
 		err_hwirq = alloc_hwirqs(dev, 1);

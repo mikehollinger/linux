@@ -196,8 +196,25 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 			return rc;
 	}
 
-	afu_disable(afu);
-	rc = psl_purge(afu);
+	if (alloc_spa(afu)) // FIXME: check we are afu_directed
+		return -ENOMEM;
+
+	init_afu_directed_native() afu specific bit in here;  leave ctx where it is
+
+	/* FIXME move this into afu init  */
+	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
+	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
+	capi_p1n_write(afu, CAPI_PSL_ID_An, CAPI_PSL_ID_An_F | CAPI_PSL_ID_An_L);
+
+	afu_disable(afu); /* FIXME: remove this */
+	if (rc = psl_purge(afu)) /* FIXME: remove this */
+		return rc;
+
+	if ((rc = afu_reset(ctx->afu)))
+		return rc;
+	if ((rc = afu_enable(ctx->afu)))
+		return rc;
+	ctx->afu->enabled = true;
 
 	return rc;
 }
@@ -224,19 +241,26 @@ static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
 	capi_p2n_write(afu, CAPI_SSTP1_An, sstp1);
 }
 
-static int alloc_spa(struct capi_afu_t *afu, int max_procs)
+static int alloc_spa(struct capi_afu_t *afu)
 {
 	u64 spap;
+
+// FIXME do this dynamically.  Now get atleast 512
+#ifdef CONFIG_PPC_64K_PAGES
+	int pages = 2;
+#else
+	int pages = 32;
+#endif
 
 	/* TODO: Calculate required size to fit that many procs and try to
 	 * allocate enough contiguous pages to support it, but fall back to
 	 * less pages if allocation is not possible.
 	 */
-	if (!(afu->spa = (struct capi_process_element *)get_zeroed_page(GFP_KERNEL))) {
+	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, ilog2(pages))) {
 		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
 		return -ENOMEM;
 	}
-	afu->spa_size = PAGE_SIZE;
+	afu->spa_size = PAGE_SIZE + pages;
 
 	/* From the CAIA:
 	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
@@ -251,6 +275,7 @@ static int alloc_spa(struct capi_afu_t *afu, int max_procs)
 	 * careful with our rounding) and solve for n:
 	 */
 	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
+	BUG_ON(afu->max_proc < afu->num_procs);
 
 	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->max_procs + 3) * 128));
 
@@ -260,31 +285,27 @@ static int alloc_spa(struct capi_afu_t *afu, int max_procs)
 	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->max_procs, afu->sw_command_status, spap);
 	capi_p1n_write(afu, CAPI_PSL_SPAP_An, spap);
 
-	return 0;
-}
+	IDA_INIT(afu->pe_index_ida);
 
-static inline u64 pe_handle(struct capi_afu_t *afu,
-			    struct capi_process_element *elem)
-{
-	return ((u64)elem - (u64)&afu->spa[0]) >> 7;
+	return 0;
 }
 
 /* TODO: Make sure all operations on the linked list are serialised to prevent
  * races on SPA->sw_command_status */
 static int
-add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
+add_process_element(struct capi_context_t *ctx)
 {
 	u64 state;
 
-	pr_devel("%s Adding pe_handle=0x%llx\n", __FUNCTION__, pe_handle(afu, elem));
+	pr_devel("%s Adding pe_handle=0x%llx\n", __FUNCTION__, ctx->ph);
 
-	elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
+	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
 	smp_wmb();
-	*afu->sw_command_status = cpu_to_be64(CAPI_SPA_SW_CMD_ADD | 0 | pe_handle(afu, elem));
+	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_ADD | 0 | ctx->ph);
 	smp_mb();
-	capi_p1n_write(afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | pe_handle(afu, elem));
+	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | ctx->ph);
 	while (1) {
-		state = be64_to_cpup(afu->sw_command_status);
+		state = be64_to_cpup(ctx->afu->sw_command_status);
 		if (state == ~0ULL) {
 			pr_err("capi: Error adding process element to AFU\n");
 			return -1;
@@ -300,10 +321,10 @@ add_process_element(struct capi_afu_t *afu, struct capi_process_element *elem)
 }
 
 static int
-init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
-			 u64 wed, u64 amr)
+init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
+			 u64 amr)
 {
-	struct capi_process_element *elem;
+
 	u64 sr, sstp0, sstp1;
 	int result;
 	int i;
@@ -314,21 +335,19 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 	 *   exceeded, etc
 	 */
 
-	if (alloc_spa(afu, 1))
-		return -ENOMEM;
+	if (ctx->master) {
+		ctx->psn_phys = ctx->afu->psn_phys;
+		ctx->psn_size = ctx->afu->psn_size;
+	} else {
+		ctx->psn_phys = ctx->afu->psn_phys +
+			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
+		ctx->psn_size = ctx->afu->pp_psn_size;
+	}
 
-	/* TODO: Find free entry */
-	elem = &afu->spa[0];
-
-	capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_AFU);
-	capi_p1n_write(afu, CAPI_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
-	capi_p1n_write(afu, CAPI_PSL_ID_An, CAPI_PSL_ID_An_F | CAPI_PSL_ID_An_L);
-	pr_devel("PSL_ID: %016llx\n", capi_p1n_read(afu, CAPI_PSL_ID_An));
-
-	elem->ctxtime = cpu_to_be64(0); /* disable */
-	elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
-	elem->haurp = cpu_to_be64(0); /* disable */
-	elem->sdr = cpu_to_be64(mfspr(SPRN_SDR1));
+	ctx->elem->ctxtime = cpu_to_be64(0); /* disable */
+	ctx->elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
+	ctx->elem->haurp = cpu_to_be64(0); /* disable */
+	ctx->elem->sdr = cpu_to_be64(mfspr(SPRN_SDR1));
 
 	sr = CAPI_PSL_SR_An_SC;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
@@ -338,42 +357,37 @@ init_afu_directed_native(struct capi_afu_t *afu, bool kernel,
 		sr |= CAPI_PSL_SR_An_PR | CAPI_PSL_SR_An_R;
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
 			sr |= CAPI_PSL_SR_An_SF;
-		capi_p2n_write(afu, CAPI_PSL_PID_TID_An, (u64)current->pid << 32); /* Not using tid field */
+		ctx->elem->common->pid = cpu_to_be32(current->pid);
 	} else { /* Initialise for kernel */
 		WARN_ONCE(1, "CAPI initialised for kernel, this won't work on GA1 hardware!\n");
 		sr |= (mfmsr() & MSR_SF) | CAPI_PSL_SR_An_HV;
-		capi_p2n_write(afu, CAPI_PSL_PID_TID_An, 0);
+		ctx->elem->common->pid = cpu_to_be32(0);
 	}
-	elem->sr = cpu_to_be64(sr);
+	ctx->elem->common->tid = cpu_to_be32(0);
+	ctx->elem->sr = cpu_to_be64(sr);
 
-	elem->common.csrp = cpu_to_be64(0); /* disable */
-	elem->common.aurp0 = cpu_to_be64(0); /* disable */
-	elem->common.aurp1 = cpu_to_be64(0); /* disable */
+	ctx->elem->common.csrp = cpu_to_be64(0); /* disable */
+	ctx->elem->common.aurp0 = cpu_to_be64(0); /* disable */
+	ctx->elem->common.aurp1 = cpu_to_be64(0); /* disable */
 
-	if ((result = capi_alloc_sst(afu, &sstp0, &sstp1)))
+	if ((result = capi_alloc_sst(ctx->afu, &sstp0, &sstp1)))
 		return result;
 
 	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
-	capi_prefault(afu, wed);
+	capi_prefault(ctx->afu, wed);
 
-	elem->common.sstp0 = cpu_to_be64(sstp0);
-	elem->common.sstp1 = cpu_to_be64(sstp1);
+	ctx->elem->common.sstp0 = cpu_to_be64(sstp0);
+	ctx->elem->common.sstp1 = cpu_to_be64(sstp1);
 
 	for (i = 0; i < 4; i++) {
-		elem->ivte.offsets[i] = cpu_to_be16(afu->hwirq[i] & 0xffff);
-		elem->ivte.ranges[i] = cpu_to_be16(1);
+		ctx->elem->ivte.offsets[i] = cpu_to_be16(afu->hwirq[i] & 0xffff);
+		ctx->elem->ivte.ranges[i] = cpu_to_be16(1);
 	}
 
-	elem->common.amr = cpu_to_be64(amr);
-	elem->common.wed = cpu_to_be64(wed);
+	ctx->elem->common.amr = cpu_to_be64(amr);
+	ctx->elem->common.wed = cpu_to_be64(wed);
 
-
-	if ((result = afu_reset(afu)))
-		return result;
-	if ((result = afu_enable(afu)))
-		return result;
-
-	add_process_element(afu, elem);
+	add_process_element(ctx);
 
 	return 0;
 }
@@ -469,8 +483,9 @@ init_dedicated_process_native(struct capi_afu_t *afu, bool kernel,
 
 static int detach_process_native(struct capi_afu_t *afu)
 {
-	afu_disable(afu);
-	psl_purge(afu);
+ FIXME: LLCMD remove the PE
+//	psl_purge(afu); // ???
+		
 	return 0;
 }
 
@@ -583,8 +598,7 @@ out:
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
-	.init_dedicated_process = init_afu_directed_native,
-	.init_afu_directed = init_afu_directed_native,
+	.init_process = init_afu_directed_process,
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
 	.ack_irq = ack_irq_native,

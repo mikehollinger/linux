@@ -189,7 +189,7 @@ out:
 static const struct capi_backend_ops capi_hv_ops = {
 	.init_adapter = init_adapter_hv,
 	.init_afu = init_afu_hv,
-	.init_dedicated_process = init_dedicated_process_hv,
+//	.init_dedicated_process = init_dedicated_process_hv,
 	.detach_process = detach_process_hv,
 	.get_irq = get_irq_hv,
 	.ack_irq = ack_irq_hv,
