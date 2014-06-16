@@ -97,7 +97,7 @@ static int psl_purge(struct capi_afu_t *afu)
 {
 	u64 PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	u64 PSL_DSISR;
+	u64 dsisr, dar;
 	u64 start, end;
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
@@ -121,9 +121,19 @@ static int psl_purge(struct capi_afu_t *afu)
 			pr_warn("WARNING: PSL Purge timed out!\n");
 			return -EBUSY;
 		}
-		PSL_DSISR = capi_p2n_read(afu, CAPI_PSL_DSISR_An);
-		pr_devel_ratelimited("PSL purging... PSL_CNTL: 0x%.16llx  PSL_DSISR: 0x%.16llx\n", PSL_CNTL, PSL_DSISR);
-		cpu_relax();
+		dsisr = capi_p2n_read(afu, CAPI_PSL_DSISR_An);
+		BUG_ON(dsisr == ~0ULL); /* FIXME: eeh path */
+		pr_devel_ratelimited("PSL purging... PSL_CNTL: 0x%.16llx  PSL_DSISR: 0x%.16llx\n", PSL_CNTL, dsisr);
+		if (dsisr & CAPI_PSL_DSISR_TRANS) {
+			dar = capi_p2n_read(afu, CAPI_PSL_DAR_An);
+			pr_warn("PSL purge terminating pending translation, DSISR: 0x%.16llx, DAR: 0x%.16llx\n", dsisr, dar);
+			capi_p2n_write(afu, CAPI_PSL_TFC_An, CAPI_PSL_TFC_An_AE);
+		} else if (dsisr) {
+			pr_warn("PSL purge acknowledging pending non-translation fault, DSISR: 0x%.16llx\n", dsisr);
+			capi_p2n_write(afu, CAPI_PSL_TFC_An, CAPI_PSL_TFC_An_A);
+		} else {
+			cpu_relax();
+		}
 		PSL_CNTL = capi_p1n_read(afu, CAPI_PSL_SCNTL_An);
 		BUG_ON(PSL_CNTL == ~0ULL); /* FIXME: eeh path */
 	};
