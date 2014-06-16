@@ -167,10 +167,10 @@ static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, void __iomem
 	u64 val;
 
 	val = _capi_reg_read(afu_desc + 0x0);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_ints_per_process", (val & 0xffff000000000000ULL >> (63-15)));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_processes",     (val & 0x0000ffff00000000ULL >> (63-31)));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_afu_CRs",       (val & 0x00000000ffff0000ULL >> (63-48)));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "req_prog_model",       (val & 0x000000000000ffffULL));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_ints_per_process", ((val & 0xffff000000000000ULL) >> (63-15)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_processes",     ((val & 0x0000ffff00000000ULL) >> (63-31)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_afu_CRs",       ((val & 0x00000000ffff0000ULL) >> (63-48)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "req_prog_model",       ((val & 0x000000000000ffffULL)));
 
 	val = _capi_reg_read(afu_desc + 0x8);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
@@ -180,21 +180,21 @@ static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, void __iomem
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
 
 	val = _capi_reg_read(afu_desc + 0x20);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_format (v0.11)", (val & 0xff00000000000000ULL >> (63-7))); /* Reserved >= 0.12 */
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_format (v0.11)", ((val & 0xff00000000000000ULL) >> (63-7))); /* Reserved >= 0.12 */
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_len",            (val & 0x00ffffffffffffffULL));
 
 	val = _capi_reg_read(afu_desc + 0x28);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_offset", val);
 
 	val = _capi_reg_read(afu_desc + 0x30);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_control", (val & 0xff00000000000000ULL >> (63-7)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_control", ((val & 0xff00000000000000ULL) >> (63-7)));
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_length",  (val & 0x00ffffffffffffffULL));
 
 	val = _capi_reg_read(afu_desc + 0x38);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_offset", val);
 
 	val = _capi_reg_read(afu_desc + 0x40);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved",   (val & 0xff00000000000000ULL >> (63-7)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved",   (val & (0xff00000000000000ULL) >> (63-7)));
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_len", (val & 0x00ffffffffffffffULL));
 
 	val = _capi_reg_read(afu_desc + 0x48);
