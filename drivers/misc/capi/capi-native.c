@@ -55,7 +55,7 @@ static int afu_enable(struct capi_afu_t *afu)
 	while ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
 			!= CAPI_AFU_Cntl_An_ES_Enabled) {
 		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: PSL Purge timed out!\n");
+			pr_warn("WARNING: AFU enable timed out!\n");
 			return -EBUSY;
 		}
 		pr_devel_ratelimited("AFU enabling... (0x%.16llx)\n", AFU_Cntl);
@@ -82,7 +82,7 @@ static int afu_disable(struct capi_afu_t *afu)
 	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
 			!= CAPI_AFU_Cntl_An_RS_Complete) {
 		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: PSL Purge timed out!\n");
+			pr_warn("WARNING: PSL disable timed out!\n");
 			return -EBUSY;
 		}
 		pr_devel_ratelimited("AFU disabling... (0x%.16llx)\n", AFU_Cntl);
