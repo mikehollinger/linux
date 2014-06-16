@@ -23,7 +23,6 @@ init_adapter_hv(struct capi_t *adapter, u64 handle,
 
 static int
 init_afu_hv(struct capi_afu_t *afu, u64 handle,
-	    irq_hw_number_t irq_start, irq_hw_number_t irq_count,
 	    irq_hw_number_t unused)
 
 {
@@ -36,8 +35,12 @@ init_afu_hv(struct capi_afu_t *afu, u64 handle,
 		return result;
 	}
 
+#if 0 /* FIXME: afu_register_irqs() is now done in file.c, but we still need
+	 this afu_disable_irqs() in the guest code path only... */
+
 	afu_register_irqs(afu, irq_start, irq_count);
 	afu_disable_irqs(afu);
+#endif
 
 	return 0;
 }

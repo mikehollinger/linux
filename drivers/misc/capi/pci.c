@@ -292,7 +292,7 @@ static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned i
 	return pnv_capi_ioda_msi_setup(phb, dev, hwirq, virq);
 }
 
-static int alloc_hwirqs(struct pci_dev *dev, int num)
+static int _alloc_hwirqs(struct pci_dev *dev, int num)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
@@ -305,10 +305,16 @@ static int alloc_hwirqs(struct pci_dev *dev, int num)
 	return phb->msi_base + hwirq;
 }
 
+static int alloc_hwirqs(struct capi_t *adapter, int num)
+{
+	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
+	return _alloc_hwirqs(dev, num);
+}
 
 static struct capi_driver_ops capi_pci_driver_ops = {
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
+	.alloc_irq = alloc_hwirqs,
 	.setup_irq = setup_capi_msi,
 };
 
@@ -475,7 +481,7 @@ int init_capi_pci(struct pci_dev *dev)
 	u8 nAFUs;
 	int slice;
 	int rc = -EBUSY;
-	int err_hwirq, afu_irq_base;
+	int err_hwirq;
 
 	if (!(wrap = kmalloc(sizeof(struct capi_pci_t), GFP_KERNEL))) {
 		rc = -ENOMEM;
@@ -532,7 +538,7 @@ int init_capi_pci(struct pci_dev *dev)
 		ps_size = 0x2000000;
 	}
 
-	err_hwirq = alloc_hwirqs(dev, 1);
+	err_hwirq = _alloc_hwirqs(dev, 1);
 
 	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
 		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
@@ -581,12 +587,9 @@ int init_capi_pci(struct pci_dev *dev)
 			BUG(); /* no afu descriptor */
 #endif
 
-		err_hwirq = alloc_hwirqs(dev, 1);
+		err_hwirq = _alloc_hwirqs(dev, 1);
 
-		afu_irq_base = alloc_hwirqs(dev, nIRQs + 1);
-
-		if ((rc = capi_init_afu(adapter, afu, slice, 0,
-			      afu_irq_base, nIRQs + 1, err_hwirq))) {
+		if ((rc = capi_init_afu(adapter, afu, slice, 0, err_hwirq))) {
 			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 			goto err4;
 		}

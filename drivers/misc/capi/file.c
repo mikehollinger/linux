@@ -34,6 +34,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	struct capi_t *adapter;
 	struct capi_context_t *ctx;
 	int i;
+	int irq_count = CAPI_SLICE_IRQS; /* FIXME - minimum provided in afu descriptor, userspace may request more */
 
 	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
 
@@ -60,10 +61,17 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	ctx->pending_afu_err = false;
 
 	i = ida_simple_get(&ctx->afu->pe_index_ida, 0, afu->max_procs, GFP_KERNEL);
-	ctx->ph = i;
 	if (i < 0)
-		goto out;
+		return i;
+	ctx->ph = i;
 	ctx->elem = &afu->spa[i];
+
+	/* FIXME: Use capi_alloc_hwirqs() to allocate four ranges instead...
+	 * FIXME: Assign all PSL IRQs to same IRQ to reduce wastage
+	 * FIXME: Will be completely broken on phyp & BML/Mambo until we add an irq allocator for them */
+	BUG_ON(!ctx->afu->adapter->driver);
+	irq_start = ctx->afu->adapter->driver->alloc_hwirqs(ctx->afu->adapter, irq_count);
+	afu_register_irqs(ctx, irq_start, irq_count);
 
 	return 0;
 }

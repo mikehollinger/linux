@@ -14,31 +14,19 @@
 
 #include "capi.h"
 
-/* XXX: Send SIGSTOP to the task that opened the AFU to prevent it doing
- * anything further so we can obtain a trace */
-static void freeze_afu_owner(struct capi_afu_t *afu)
-{
-	struct task_struct *task = get_pid_task(afu->pid, PIDTYPE_PID);
-	pr_crit("SENDING SIGSTOP TO %s (%i)\n", task->comm, task->pid);
-	put_task_struct(task);
-
-	kill_pid(afu->pid, SIGSTOP, 0);
-}
-
 /* XXX: This is implementation specific */
-static irqreturn_t handle_psl_slice_error(struct capi_afu_t *afu, u64 dsisr, u64 fir_recov_slice)
+static irqreturn_t handle_psl_slice_error(struct capi_context_t *ctx, u64 dsisr, u64 fir_recov_slice)
 {
 	u64 fir1, fir2, fir_slice;
 
 	pr_devel("CAPI interrupt: PSL Error (implementation specific, recoverable: %#.16llx)\n", fir_recov_slice);
 
 	if (fir_recov_slice)
-		return capi_ops->ack_irq(afu, 0, fir_recov_slice);
+		return capi_ops->ack_irq(ctx->afu, 0, fir_recov_slice);
 
 	if (cpu_has_feature(CPU_FTR_HVMODE)) { /* TODO: Refactor */
 		pr_crit("STOPPING CAPI TRACE\n");
-		capi_stop_trace(afu->adapter);
-		freeze_afu_owner(afu);
+		capi_stop_trace(ctx->afu->adapter);
 
 		fir1 = capi_p1_read(afu->adapter, CAPI_PSL_FIR1);
 		fir2 = capi_p1_read(afu->adapter, CAPI_PSL_FIR2);
@@ -101,12 +89,12 @@ irqreturn_t capi_irq_err(int irq, void *data)
 
 static irqreturn_t capi_irq(int irq, void *data)
 {
-	struct capi_afu_t *afu = (struct capi_afu_t *)data;
+	struct capi_context_t *ctx = (struct capi_context_t *)data;
 	struct capi_irq_info irq_info;
 	u64 dsisr, dar;
 	int result;
 
-	if ((result = capi_ops->get_irq(afu, &irq_info))) {
+	if ((result = capi_ops->get_irq(ctx->afu, &irq_info))) {
 		WARN(1, "Unable to get CAPI IRQ Info: %i\n", result);
 		return IRQ_NONE;
 	}
@@ -114,20 +102,20 @@ static irqreturn_t capi_irq(int irq, void *data)
 	dsisr = irq_info.dsisr;
 	dar = irq_info.dar;
 
-	pr_devel("CAPI interrupt %i for afu %p. DSISR: %#llx DAR: %#llx\n", irq, afu, dsisr, dar);
+	pr_devel("CAPI interrupt %i for afu context %p. DSISR: %#llx DAR: %#llx\n", irq, ctx, dsisr, dar);
 
 	if (dsisr & CAPI_PSL_DSISR_An_DS)
-		return capi_handle_segment_miss(afu, dar);
+		return capi_handle_segment_miss(ctx, dar);
 	if (dsisr & CAPI_PSL_DSISR_An_DM) {
 		/* XXX: If we aren't in_atomic() we might be able to handle the
 		 * fault immediately, can we at least try to hash_preload? */
 		pr_devel("Scheduling page fault handling for later (in_atomic() = %i)...\n",
 				in_atomic());
 
-		INIT_WORK(&afu->work, capi_handle_page_fault);
-		afu->dsisr = dsisr;
-		afu->dar = dar;
-		schedule_work(&afu->work);
+		INIT_WORK(&ctx->work, capi_handle_page_fault);
+		ctx->dsisr = dsisr;
+		ctx->dar = dar;
+		schedule_work(&ctx->work);
 		return IRQ_HANDLED;
 	}
 
@@ -137,19 +125,19 @@ static irqreturn_t capi_irq(int irq, void *data)
 	if (dsisr & CAPI_PSL_DSISR_An_UR)
 		pr_devel("CAPI interrupt: AURP PTE not found\n");
 	if (dsisr & CAPI_PSL_DSISR_An_PE)
-		return handle_psl_slice_error(afu, dsisr, irq_info.fir_r_slice);
+		return handle_psl_slice_error(ctx, dsisr, irq_info.fir_r_slice);
 	if (dsisr & CAPI_PSL_DSISR_An_AE) {
 		pr_devel("CAPI interrupt: AFU Error\n");
 
-		spin_lock(&afu->lock);
-		WARN(afu->pending_afu_err,
+		spin_lock(&ctx->lock);
+		WARN(ctx->pending_afu_err,
 		     "FIXME: Potentially clobbering undelivered AFU interrupt\n");
-		afu->afu_err = irq_info.afu_err;
-		afu->pending_afu_err = 1;
-		spin_unlock(&afu->lock);
+		ctx->afu_err = irq_info.afu_err;
+		ctx->pending_afu_err = 1;
+		spin_unlock(&ctx->lock);
 
-		wake_up_all(&afu->wq);
-		capi_ops->ack_irq(afu, CAPI_PSL_TFC_An_A, 0);
+		wake_up_all(&ctx->wq);
+		capi_ops->ack_irq(ctx->afu, CAPI_PSL_TFC_An_A, 0);
 	}
 	if (dsisr & CAPI_PSL_DSISR_An_OC)
 		pr_devel("CAPI interrupt: OS Context Warning\n");
@@ -174,16 +162,19 @@ static irqreturn_t capi_irq(int irq, void *data)
 
 static irqreturn_t capi_irq_afu(int irq, void *data, int ivte)
 {
-	struct capi_afu_t *afu = (struct capi_afu_t *)data;
+	struct capi_context_t *ctx = (struct capi_context_t *)data;
+	int ivte = 0;
 
-	pr_devel("Received IVTE %i for afu %p (interrupt %i)\n",
-	       ivte, afu, irq);
+	/* FIXME calculate AFU irq number from IVTE ranges */
 
-	spin_lock(&afu->lock);
-	afu->pending_irq_mask |= 1 << (ivte-1);
-	spin_unlock(&afu->lock);
+	pr_devel("Received IVTE %i for afu context %p (interrupt %i)\n",
+	       ivte, ctx, irq);
 
-	wake_up_all(&afu->wq);
+	spin_lock(&ctx->lock);
+	ctx->pending_irq_mask |= 1 << (ivte-1);
+	spin_unlock(&ctx->lock);
+
+	wake_up_all(&ctx->wq);
 
 	return IRQ_HANDLED;
 }
@@ -240,48 +231,48 @@ void capi_unmap_irq(unsigned int virq, void *cookie)
 	irq_dispose_mapping(virq);
 }
 
-void afu_register_irqs(struct capi_afu_t *afu, u32 start, u32 count)
+void afu_register_irqs(struct capi_context_t *ctx, u32 start, u32 count)
 {
 	int idx, ivt_off;
 
-	afu->irq_count = count;
-	pr_devel("afu_get_dt_irq_ranges: %#x %#x", start, afu->irq_count);
-	BUG_ON(afu->irq_count > CAPI_SLICE_IRQS);
-	for (ivt_off = start, idx = 0; idx < afu->irq_count; ivt_off++, idx++) {
-		afu->hwirq[idx] = ivt_off;
+	ctx->irq_count = count;
+	pr_devel("afu_get_dt_irq_ranges: %#x %#x", start, ctx->irq_count);
+	BUG_ON(ctx->irq_count > CAPI_SLICE_IRQS);
+	for (ivt_off = start, idx = 0; idx < ctx->irq_count; ivt_off++, idx++) {
+		ctx->hwirq[idx] = ivt_off;
 		pr_devel("capi_afu_hwirq[%i]: %#x\n", idx, ivt_off);
-		afu->virq[idx] = capi_map_irq(afu->adapter, afu->hwirq[idx],
+		ctx->virq[idx] = capi_map_irq(ctx->afu->adapter, ctx->hwirq[idx],
 					      capi_irq_handlers[idx],
-					      (void*)afu);
+					      (void*)ctx);
 	}
 }
 
-void afu_enable_irqs(struct capi_afu_t *afu)
+void afu_enable_irqs(struct capi_context_t *ctx)
 {
 	int idx;
 
 	pr_info("Enabling CAPI Interrupts\n");
 
-	for (idx = 0; idx < afu->irq_count; idx++)
-		enable_irq(afu->virq[idx]);
+	for (idx = 0; idx < ctx->irq_count; idx++)
+		enable_irq(ctx->virq[idx]);
 }
 
-void afu_disable_irqs(struct capi_afu_t *afu)
+void afu_disable_irqs(struct capi_context_t *ctx)
 {
 	int idx;
 
 	pr_info("Disabling CAPI Interrupts\n");
 
-	for (idx = 0; idx < afu->irq_count; idx++)
-		disable_irq(afu->virq[idx]);
+	for (idx = 0; idx < ctx->irq_count; idx++)
+		disable_irq(ctx->virq[idx]);
 }
 
-void afu_release_irqs(struct capi_afu_t *afu)
+void afu_release_irqs(struct capi_context_t *ctx)
 {
 	int idx;
 
-	for (idx = 0; idx < CAPI_SLICE_IRQS; idx++) {
-		if (afu->virq[idx])
-			capi_unmap_irq(afu->virq[idx], (void*)afu);
+	for (idx = 0; idx < ctx->irq_count; idx++) {
+		if (ctx->virq[idx])
+			capi_unmap_irq(ctx->virq[idx], (void*)ctx);
 	}
 }

@@ -187,7 +187,6 @@ static void release_adapter_native(struct capi_t *adapter)
 
 static int
 init_afu_native(struct capi_afu_t *afu, u64 handle,
-		irq_hw_number_t irq_start, irq_hw_number_t irq_count,
 		irq_hw_number_t err_hwirq)
 {
 	int rc = 0;
@@ -198,8 +197,6 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 		afu->err_virq = capi_map_irq(afu->adapter, afu->err_hwirq, capi_slice_irq_err, (void*)afu);
 		capi_p1n_write(afu, CAPI_PSL_SERR_An, afu->err_hwirq);
 	}
-
-	afu_register_irqs(afu, irq_start, irq_count);
 
 	if (afu->adapter->driver && afu->adapter->driver->init_afu) {
 		if ((rc = afu->adapter->driver->init_afu(afu)))
@@ -243,6 +240,7 @@ static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
 
 	/* 2. Invalidate all SLB entries */
 	capi_p2n_write(afu, CAPI_SLBIA_An, 0);
+	/* TODO: Poll for completion */
 
 	/* 3. Set SSTP0_An */
 	capi_p2n_write(afu, CAPI_SSTP0_An, sstp0);
@@ -480,7 +478,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 		return result;
 
 	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
-	capi_prefault(ctx->afu, wed);
+	capi_prefault(ctx, wed);
 
 	ctx->elem->common.sstp0 = cpu_to_be64(sstp0);
 	ctx->elem->common.sstp1 = cpu_to_be64(sstp1);
