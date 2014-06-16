@@ -306,7 +306,9 @@ static int
 add_process_element(struct capi_context_t *ctx)
 {
 	u64 state;
+	int rc = 0;
 
+	spin_lock(&ctx->afu->spa_lock);
 	pr_devel("%s Adding pe=0x%llx\n", __FUNCTION__, ctx->ph);
 
 	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
@@ -319,7 +321,8 @@ add_process_element(struct capi_context_t *ctx)
 		state = be64_to_cpup(ctx->afu->sw_command_status);
 		if (state == ~0ULL) {
 			pr_err("capi: Error adding process element to AFU\n");
-			return -1;
+			rc = -1;
+			goto out;
 		}
 		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
 		    (CAPI_SPA_SW_CMD_ADD  | CAPI_SPA_SW_STATE_ADDED | ctx->ph))
@@ -327,17 +330,22 @@ add_process_element(struct capi_context_t *ctx)
 		cpu_relax();
 	}
 
-	return 0;
+out:
+	spin_unlock(&ctx->afu->spa_lock);
+	return rc;
 }
 
+/* FIXME merge this with add_process_element */
 static int
 terminate_process_element(struct capi_context_t *ctx)
 {
+	int rc = 0;
 
 	/* fast path terminate if it's already invalid */
 	if !(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V))
-	     return 0;
+	     return rc;
 
+	spin_lock(&ctx->afu->spa_lock);
 	pr_devel("%s Terminate pe=0x%llx\n", __FUNCTION__, ctx->ph);
 	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V |
 						CAPI_PE_SOFTWARE_STATE_T);
@@ -350,7 +358,8 @@ terminate_process_element(struct capi_context_t *ctx)
 		state = be64_to_cpup(ctx->afu->sw_command_status);
 		if (state == ~0ULL) {
 			pr_err("capi: Error adding process element to AFU\n");
-			return -1;
+			rc = -1;
+			goto out;
 		}
 		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
 		    (CAPI_SPA_SW_CMD_TERMINATE | CAPI_SPA_SW_STATE_TERMINATED | ctx->ph))
@@ -358,8 +367,13 @@ terminate_process_element(struct capi_context_t *ctx)
 		cpu_relax();
 	}
 	ctx->elem->software_state = cpu_to_be32(0);
+
+out:
+	spin_unlock(&ctx->afu->spa_lock);
+	return rc;
 }
 
+/* must hold ctx->afu->spa_lock */
 static void
 slb_invalid(struct capi_context_t *ctx)
 {
@@ -386,6 +400,7 @@ remove_process_element(struct capi_context_t *ctx)
 {
 	pr_devel("%s remove pe=0x%llx\n", __FUNCTION__, ctx->ph);
 
+	spin_lock(&ctx->afu->spa_lock);
 	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_REMOVE |
 						     0 | ctx->ph);
 	smp_mb();
@@ -394,7 +409,8 @@ remove_process_element(struct capi_context_t *ctx)
 		state = be64_to_cpup(ctx->afu->sw_command_status);
 		if (state == ~0ULL) {
 			pr_err("capi: Error adding process element to AFU\n");
-			return -1;
+			rc = -1;
+			goto out;
 		}
 		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
 		    (CAPI_SPA_SW_CMD_REMOVE | CAPI_SPA_SW_STATE_REMOVED | ctx->ph)) {
@@ -404,6 +420,10 @@ remove_process_element(struct capi_context_t *ctx)
 	}
 
 	slb_invalid(ctx);
+
+out:
+	spin_unlock(&ctx->afu->spa_lock);
+	return rc;
 }
 
 static int

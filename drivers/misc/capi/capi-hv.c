@@ -148,13 +148,13 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 		cred = get_current_cred();
 		elem->isPrivilegedProcess = uid_eq(cred->euid, GLOBAL_ROOT_UID);
 		put_cred(cred);
-		elem->common.processId = cpu_to_be32(current->pid);
+		elem->common.pid = cpu_to_be32(current->pid);
 	} else { /* Initialise for kernel */
 		WARN(1, "CAPI initialised for kernel under phyp, this is untested and won't work on GA1 hardware!\n");
 		if (mfmsr() & MSR_SF)
 			elem->sixtyFourBit = 1;
 		elem->isPrivilegedProcess = 1;
-		elem->common.processId = 0;
+		elem->common.pid = 0;
 	}
 	/*
 	 * FIXME: Set this to match our partition's settings. For now it should
@@ -165,7 +165,7 @@ init_dedicated_process_hv(struct capi_afu_t *afu, bool kernel,
 #endif
 
 	elem->version               = cpu_to_be64(CAPI_PROCESS_ELEMENT_VERSION);
-	elem->common.threadId       = cpu_to_be32(0); /* Unused */
+	elem->common.tid            = cpu_to_be32(0); /* Unused */
 	elem->common.csrp           = cpu_to_be64(0); /* Disable */
 	elem->common.aurp0          = cpu_to_be64(0); /* Disable */
 	elem->common.aurp1          = cpu_to_be64(0); /* Disable */

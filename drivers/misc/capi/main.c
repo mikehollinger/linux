@@ -144,7 +144,7 @@ int capi_init_adapter(struct capi_t *adapter,
 
 	adapter->driver = driver;
 	adapter->device.parent = NULL; /* FIXME: Set to PHB on Sapphire? */
-	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num); FIXME;
+	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
 	adapter->device.bus = &capi_bus_type;
 	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);
 
@@ -248,6 +248,8 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	dev_set_name(&afu->device, "%s%is", dev_name(&adapter->device), slice + 1);
 	afu->device.bus = &capi_bus_type;
 	afu->device.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + CAPI_MAX_SLICES + 1 + slice);
+
+	spin_lock_init(&afu->spa_lock);
 
 	if (device_register(&afu->device)) {
 		/* FIXME: chardev for this AFU should return errors */

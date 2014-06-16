@@ -349,6 +349,7 @@ struct capi_afu_t {
 	u64 process_token;
 
 	struct ida pe_index_ida;
+	spinlock_t spa_lock;
 };
 
 /* This is a capi context.  If the PSL is in dedicated mode, there will be one
