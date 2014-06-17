@@ -30,7 +30,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 {
 	int minor = MINOR(inode->i_rdev);
 	int adapter_num = minor / CAPI_DEV_MINORS;
-	int slice = minor % CAPI_DEV_MINORS - 1;
+	int slice = (minor % CAPI_DEV_MINORS - 1) % CAPI_MAX_SLICES;
 	struct capi_t *adapter;
 	struct capi_context_t *ctx;
 	int i;
