@@ -13,7 +13,7 @@
 #include <asm/reg.h>
 #include <asm/io.h>
 
-#include <uapi/asm/capi.h>
+#include <uapi/misc/capi.h>
 
 /* Valid setting for this are 7 and 11 */
 /* FIXME do this dynamically, or just only support 11 and above */
