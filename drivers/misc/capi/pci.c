@@ -569,6 +569,8 @@ int init_capi_pci(struct pci_dev *dev)
 
 #if 1 /* PSL bug doesn't allow us to read the AFU descriptor until the AFU is enabled, supposed to be fixed in PSL 185 */
 		if (afu->afu_desc_mmio) {
+			u64 val;
+
 			pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
 
 			/* FIXME: mask the MMIO timeout IRQ for now.  need to
@@ -576,14 +578,16 @@ int init_capi_pci(struct pci_dev *dev)
 			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
 			afu_reset(afu);
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
-			afu->pp_irqs = _capi_reg_read(afu->afu_desc_mmio + 0x0) >> (63-15);
-			afu->num_procs = _capi_reg_read(afu->afu_desc_mmio + 0x0) >> (63-31) & 0xffffull;
+			val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
+			afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
+			afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
 			// FIXME : check req_prog_model and bugon
 
+			val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
+			afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
 
-			afu->pp_offset = _capi_reg_read(afu->afu_desc_mmio + 0x38) * 4096;
-			afu->pp_size = (_capi_reg_read(afu->afu_desc_mmio + 0x30) &
-					0x00FFFFFFFFFFFFFFUL) * 4096;
+			val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
+			afu->pp_offset = val;
 			/* FIXME check PerProcessPSA_control to see if above
 			 * needed */
 			WARN_ON(afu->psn_size < (afu->pp_offset +

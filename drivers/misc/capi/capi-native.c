@@ -204,7 +204,7 @@ static int alloc_spa(struct capi_afu_t *afu)
 		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
 		return -ENOMEM;
 	}
-	afu->spa_size = PAGE_SIZE + pages;
+	afu->spa_size = PAGE_SIZE * pages;
 
 	/* From the CAIA:
 	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
@@ -219,6 +219,8 @@ static int alloc_spa(struct capi_afu_t *afu)
 	 * careful with our rounding) and solve for n:
 	 */
 	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
+	pr_devel("afu->max_procs: %i < afu->num_procs: %i\n",
+		 afu->max_procs, afu->num_procs);
 	BUG_ON(afu->max_procs < afu->num_procs);
 
 	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->max_procs + 3) * 128));
