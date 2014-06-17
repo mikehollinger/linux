@@ -402,7 +402,7 @@ static int
 remove_process_element(struct capi_context_t *ctx)
 {
 	u64 state;
-	int rc;
+	int rc = 0;
 
 	pr_devel("%s remove pe=0x%i\n", __FUNCTION__, ctx->ph);
 
