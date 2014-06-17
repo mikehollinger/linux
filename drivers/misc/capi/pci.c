@@ -271,10 +271,6 @@ static int init_implementation_afu_regs(struct capi_afu_t *afu)
 
 	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0xF000000000000000ULL);
 
-	/* FIXME: mask the MMIO timeout IRQ for now.  need to fix this long
-	 * term */
-	capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
-
 	return 0;
 }
 
@@ -574,8 +570,11 @@ int init_capi_pci(struct pci_dev *dev)
 #if 1 /* PSL bug doesn't allow us to read the AFU descriptor until the AFU is enabled, supposed to be fixed in PSL 185 */
 		if (afu->afu_desc_mmio) {
 			pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
-//			capi_p1n_write(afu, CAPI_PSL_SCNTL_An, CAPI_PSL_SCNTL_An_PM_Process);
-			afu_reset(afu); // HACK should be fixed in 185 but isn't 
+
+			/* FIXME: mask the MMIO timeout IRQ for now.  need to
+			 * fix this long term */
+			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
+			afu_reset(afu); // HACK should be fixed in 185 but isn't
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
 			afu->pp_irqs = _capi_reg_read(afu_desc + 0x0) >> (63-15);
 			afu->num_procs = _capi_reg_read(afu_desc + 0x0) >> (63-31) & 0xffffull;
