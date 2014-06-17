@@ -240,13 +240,16 @@ static int
 init_afu_native(struct capi_afu_t *afu, u64 handle,
 		irq_hw_number_t err_hwirq)
 {
+	u64 val;
 	int rc = 0;
 
 	afu->err_hwirq = err_hwirq;
 	if (err_hwirq) { /* Can drop this test when the BML support is pulled out - under phyp we use capi-of.c */
 		pr_devel("capi slice error IVTE: %#lx\n", afu->err_hwirq);
 		afu->err_virq = capi_map_irq(afu->adapter, afu->err_hwirq, capi_slice_irq_err, (void*)afu);
-		capi_p1n_write(afu, CAPI_PSL_SERR_An, afu->err_hwirq);
+		val = capi_p1n_read(afu, CAPI_PSL_SERR_An);
+		val = (val & 0x00ffffffffff0000ULL) | afu->err_hwirq;
+		capi_p1n_write(afu, CAPI_PSL_SERR_An, val);
 	}
 
 	if (afu->adapter->driver && afu->adapter->driver->init_afu) {
