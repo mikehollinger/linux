@@ -492,8 +492,11 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	ctx->elem->common.sstp1 = cpu_to_be64(sstp1);
 
 	for (i = 0; i < 4; i++) {
-		ctx->elem->ivte.offsets[i] = cpu_to_be16(ctx->hwirq[i] & 0xffff);
-		ctx->elem->ivte.ranges[i] = cpu_to_be16(1);
+//		ctx->elem->ivte.offsets[i] = cpu_to_be16(ctx->hwirq[i] & 0xffff);
+//		ctx->elem->ivte.ranges[i] = cpu_to_be16(1);
+		/* MASSIVE HACK HACK map 16 irqs and fold */
+		ctx->elem->ivte.offsets[i] = cpu_to_be16(ctx->hwirq[0] & 0xffff);
+		ctx->elem->ivte.ranges[i] = cpu_to_be16(4);
 	}
 
 	ctx->elem->common.amr = cpu_to_be64(amr);
