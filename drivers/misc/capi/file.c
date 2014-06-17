@@ -47,6 +47,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 
 	if (!(ctx = kmalloc(sizeof(struct capi_context_t), GFP_KERNEL)))
 	    return -ENOMEM;
+	ctx->sstp = NULL;
 	ctx->afu = &adapter->slice[slice];
 
 	file->private_data = (void *)ctx;
