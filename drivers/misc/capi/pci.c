@@ -573,9 +573,9 @@ int init_capi_pci(struct pci_dev *dev)
 
 			pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
 
-			/* FIXME: mask the MMIO timeout IRQ for now.  need to
-			 * fix this long term */
-			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
+			/* FIXME: mask the MMIO timeout and IRQ bad source for
+			   now.  need to * fix this long term */
+			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000088000000);
 			afu_reset(afu);
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
 			val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
