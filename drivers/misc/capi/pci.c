@@ -574,15 +574,15 @@ int init_capi_pci(struct pci_dev *dev)
 			/* FIXME: mask the MMIO timeout IRQ for now.  need to
 			 * fix this long term */
 			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
-			afu_reset(afu); // HACK should be fixed in 185 but isn't
+			afu_reset(afu);
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
-			afu->pp_irqs = _capi_reg_read(afu_desc + 0x0) >> (63-15);
-			afu->num_procs = _capi_reg_read(afu_desc + 0x0) >> (63-31) & 0xffffull;
+			afu->pp_irqs = _capi_reg_read(afu->afu_desc_mmio + 0x0) >> (63-15);
+			afu->num_procs = _capi_reg_read(afu->afu_desc_mmio + 0x0) >> (63-31) & 0xffffull;
 			// FIXME : check req_prog_model and bugon
 
 
-			afu->pp_offset = _capi_reg_read(afu_desc + 0x38) * 4096;
-			afu->pp_size = (_capi_reg_read(afu_desc + 0x30) &
+			afu->pp_offset = _capi_reg_read(afu->afu_desc_mmio + 0x38) * 4096;
+			afu->pp_size = (_capi_reg_read(afu->afu_desc_mmio + 0x30) &
 					0x00FFFFFFFFFFFFFFUL) * 4096;
 			/* FIXME check PerProcessPSA_control to see if above
 			 * needed */
@@ -631,7 +631,7 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 	dev_info(&dev->dev, "capi protocol enabled\n");
 
-	dump_capi_config_space(dev);
+//	dump_capi_config_space(dev);
 
 	/* FIXME: I should wait for PHB to come back in CAPI mode and re-probe */
 	if ((rc = pci_enable_device(dev))) {
