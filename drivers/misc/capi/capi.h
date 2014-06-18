@@ -323,6 +323,7 @@ struct capi_afu_t {
 	u64 afu_desc_size;
 	struct capi_t *adapter;
 	struct device device, device_master;
+	bool afu_directed_mode;
 
 
 	u64 enabled;
