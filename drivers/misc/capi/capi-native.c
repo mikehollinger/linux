@@ -573,6 +573,10 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 
+	/* master only context for dedicated */
+	ctx->psn_phys = ctx->afu->psn_phys;
+	ctx->psn_size = ctx->afu->psn_size;
+
 	if ((result = afu_reset(afu)))
 		return result;
 
