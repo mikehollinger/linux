@@ -301,10 +301,45 @@ static int _alloc_hwirqs(struct pci_dev *dev, int num)
 	return phb->msi_base + hwirq;
 }
 
-static int alloc_hwirqs(struct capi_t *adapter, unsigned int num)
+static int alloc_hwirq_ranges(struct pci_dev *dev, int num, struct capi_ivte_ranges *ranges)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int range = 0;
+	int hwirq;
+	int try;
+
+	memset(ranges, 0, sizeof(struct capi_ivte_ranges));
+
+	for (range = 0; range < 4, num; range++) {
+		try = num;
+		while (try) {
+			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
+			if (hwirq >= 0)
+				break;
+			try /= 2;
+		}
+		if (!try)
+			goto fail;
+
+		ranges->offsets[range] = phb->msi_base + hwirq;
+		ranges->ranges[range] = try;
+		num -= try;
+	}
+	if (num)
+		goto fail;
+
+	return 0;
+fail:
+	for (range--; range >= 0; range--)
+		msi_bitmap_free_hwirqs(&phb->msi_bmp, ranges->offsets[range], ranges->ranges[range])
+	return -ENOSPC;
+}
+
+static int alloc_hwirqs(struct capi_ivte_ranges *ranges, struct capi_t *adapter, unsigned int num)
 {
 	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
-	return _alloc_hwirqs(dev, num);
+	return alloc_hwirq_ranges(dev, ranges, num);
 }
 
 static struct capi_driver_ops capi_pci_driver_ops = {
@@ -424,44 +459,6 @@ int enable_capi_protocol(struct pci_dev *dev)
 
 	return rc;
 }
-
-#if 0
-/* XXX: This hasn't been tested yet. */
-int capi_alloc_hwirqs(struct pci_dev *dev, int num, struct capi_ivte_ranges *ranges)
-{
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-	struct pnv_phb *phb = hose->private_data;
-	int range = 0;
-	int hwirq;
-	int try;
-
-	memset(ranges, 0, sizeof(struct capi_ivte_ranges));
-
-	for (range = 0; range < 4, num; range++) {
-		try = num;
-		while (try) {
-			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
-			if (hwirq >= 0)
-				break;
-			try /= 2;
-		}
-		if (!try)
-			goto fail;
-
-		ranges->offsets[range] = phb->msi_base + hwirq;
-		ranges->ranges[range] = try;
-		num -= try;
-	}
-	if (num)
-		goto fail;
-
-	return 0;
-fail:
-	for (range--; range >= 0; range--)
-		msi_bitmap_free_hwirqs(&phb->msi_bmp, ranges->offsets[range], ranges->ranges[range])
-	return -ENOMEM;
-}
-#endif
 
 extern int afu_reset(struct capi_afu_t *afu); // FIXME remove
 

@@ -158,41 +158,36 @@ static irqreturn_t capi_irq(int irq, void *data)
 	return IRQ_NONE;
 }
 
-static irqreturn_t capi_irq_afu(int irq, void *data, int ivte)
+static irqreturn_t capi_irq_afu(int irq, void *data)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)data;
+	long off, hwirq = irq_find_mapping(NULL, irq); /* FIXME THIS IS THE WRONG WAY ROUND!!!!!!!!!!!!!!!!!!!!!! */
+	int afu_irq = 0;
+	__u16 range;
+	int r;
 
-	/* FIXME calculate AFU irq number from IVTE ranges */
+	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
+		off = hwirq - ctx->elem->ivte.offsets[r];
+		range = ctx->elem->ivte.ranges[r];
+		if (off >= 0 && off < range) {
+			afu_irq += off;
+			break;
+		}
+		afu_irq += range;
+	}
+	BUG_ON(r >= CAPI_IRQ_RANGES);
 
-	pr_devel("Received IVTE %i for afu context %p (interrupt %i)\n",
-	       ivte, ctx, irq);
+	pr_devel("Received AFU interrupt %i for afu context %p (virq %i hwirq %lu)\n",
+	       afu_irq, ctx, irq, hwirq);
 
 	spin_lock(&ctx->lock);
-	ctx->pending_irq_mask |= 1 << (ivte-1);
+	ctx->pending_irq_mask |= 1 << (afu_irq-1);
 	spin_unlock(&ctx->lock);
 
 	wake_up_all(&ctx->wq);
 
 	return IRQ_HANDLED;
 }
-
-/* FIXME: This isn't very elegant and won't work for > 4 interrupts: */
-static irqreturn_t capi_irq_afu_1(int irq, void *data)
-{
-	return capi_irq_afu(irq, data, 1);
-}
-static irqreturn_t capi_irq_afu_2(int irq, void *data)
-{
-	return capi_irq_afu(irq, data, 2);
-}
-static irqreturn_t capi_irq_afu_3(int irq, void *data)
-{
-	return capi_irq_afu(irq, data, 3);
-}
-
-static irq_handler_t capi_irq_handlers[] = {
-	capi_irq, capi_irq_afu_1, capi_irq_afu_2, capi_irq_afu_3,
-};
 
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq,
@@ -228,48 +223,79 @@ void capi_unmap_irq(unsigned int virq, void *cookie)
 	irq_dispose_mapping(virq);
 }
 
-void afu_register_irqs(struct capi_context_t *ctx, u32 start, u32 count)
+void afu_register_irqs(struct capi_context_t *ctx, u32 count)
 {
-	int idx, ivt_off;
+	irq_handler_t handler = capi_irq;
+	struct capi_ivte_ranges *ranges = &ctx->elem->common.ivte;
+	irq_hw_number_t hwirq;
+	int r, i;
+
+	/* FIXME: Assign all PSL IRQs to same IRQ to reduce wastage
+	 * FIXME: Will be completely broken on phyp & BML/Mambo until we add an
+	 * irq allocator for them - alloc_hwirq_ranges() can be used if
+	 * refactored to remove pnv phb dependency */
+	BUG_ON(!ctx->afu->adapter->driver);
+	BUG_ON(!ctx->afu->adapter->driver->alloc_irqs);
+	if (ctx->afu->adapter->driver->alloc_irqs(ranges, ctx->afu->adapter, count))
 
 	ctx->irq_count = count;
 	pr_devel("afu_get_dt_irq_ranges: %#x %#x", start, ctx->irq_count);
-	BUG_ON(ctx->irq_count > CAPI_SLICE_IRQS);
-	for (ivt_off = start, idx = 0; idx < ctx->irq_count; ivt_off++, idx++) {
-		ctx->hwirq[idx] = ivt_off;
-		pr_devel("capi_afu_hwirq[%i]: %#x\n", idx, ivt_off);
-		ctx->virq[idx] = capi_map_irq(ctx->afu->adapter, ctx->hwirq[idx],
-					      capi_irq_handlers[idx],
-					      (void*)ctx);
+	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
+		hwirq = ranges->offsets[r];
+		for (i = 0; i < ranges->ranges[r]; hwirq++, i++) {
+			capi_map_irq(ctx->afu->adapter, hwirq,
+				     handler, (void*)ctx);
+			handler = capi_irq_afu;
+		}
 	}
 }
 
 void afu_enable_irqs(struct capi_context_t *ctx)
 {
-	int idx;
+	irq_hw_number_t hwirq;
+	unsigned int virq;
+	int r, i;
 
 	pr_info("Enabling CAPI Interrupts\n");
 
-	for (idx = 0; idx < ctx->irq_count; idx++)
-		enable_irq(ctx->virq[idx]);
+	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
+		hwirq = ranges->offsets[r];
+		for (i = 0; i < ranges->ranges[r]; hwirq++, i++) {
+			virq = irq_find_mapping(NULL, hwirq);
+			enable_irq(virq);
+		}
+	}
 }
 
 void afu_disable_irqs(struct capi_context_t *ctx)
 {
-	int idx;
+	irq_hw_number_t hwirq;
+	unsigned int virq;
+	int r, i;
 
 	pr_info("Disabling CAPI Interrupts\n");
 
-	for (idx = 0; idx < ctx->irq_count; idx++)
-		disable_irq(ctx->virq[idx]);
+	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
+		hwirq = ranges->offsets[r];
+		for (i = 0; i < ranges->ranges[r]; hwirq++, i++) {
+			virq = irq_find_mapping(NULL, hwirq);
+			disable_irq(virq);
+		}
+	}
 }
 
 void afu_release_irqs(struct capi_context_t *ctx)
 {
-	int idx;
+	irq_hw_number_t hwirq;
+	unsigned int virq;
+	int r, i;
 
-	for (idx = 0; idx < ctx->irq_count; idx++) {
-		if (ctx->virq[idx])
-			capi_unmap_irq(ctx->virq[idx], (void*)ctx);
+	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
+		hwirq = ranges->offsets[r];
+		for (i = 0; i < ranges->ranges[r]; hwirq++, i++) {
+			virq = irq_find_mapping(NULL, hwirq);
+			if (virq)
+				capi_unmap_irq(virq, (void*)ctx);
+		}
 	}
 }

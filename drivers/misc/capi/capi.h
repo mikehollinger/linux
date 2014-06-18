@@ -279,7 +279,6 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_SPA_SW_LINK_MASK        0x000000000000ffffULL
 
 #define CAPI_MAX_SLICES 4
-#define CAPI_SLICE_IRQS 4 /* FIXME: DELETE THIS AND USE AFU DESCRIPTOR VALUE */
 #define CAPI_IRQ_RANGES 4
 #define MAX_AFU_MMIO_REGS 3
 
@@ -370,10 +369,7 @@ struct capi_context_t {
 	u64 afu_err;
 	bool pending_afu_err;
 
-	/* FIXME: The IRQs need to be reworked to support > 4 per context */
 	u32 irq_count;
-	irq_hw_number_t hwirq[CAPI_SLICE_IRQS];
-	unsigned int virq[CAPI_SLICE_IRQS];
 
 	/* XXX: Is it possible to need multiple work items at once? */
 	struct work_struct work;
@@ -408,16 +404,16 @@ struct capi_t {
 	struct list_head list;
 };
 
-struct capi_driver_ops {
-	int (*init_adapter) (struct capi_t *adapter);
-	int (*init_afu) (struct capi_afu_t *afu);
-	int (*alloc_irqs) (struct capi_t *adapter, unsigned int num);
-	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
-};
-
 struct capi_ivte_ranges {
 	__be16 offsets[4];
 	__be16 ranges[4];
+};
+
+struct capi_driver_ops {
+	int (*init_adapter) (struct capi_t *adapter);
+	int (*init_afu) (struct capi_afu_t *afu);
+	int (*alloc_irqs) (struct capi_ivte_ranges *ranges, struct capi_t *adapter, unsigned int num);
+	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
 };
 
 /* common == phyp + powernv */
@@ -515,7 +511,7 @@ void del_capi_dev(struct capi_t *capi, int adapter_num);
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void capi_unmap_irq(unsigned int virq, void *cookie);
-void afu_register_irqs(struct capi_context_t *ctx, u32 start, u32 count);
+void afu_register_irqs(struct capi_context_t *ctx, u32 count);
 void afu_enable_irqs(struct capi_context_t *ctx);
 void afu_disable_irqs(struct capi_context_t *ctx);
 void afu_release_irqs(struct capi_context_t *ctx);

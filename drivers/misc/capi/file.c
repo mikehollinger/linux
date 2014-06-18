@@ -34,8 +34,6 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	struct capi_t *adapter;
 	struct capi_context_t *ctx;
 	int i;
-	int irq_count = CAPI_SLICE_IRQS; /* FIXME - minimum provided in afu descriptor, userspace may request more */
-	irq_hw_number_t irq_start;
 
 	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
 
@@ -69,12 +67,9 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	ctx->ph = i;
 	ctx->elem = &ctx->afu->spa[i];
 
-	/* FIXME: Use capi_alloc_hwirqs() to allocate four ranges instead...
-	 * FIXME: Assign all PSL IRQs to same IRQ to reduce wastage
-	 * FIXME: Will be completely broken on phyp & BML/Mambo until we add an irq allocator for them */
-	BUG_ON(!ctx->afu->adapter->driver);
-	irq_start = ctx->afu->adapter->driver->alloc_irqs(ctx->afu->adapter, irq_count);
-	afu_register_irqs(ctx, irq_start, irq_count);
+	/* FIXME: Allow userspace to request more IRQs & maybe have an
+	 * administrative way to restrict excess per process allocations */
+	afu_register_irqs(ctx, afu->irq_count);
 
 	return 0;
 }
@@ -103,6 +98,8 @@ afu_release(struct inode *inode, struct file *file)
 	/* FIXME: If we opened it but never started it, this will WARN */
 	/* FIXME: check this is the last context to shut down */
 	WARN_ON(capi_ops->detach_process(ctx));
+
+	afu_release_irqs(ctx);
 
 	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
 
@@ -258,7 +255,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event->header.size = sizeof(struct capi_event_afu_interrupt);
 		event->header.type = CAPI_EVENT_AFU_INTERRUPT;
-		event->level = ctx->pending_irq_mask;
+		event->interrupt = ctx->pending_irq_mask;
 
 		/* Only clear the IRQ if we can send the whole event: */
 		if (count >= event->header.size) {
