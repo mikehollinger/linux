@@ -121,6 +121,8 @@ init_dedicated_process_hv(struct capi_context_t *ctx, bool kernel,
 	u64 sstp0, sstp1;
 	int rc = 0, result;
 	const struct cred *cred;
+	u32 irq;
+	int i, r;
 
 	if (ctx->process_token) {
 		pr_info("capi: init dedicated process while attached, detaching...\n");
@@ -175,8 +177,16 @@ init_dedicated_process_hv(struct capi_context_t *ctx, bool kernel,
 	elem->common.sstp0          = cpu_to_be64(sstp0);
 	elem->common.sstp1          = cpu_to_be64(sstp1);
 	elem->common.amr            = cpu_to_be64(amr);
-	elem->pslVirtualIsn         = cpu_to_be32(ctx->hwirq[0]);
-	elem->applicationVirtualIsnBitmap[0] = 0x70; /* Initially use three (after the PSL irq), for compatibility with old CAIA */
+	elem->pslVirtualIsn         = cpu_to_be32(ctx->elem->ivte.offsets[0]);
+	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
+		/* FIXME: Test this and maybe optimise - can we use bitmap.h? */
+		irq = ctx->elem->ivte.offsets[r];
+		for (i = 0; i < ctx->elem->ivte.ranges[r]; i++) {
+			if (r == 0 && i == 0) /* PSL interrupt, set above */
+				continue;
+			elem->applicationVirtualIsnBitmap[irq / 8] |= 0x80 >> (irq % 8);
+		}
+	}
 	elem->common.wed = cpu_to_be64(wed);
 
 	if ((rc = capi_h_attach_process(ctx->afu->handle, elem, &ctx->process_token)))

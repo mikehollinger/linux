@@ -69,7 +69,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 
 	/* FIXME: Allow userspace to request more IRQs & maybe have an
 	 * administrative way to restrict excess per process allocations */
-	afu_register_irqs(ctx, afu->irq_count);
+	afu_register_irqs(ctx, ctx->afu->pp_irqs);
 
 	return 0;
 }
@@ -255,7 +255,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event->header.size = sizeof(struct capi_event_afu_interrupt);
 		event->header.type = CAPI_EVENT_AFU_INTERRUPT;
-		event->interrupt = ctx->pending_irq_mask;
+		event->irq = ctx->pending_irq_mask;
 
 		/* Only clear the IRQ if we can send the whole event: */
 		if (count >= event->header.size) {

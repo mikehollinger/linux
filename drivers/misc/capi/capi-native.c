@@ -439,7 +439,6 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 
 	u64 sr, sstp0, sstp1;
 	int result;
-	int i;
 
 	/* FIXME:
 	 * - Add to exising SPA list if one already exists
@@ -491,13 +490,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	ctx->elem->common.sstp0 = cpu_to_be64(sstp0);
 	ctx->elem->common.sstp1 = cpu_to_be64(sstp1);
 
-	for (i = 0; i < 4; i++) {
-//		ctx->elem->ivte.offsets[i] = cpu_to_be16(ctx->hwirq[i] & 0xffff);
-//		ctx->elem->ivte.ranges[i] = cpu_to_be16(1);
-		/* MASSIVE HACK HACK map 16 irqs and fold */
-		ctx->elem->ivte.offsets[i] = cpu_to_be16(ctx->hwirq[0] & 0xffff);
-		ctx->elem->ivte.ranges[i] = cpu_to_be16(4);
-	}
+	/* ctx->elem->ivte set up elsewhere */
 
 	ctx->elem->common.amr = cpu_to_be64(amr);
 	ctx->elem->common.wed = cpu_to_be64(wed);
@@ -512,6 +505,7 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 			      u64 wed, u64 amr)
 {
 	struct capi_afu_t * afu = ctx->afu;
+	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
 	u64 sr, sstp0, sstp1;
 	int result;
 
@@ -560,16 +554,16 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	capi_prefault(ctx, wed);
 
 	capi_write_sstp(afu, sstp0, sstp1);
-	capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An,
-		       (1ULL << 48) |
-		       (1ULL << 32) |
-		       (1ULL << 16) |
-		       1ULL);
-	capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An,
-		       ((ctx->hwirq[0] & 0xffff) << 48) |
-		       ((ctx->hwirq[1] & 0xffff) << 32) |
-		       ((ctx->hwirq[2] & 0xffff) << 16) |
-		       (ctx->hwirq[3] & 0xffff));
+	capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An, (u64)
+		       (ranges->offsets[0] << 48) |
+		       (ranges->offsets[1] << 32) |
+		       (ranges->offsets[2] << 16) |
+		        ranges->offsets[3]);
+	capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An, (u64)
+		       (ranges->ranges[0] << 48) |
+		       (ranges->ranges[1] << 32) |
+		       (ranges->ranges[2] << 16) |
+		        ranges->ranges[3]);
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 

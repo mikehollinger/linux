@@ -161,16 +161,16 @@ static irqreturn_t capi_irq(int irq, void *data)
 static irqreturn_t capi_irq_afu(int irq, void *data)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)data;
-	long off, hwirq = irq_find_mapping(NULL, irq); /* FIXME THIS IS THE WRONG WAY ROUND!!!!!!!!!!!!!!!!!!!!!! */
-	int afu_irq = 0;
+	irq_hw_number_t hwirq = irqd_to_hwirq(irq_get_irq_data(irq));
+	int irq_off, afu_irq = 0;
 	__u16 range;
 	int r;
 
 	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
-		off = hwirq - ctx->elem->ivte.offsets[r];
+		irq_off = hwirq - ctx->elem->ivte.offsets[r];
 		range = ctx->elem->ivte.ranges[r];
-		if (off >= 0 && off < range) {
-			afu_irq += off;
+		if (irq_off >= 0 && irq_off < range) {
+			afu_irq += irq_off;
 			break;
 		}
 		afu_irq += range;
@@ -226,7 +226,7 @@ void capi_unmap_irq(unsigned int virq, void *cookie)
 void afu_register_irqs(struct capi_context_t *ctx, u32 count)
 {
 	irq_handler_t handler = capi_irq;
-	struct capi_ivte_ranges *ranges = &ctx->elem->common.ivte;
+	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
 	irq_hw_number_t hwirq;
 	int r, i;
 
@@ -239,7 +239,6 @@ void afu_register_irqs(struct capi_context_t *ctx, u32 count)
 	if (ctx->afu->adapter->driver->alloc_irqs(ranges, ctx->afu->adapter, count))
 
 	ctx->irq_count = count;
-	pr_devel("afu_get_dt_irq_ranges: %#x %#x", start, ctx->irq_count);
 	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
 		hwirq = ranges->offsets[r];
 		for (i = 0; i < ranges->ranges[r]; hwirq++, i++) {
@@ -252,6 +251,7 @@ void afu_register_irqs(struct capi_context_t *ctx, u32 count)
 
 void afu_enable_irqs(struct capi_context_t *ctx)
 {
+	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
 	irq_hw_number_t hwirq;
 	unsigned int virq;
 	int r, i;
@@ -269,6 +269,7 @@ void afu_enable_irqs(struct capi_context_t *ctx)
 
 void afu_disable_irqs(struct capi_context_t *ctx)
 {
+	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
 	irq_hw_number_t hwirq;
 	unsigned int virq;
 	int r, i;
@@ -286,6 +287,7 @@ void afu_disable_irqs(struct capi_context_t *ctx)
 
 void afu_release_irqs(struct capi_context_t *ctx)
 {
+	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
 	irq_hw_number_t hwirq;
 	unsigned int virq;
 	int r, i;
