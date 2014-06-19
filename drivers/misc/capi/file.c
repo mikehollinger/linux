@@ -220,7 +220,7 @@ static ssize_t
 afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
-	struct capi_event_uncast raw_event;
+	struct capi_event event;
 	unsigned long flags;
 	ssize_t size;
 	DEFINE_WAIT(wait);
@@ -251,47 +251,41 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 			return -ERESTARTSYS;
 	}
 
-	memset(&raw_event, 0, sizeof(raw_event));
+	memset(&event, 0, sizeof(event));
 	if (ctx->pending_irq_mask) {
-		struct capi_event_afu_interrupt *event =
-			(struct capi_event_afu_interrupt *)&raw_event;
 		pr_devel("afu_read delivering AFU interrupt\n");
-		event->header.size = sizeof(struct capi_event_afu_interrupt);
-		event->header.type = CAPI_EVENT_AFU_INTERRUPT;
-		event->level = ctx->pending_irq_mask;
+		event.header.size = sizeof(struct capi_event_afu_interrupt);
+		event.header.type = CAPI_EVENT_AFU_INTERRUPT;
+		event.irq.irq = ctx->pending_irq_mask;
 
 		/* Only clear the IRQ if we can send the whole event: */
-		if (count >= event->header.size) {
+		if (count >= event.header.size) {
 			ctx->pending_irq_mask = 0;
 		}
 	} else if (ctx->pending_fault) {
-		struct capi_event_data_storage *event =
-			(struct capi_event_data_storage *)&raw_event;
 		pr_devel("afu_read delivering data storage fault\n");
-		event->header.size = sizeof(struct capi_event_data_storage);
-		event->header.type = CAPI_EVENT_DATA_STORAGE;
-		event->address = ctx->fault_addr;
+		event.header.size = sizeof(struct capi_event_data_storage);
+		event.header.type = CAPI_EVENT_DATA_STORAGE;
+		event.fault.addr = ctx->fault_addr;
 
 		/* Only clear the fault if we can send the whole event: */
-		if (count >= event->header.size)
+		if (count >= event.header.size)
 			ctx->pending_fault = false;
 	} else if (ctx->pending_afu_err) {
-		struct capi_event_afu_error *event =
-			(struct capi_event_afu_error *)&raw_event;
 		pr_devel("afu_read delivering afu error\n");
-		event->header.size = sizeof(struct capi_event_afu_error);
-		event->header.type = CAPI_EVENT_AFU_ERROR;
-		event->afu_err = ctx->afu_err;
+		event.header.size = sizeof(struct capi_event_afu_error);
+		event.header.type = CAPI_EVENT_AFU_ERROR;
+		event.afu_err.err = ctx->afu_err;
 
 		/* Only clear the fault if we can send the whole event: */
-		if (count >= event->header.size)
+		if (count >= event.header.size)
 			ctx->pending_afu_err = false;
 	} else BUG();
 
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
-	size = min(count, (size_t)raw_event.header.size);
-	copy_to_user(buf, &raw_event, size);
+	size = min(count, (size_t)event.header.size);
+	copy_to_user(buf, &event, size);
 	return size;
 }
 
