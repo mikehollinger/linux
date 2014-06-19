@@ -432,6 +432,20 @@ out:
 	return rc;
 }
 
+
+static void assign_psn_space(struct capi_context_t *ctx)
+{
+	if (ctx->master) {
+		ctx->psn_phys = ctx->afu->psn_phys;
+		ctx->psn_size = ctx->afu->psn_size;
+	} else {
+		ctx->psn_phys = ctx->afu->psn_phys +
+			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
+		ctx->psn_size = ctx->afu->pp_size;
+	}
+}
+
+
 static int
 init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 			  u64 amr)
@@ -447,14 +461,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	 *   exceeded, etc
 	 */
 
-	if (ctx->master) {
-		ctx->psn_phys = ctx->afu->psn_phys;
-		ctx->psn_size = ctx->afu->psn_size;
-	} else {
-		ctx->psn_phys = ctx->afu->psn_phys +
-			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
-		ctx->psn_size = ctx->afu->pp_size;
-	}
+	assign_psn_space(ctx);
 
 	ctx->elem->ctxtime = cpu_to_be64(0); /* disable */
 	ctx->elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
@@ -574,8 +581,7 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 
 	/* master only context for dedicated */
-	ctx->psn_phys = ctx->afu->psn_phys;
-	ctx->psn_size = ctx->afu->psn_size;
+	assign_psn_space(ctx);
 
 	if ((result = afu_reset(afu)))
 		return result;
