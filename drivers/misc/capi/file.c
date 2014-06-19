@@ -351,12 +351,14 @@ static int psl_err_chk_show(struct seq_file *m, void *p)
 	show_reg("PSL FIR CNTL", capi_p1_read(capi, CAPI_PSL_FIR_CNTL));
 	show_reg("PSL FIR SLICE A0", capi_p1n_read(a0, CAPI_PSL_FIR_SLICE_An));
 	show_reg("PSL RECOV FIR SLICE A0", capi_p1n_read(a0, CAPI_PSL_R_FIR_SLICE_An));
+	show_reg("PSL SERR A0", capi_p1n_read(a0, CAPI_PSL_SERR_An));
 	show_reg("PSL ERRIVTE", capi_p1_read(capi, CAPI_PSL_ErrIVTE));
 	show_reg("PSL DSISR A0", capi_p2n_read(a0, CAPI_PSL_DSISR_An));
 	show_reg("PSL SR", capi_p1n_read(a0, CAPI_PSL_SR_An));
 	show_reg("PSL SSTP0 A0", capi_p2n_read(a0, CAPI_SSTP0_An));
 	show_reg("PSL SSTP1 A0", capi_p2n_read(a0, CAPI_SSTP1_An));
 	show_reg("PSL DAR A0", capi_p2n_read(a0, CAPI_PSL_DAR_An));
+	show_reg("PSL ErrStat A0", capi_p2n_read(a0, CAPI_PSL_ErrStat_An));
 #undef showreg
 	seq_putc(m, '\n');
 
