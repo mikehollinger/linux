@@ -353,7 +353,7 @@ add_process_element(struct capi_context_t *ctx)
 {
 	int rc = 0;
 
-	pr_devel("%s Adding pe=0x%i\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Adding pe=%i\n", __FUNCTION__, ctx->ph);
 	spin_lock(&ctx->afu->spa_lock);
 	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_ADD, CAPI_PE_SOFTWARE_STATE_V);
 	spin_unlock(&ctx->afu->spa_lock);
@@ -370,7 +370,7 @@ terminate_process_element(struct capi_context_t *ctx)
 	if (!(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V)))
 		return rc;
 
-	pr_devel("%s Terminate pe=0x%i\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Terminate pe=%i\n", __FUNCTION__, ctx->ph);
 	spin_lock(&ctx->afu->spa_lock);
 	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_TERMINATE,
 				    CAPI_PE_SOFTWARE_STATE_V | CAPI_PE_SOFTWARE_STATE_T);
@@ -386,7 +386,7 @@ remove_process_element(struct capi_context_t *ctx)
 {
 	int rc = 0;
 
-	pr_devel("%s Remove pe=0x%i\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Remove pe=%i\n", __FUNCTION__, ctx->ph);
 
 	spin_lock(&ctx->afu->spa_lock);
 	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_REMOVE, 0);
