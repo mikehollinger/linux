@@ -324,6 +324,8 @@ static int alloc_hwirq_ranges(struct capi_ivte_ranges *ranges, struct pci_dev *d
 
 		ranges->offsets[range] = phb->msi_base + hwirq;
 		ranges->ranges[range] = try;
+		dev_info(&dev->dev, "capi range %i: offset: %i  limit: %i\n",
+			 range, ranges->offsets[range], ranges->ranges[range]);
 		num -= try;
 	}
 	if (num)
