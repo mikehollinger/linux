@@ -46,7 +46,16 @@ struct capi_event_header {
 	__u64 reserved3;
 };
 
-/* Keep this large enough to fit any event for convenience */
+#if 0
+/*
+ * This was an old convenience structure guaranteed to be the same size as the
+ * largest event, so userspace could use one of these as the buffer to receive
+ * an event and then cast it into the specific event structure from
+ * header->type.
+ *
+ * This has been deprecated in favour of using struct capi_event with each
+ * possible event type in a union.
+ */
 struct capi_event_uncast {
 	struct capi_event_header header;
 	__u64 reserved1;
@@ -54,6 +63,7 @@ struct capi_event_uncast {
 	__u64 reserved3;
 	__u64 reserved4;
 };
+#endif
 
 struct capi_event_afu_interrupt {
 	struct capi_event_header header;
@@ -67,7 +77,7 @@ struct capi_event_afu_interrupt {
 
 struct capi_event_data_storage {
 	struct capi_event_header header;
-	__u64 address;
+	__u64 addr;
 	__u64 reserved1;
 	__u64 reserved2;
 	__u64 reserved3;
@@ -75,10 +85,19 @@ struct capi_event_data_storage {
 
 struct capi_event_afu_error {
 	struct capi_event_header header;
-	__u64 afu_err;
+	__u64 err;
 	__u64 reserved1;
 	__u64 reserved2;
 	__u64 reserved3;
+};
+
+struct capi_event {
+	union {
+		struct capi_event_header header;
+		struct capi_event_afu_interrupt irq;
+		struct capi_event_data_storage fault;
+		struct capi_event_afu_error afu_err;
+	};
 };
 
 #endif
