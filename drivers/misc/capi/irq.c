@@ -305,4 +305,6 @@ void afu_release_irqs(struct capi_context_t *ctx)
 				capi_unmap_irq(virq, (void*)ctx);
 		}
 	}
+
+	ctx->afu->adapter->driver->release_irqs(ranges, ctx->afu->adapter);
 }

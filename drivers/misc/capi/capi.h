@@ -414,6 +414,7 @@ struct capi_driver_ops {
 	int (*init_adapter) (struct capi_t *adapter);
 	int (*init_afu) (struct capi_afu_t *afu);
 	int (*alloc_irqs) (struct capi_ivte_ranges *ranges, struct capi_t *adapter, unsigned int num);
+	void (*release_irqs) (struct capi_ivte_ranges *ranges, struct capi_t *adapter);
 	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
 };
 

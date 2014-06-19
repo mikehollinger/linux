@@ -47,6 +47,7 @@ void msi_bitmap_free_hwirqs(struct msi_bitmap *bmp, unsigned int offset,
 	bitmap_release_region(bmp->bitmap, offset, order);
 	spin_unlock_irqrestore(&bmp->lock, flags);
 }
+EXPORT_SYMBOL(msi_bitmap_free_hwirqs);
 
 void msi_bitmap_reserve_hwirq(struct msi_bitmap *bmp, unsigned int hwirq)
 {

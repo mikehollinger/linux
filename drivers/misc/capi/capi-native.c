@@ -525,16 +525,16 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	capi_prefault(ctx, wed);
 
 	capi_write_sstp(afu, sstp0, sstp1);
-	capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An, (u64)
-		       (ranges->offsets[0] << 48) |
-		       (ranges->offsets[1] << 32) |
-		       (ranges->offsets[2] << 16) |
-		        ranges->offsets[3]);
+	capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An,
+		       ((u64)ranges->offsets[0] << 48) |
+		       ((u64)ranges->offsets[1] << 32) |
+		       ((u64)ranges->offsets[2] << 16) |
+		       (u64)ranges->offsets[3]);
 	capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An, (u64)
-		       (ranges->ranges[0] << 48) |
-		       (ranges->ranges[1] << 32) |
-		       (ranges->ranges[2] << 16) |
-		        ranges->ranges[3]);
+		       ((u64)ranges->ranges[0] << 48) |
+		       ((u64)ranges->ranges[1] << 32) |
+		       ((u64)ranges->ranges[2] << 16) |
+		        (u64)ranges->ranges[3]);
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 

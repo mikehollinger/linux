@@ -324,7 +324,7 @@ static int alloc_hwirq_ranges(struct capi_ivte_ranges *ranges, struct pci_dev *d
 
 		ranges->offsets[range] = phb->msi_base + hwirq;
 		ranges->ranges[range] = try;
-		dev_info(&dev->dev, "capi range %i: offset: %i  limit: %i\n",
+		dev_info(&dev->dev, "capi alloc irq range %i: offset: %i  limit: %i\n",
 			 range, ranges->offsets[range], ranges->ranges[range]);
 		num -= try;
 	}
@@ -333,8 +333,11 @@ static int alloc_hwirq_ranges(struct capi_ivte_ranges *ranges, struct pci_dev *d
 
 	return 0;
 fail:
-	for (range--; range >= 0; range--)
-		msi_bitmap_free_hwirqs(&phb->msi_bmp, ranges->offsets[range], ranges->ranges[range]);
+	for (range--; range >= 0; range--) {
+		hwirq = ranges->offsets[range] - phb->msi_base;
+		msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
+				       ranges->ranges[range]);
+	}
 	return -ENOSPC;
 }
 
@@ -344,10 +347,31 @@ static int alloc_hwirqs(struct capi_ivte_ranges *ranges, struct capi_t *adapter,
 	return alloc_hwirq_ranges(ranges, dev, num);
 }
 
+static void release_hwirqs(struct capi_ivte_ranges *ranges, struct capi_t *adapter)
+{
+	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int range = 0;
+	int hwirq;
+
+	for (range = 0; range < 4; range++) {
+		hwirq = ranges->offsets[range] - phb->msi_base;
+		if (ranges->ranges[range]) {
+			dev_info(&dev->dev, "capi release irq range %i: offset: %i  limit: %i\n",
+				 range, ranges->offsets[range],
+				 ranges->ranges[range]);
+			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
+					       ranges->ranges[range]);
+		}
+	}
+}
+
 static struct capi_driver_ops capi_pci_driver_ops = {
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
 	.alloc_irqs = alloc_hwirqs,
+	.release_irqs = release_hwirqs,
 	.setup_irq = setup_capi_msi,
 };
 
