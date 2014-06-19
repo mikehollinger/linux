@@ -218,17 +218,17 @@ static int alloc_spa(struct capi_afu_t *afu)
 	 * Ignore the alignment (which is safe in this case as long as we are
 	 * careful with our rounding) and solve for n:
 	 */
-	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
-	pr_devel("afu->max_procs: %i < afu->num_procs: %i\n",
-		 afu->max_procs, afu->num_procs);
-	BUG_ON(afu->max_procs < afu->num_procs);
+	afu->spa_max_procs = (((afu->spa_size / 8) - 96) / 17);
+	pr_devel("afu->spa_max_procs: %i   afu->num_procs: %i\n",
+		 afu->spa_max_procs, afu->num_procs);
+	BUG_ON(afu->spa_max_procs < afu->num_procs);
 
-	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->max_procs + 3) * 128));
+	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->spa_max_procs + 3) * 128));
 
 	spap = virt_to_phys(afu->spa) & CAPI_PSL_SPAP_Addr;
 	spap |= ((afu->spa_size >> (12 - CAPI_PSL_SPAP_Size_Shift)) - 1) & CAPI_PSL_SPAP_Size;
 	spap |= CAPI_PSL_SPAP_V;
-	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->max_procs, afu->sw_command_status, spap);
+	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->spa_max_procs, afu->sw_command_status, spap);
 	capi_p1n_write(afu, CAPI_PSL_SPAP_An, spap);
 
 	ida_init(&afu->pe_index_ida);

@@ -63,7 +63,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	ctx->pending_afu_err = false;
 
 	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
-			   ctx->afu->max_procs, GFP_KERNEL);
+			   ctx->afu->num_procs, GFP_KERNEL);
 	if (i < 0)
 		return i;
 	ctx->ph = i;
