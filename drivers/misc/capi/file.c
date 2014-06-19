@@ -30,7 +30,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 {
 	int minor = MINOR(inode->i_rdev);
 	int adapter_num = minor / CAPI_DEV_MINORS;
-	int slice = minor % CAPI_DEV_MINORS - 1;
+	int slice = (minor % CAPI_DEV_MINORS - 1) % CAPI_MAX_SLICES;
 	struct capi_t *adapter;
 	struct capi_context_t *ctx;
 	int i;
@@ -61,7 +61,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	ctx->pending_afu_err = false;
 
 	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
-			   ctx->afu->max_procs, GFP_KERNEL);
+			   ctx->afu->num_procs, GFP_KERNEL);
 	if (i < 0)
 		return i;
 	ctx->ph = i;

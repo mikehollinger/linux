@@ -570,14 +570,24 @@ int init_capi_pci(struct pci_dev *dev)
 
 			pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
 
-			/* FIXME: mask the MMIO timeout IRQ for now.  need to
-			 * fix this long term */
+			/* FIXME: mask the MMIO timeout for
+			   now.  need to * fix this long term */
 			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
 			afu_reset(afu);
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
 			val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
 			afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
 			afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
+			if (val & (1ull << (63-61))) {
+				afu->afu_directed_mode = true;
+			} else if (val & (1ull << (63-59))) {
+				afu->afu_directed_mode = false;
+			} else {
+				afu->afu_directed_mode = false;
+				pr_err("No programing mode found in AFU desc\n");
+				WARN_ON(1);
+			}
+
 			// FIXME : check req_prog_model and bugon
 
 			val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
@@ -588,7 +598,7 @@ int init_capi_pci(struct pci_dev *dev)
 			/* FIXME check PerProcessPSA_control to see if above
 			 * needed */
 			WARN_ON(afu->psn_size < (afu->pp_offset +
-						afu->pp_size*afu->max_procs));
+						afu->pp_size*afu->num_procs));
 			WARN_ON(afu->pp_size < PAGE_SIZE);
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
