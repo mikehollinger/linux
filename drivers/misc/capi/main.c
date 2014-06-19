@@ -228,7 +228,7 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	afu->adapter = adapter;
 
 	afu->device_master.parent = get_device(&adapter->device);
-	dev_set_name(&afu->device_master, "%s%i", dev_name(&adapter->device), slice + 1);
+	dev_set_name(&afu->device_master, "%s%im", dev_name(&adapter->device), slice + 1);
 	afu->device_master.bus = &capi_bus_type;
 	afu->device_master.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + 1 + slice);
 
@@ -239,7 +239,7 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 
 
 	afu->device.parent = get_device(&adapter->device);
-	dev_set_name(&afu->device, "%s%is", dev_name(&adapter->device), slice + 1);
+	dev_set_name(&afu->device, "%s%i", dev_name(&adapter->device), slice + 1);
 	afu->device.bus = &capi_bus_type;
 	afu->device.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + CAPI_MAX_SLICES + 1 + slice);
 

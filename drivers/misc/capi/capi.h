@@ -323,6 +323,7 @@ struct capi_afu_t {
 	u64 afu_desc_size;
 	struct capi_t *adapter;
 	struct device device, device_master;
+	bool afu_directed_mode;
 
 
 	u64 enabled;
@@ -333,7 +334,7 @@ struct capi_afu_t {
 	 * Everything else in the SPA is only used by hardware */
 	struct capi_process_element *spa;
 	unsigned int spa_size;
-	int max_procs;
+	int spa_max_procs;
 	__be64 *sw_command_status;
 
 	/* FIXME: Below items should be in a separate context struct for virtualisation */

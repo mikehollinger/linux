@@ -218,17 +218,17 @@ static int alloc_spa(struct capi_afu_t *afu)
 	 * Ignore the alignment (which is safe in this case as long as we are
 	 * careful with our rounding) and solve for n:
 	 */
-	afu->max_procs = (((afu->spa_size / 8) - 96) / 17);
-	pr_devel("afu->max_procs: %i < afu->num_procs: %i\n",
-		 afu->max_procs, afu->num_procs);
-	BUG_ON(afu->max_procs < afu->num_procs);
+	afu->spa_max_procs = (((afu->spa_size / 8) - 96) / 17);
+	pr_devel("afu->spa_max_procs: %i   afu->num_procs: %i\n",
+		 afu->spa_max_procs, afu->num_procs);
+	BUG_ON(afu->spa_max_procs < afu->num_procs);
 
-	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->max_procs + 3) * 128));
+	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->spa_max_procs + 3) * 128));
 
 	spap = virt_to_phys(afu->spa) & CAPI_PSL_SPAP_Addr;
 	spap |= ((afu->spa_size >> (12 - CAPI_PSL_SPAP_Size_Shift)) - 1) & CAPI_PSL_SPAP_Size;
 	spap |= CAPI_PSL_SPAP_V;
-	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->max_procs, afu->sw_command_status, spap);
+	pr_devel("capi: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CAPI_PSL_SPAP_An=0x%016llx\n", afu->spa, afu->spa_max_procs, afu->sw_command_status, spap);
 	capi_p1n_write(afu, CAPI_PSL_SPAP_An, spap);
 
 	ida_init(&afu->pe_index_ida);
@@ -301,80 +301,6 @@ static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
 	capi_p2n_write(afu, CAPI_SSTP1_An, sstp1);
 }
 
-/* TODO: Make sure all operations on the linked list are serialised to prevent
- * races on SPA->sw_command_status */
-static int
-add_process_element(struct capi_context_t *ctx)
-{
-	u64 state;
-	int rc = 0;
-
-	spin_lock(&ctx->afu->spa_lock);
-	pr_devel("%s Adding pe=0x%i\n", __FUNCTION__, ctx->ph);
-
-	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V);
-	smp_wmb();
-	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_ADD |
-						     0 | ctx->ph);
-	smp_mb();
-	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_ADD | ctx->ph);
-	while (1) {
-		state = be64_to_cpup(ctx->afu->sw_command_status);
-		if (state == ~0ULL) {
-			pr_err("capi: Error adding process element to AFU\n");
-			rc = -1;
-			goto out;
-		}
-		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
-		    (CAPI_SPA_SW_CMD_ADD  | CAPI_SPA_SW_STATE_ADDED | ctx->ph))
-			break;
-		cpu_relax();
-	}
-
-out:
-	spin_unlock(&ctx->afu->spa_lock);
-	return rc;
-}
-
-/* FIXME merge this with add_process_element */
-static int
-terminate_process_element(struct capi_context_t *ctx)
-{
-	u64 state;
-	int rc = 0;
-
-	/* fast path terminate if it's already invalid */
-	if (!(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V)))
-		return rc;
-
-	spin_lock(&ctx->afu->spa_lock);
-	pr_devel("%s Terminate pe=0x%i\n", __FUNCTION__, ctx->ph);
-	ctx->elem->software_state = cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V |
-						CAPI_PE_SOFTWARE_STATE_T);
-	smp_wmb();
-	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_TERMINATE |
-						     0 | ctx->ph);
-	smp_mb();
-	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_TERMINATE | ctx->ph);
-	while (1) {
-		state = be64_to_cpup(ctx->afu->sw_command_status);
-		if (state == ~0ULL) {
-			pr_err("capi: Error adding process element to AFU\n");
-			rc = -1;
-			goto out;
-		}
-		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
-		    (CAPI_SPA_SW_CMD_TERMINATE | CAPI_SPA_SW_STATE_TERMINATED | ctx->ph))
-			break;
-		cpu_relax();
-	}
-	ctx->elem->software_state = cpu_to_be32(0);
-
-out:
-	spin_unlock(&ctx->afu->spa_lock);
-	return rc;
-}
-
 /* must hold ctx->afu->spa_lock */
 static void
 slb_invalid(struct capi_context_t *ctx)
@@ -396,41 +322,93 @@ slb_invalid(struct capi_context_t *ctx)
 	/* TODO: assume TLB is already invalidated via broadcast tlbie */
 }
 
+static int do_process_element_cmd(struct capi_context_t *ctx,
+				  u64 cmd, u64 pe_state)
+{
+	u64 state;
+
+	ctx->elem->software_state = cpu_to_be32(pe_state);
+	smp_wmb();
+	*(ctx->afu->sw_command_status) = cpu_to_be64(cmd | 0 | ctx->ph);
+	smp_mb();
+	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, cmd | ctx->ph);
+	while (1) {
+		state = be64_to_cpup(ctx->afu->sw_command_status);
+		if (state == ~0ULL) {
+			pr_err("capi: Error adding process element to AFU\n");
+			return -1;
+		}
+		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
+		    (cmd | (cmd >> 16) | ctx->ph))
+			break;
+		cpu_relax();
+	}
+	return 0;
+}
+
+/* TODO: Make sure all operations on the linked list are serialised to prevent
+ * races on SPA->sw_command_status */
+static int
+add_process_element(struct capi_context_t *ctx)
+{
+	int rc = 0;
+
+	pr_devel("%s Adding pe=0x%i\n", __FUNCTION__, ctx->ph);
+	spin_lock(&ctx->afu->spa_lock);
+	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_ADD, CAPI_PE_SOFTWARE_STATE_V);
+	spin_unlock(&ctx->afu->spa_lock);
+	return rc;
+}
+
+/* FIXME merge this with add_process_element */
+static int
+terminate_process_element(struct capi_context_t *ctx)
+{
+	int rc = 0;
+
+	/* fast path terminate if it's already invalid */
+	if (!(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V)))
+		return rc;
+
+	pr_devel("%s Terminate pe=0x%i\n", __FUNCTION__, ctx->ph);
+	spin_lock(&ctx->afu->spa_lock);
+	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_TERMINATE,
+				    CAPI_PE_SOFTWARE_STATE_V | CAPI_PE_SOFTWARE_STATE_T);
+	ctx->elem->software_state = cpu_to_be32(0); 	/* Remove Valid bit */
+	spin_unlock(&ctx->afu->spa_lock);
+	return rc;
+}
+
 /* TODO: Make sure all operations on the linked list are serialised to prevent
  * races on SPA->sw_command_status */
 static int
 remove_process_element(struct capi_context_t *ctx)
 {
-	u64 state;
 	int rc = 0;
 
-	pr_devel("%s remove pe=0x%i\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Remove pe=0x%i\n", __FUNCTION__, ctx->ph);
 
 	spin_lock(&ctx->afu->spa_lock);
-	*(ctx->afu->sw_command_status) = cpu_to_be64(CAPI_SPA_SW_CMD_REMOVE |
-						     0 | ctx->ph);
-	smp_mb();
-	capi_p1n_write(ctx->afu, CAPI_PSL_LLCMD_An, CAPI_LLCMD_REMOVE | ctx->ph);
-	while (1) {
-		state = be64_to_cpup(ctx->afu->sw_command_status);
-		if (state == ~0ULL) {
-			pr_err("capi: Error adding process element to AFU\n");
-			rc = -1;
-			goto out;
-		}
-		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
-		    (CAPI_SPA_SW_CMD_REMOVE | CAPI_SPA_SW_STATE_REMOVED | ctx->ph)) {
-			break;
-		}
-		cpu_relax();
-	}
-
+	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_REMOVE, 0);
 	slb_invalid(ctx);
-
-out:
 	spin_unlock(&ctx->afu->spa_lock);
+
 	return rc;
 }
+
+
+static void assign_psn_space(struct capi_context_t *ctx)
+{
+	if (ctx->master) {
+		ctx->psn_phys = ctx->afu->psn_phys;
+		ctx->psn_size = ctx->afu->psn_size;
+	} else {
+		ctx->psn_phys = ctx->afu->psn_phys +
+			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
+		ctx->psn_size = ctx->afu->pp_size;
+	}
+}
+
 
 static int
 init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
@@ -447,14 +425,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	 *   exceeded, etc
 	 */
 
-	if (ctx->master) {
-		ctx->psn_phys = ctx->afu->psn_phys;
-		ctx->psn_size = ctx->afu->psn_size;
-	} else {
-		ctx->psn_phys = ctx->afu->psn_phys +
-			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
-		ctx->psn_size = ctx->afu->pp_size;
-	}
+	assign_psn_space(ctx);
 
 	ctx->elem->ctxtime = cpu_to_be64(0); /* disable */
 	ctx->elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
@@ -507,7 +478,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	return 0;
 }
 
-static int __maybe_unused
+static int
 init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 			      u64 wed, u64 amr)
 {
@@ -573,6 +544,9 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 
+	/* master only context for dedicated */
+	assign_psn_space(ctx);
+
 	if ((result = afu_reset(afu)))
 		return result;
 
@@ -585,14 +559,27 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	return 0;
 }
 
+static int
+init_process_native(struct capi_context_t *ctx, bool kernel, u64 wed,
+		  u64 amr)
+{
+	if (ctx->afu->afu_directed_mode)
+		return init_afu_directed_process(ctx, kernel, wed, amr);
+	return init_dedicated_process_native(ctx, kernel, wed, amr);
+}
+
 static int detach_process_native(struct capi_context_t *ctx)
 {
+	if (!ctx->afu->afu_directed_mode) {
+		psl_purge(ctx->afu);
+		return 0;
+	}
+
 	if (terminate_process_element(ctx))
 		return -1;
 	if (remove_process_element(ctx))
 		return -1;
 
-//	psl_purge(afu); // ???
 	return 0;
 }
 
@@ -705,7 +692,7 @@ out:
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
-	.init_process = init_afu_directed_process,
+	.init_process = init_process_native,
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
 	.ack_irq = ack_irq_native,
