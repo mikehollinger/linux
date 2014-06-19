@@ -507,7 +507,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	return 0;
 }
 
-static int __maybe_unused
+static int
 init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 			      u64 wed, u64 amr)
 {
@@ -573,6 +573,10 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 
+	/* master only context for dedicated */
+	ctx->psn_phys = ctx->afu->psn_phys;
+	ctx->psn_size = ctx->afu->psn_size;
+
 	if ((result = afu_reset(afu)))
 		return result;
 
@@ -585,14 +589,27 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	return 0;
 }
 
+static int
+init_process_native(struct capi_context_t *ctx, bool kernel, u64 wed,
+		  u64 amr)
+{
+	if (ctx->afu->afu_directed_mode)
+		return init_afu_directed_process(ctx, kernel, wed, amr);
+	return init_dedicated_process_native(ctx, kernel, wed, amr);
+}
+
 static int detach_process_native(struct capi_context_t *ctx)
 {
+	if (!ctx->afu->afu_directed_mode) {
+		psl_purge(ctx->afu);
+		return 0;
+	}
+
 	if (terminate_process_element(ctx))
 		return -1;
 	if (remove_process_element(ctx))
 		return -1;
 
-//	psl_purge(afu); // ???
 	return 0;
 }
 
@@ -705,7 +722,7 @@ out:
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
-	.init_process = init_afu_directed_process,
+	.init_process = init_process_native,
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
 	.ack_irq = ack_irq_native,
