@@ -241,7 +241,7 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 
 	/* cappid 0:2 nodeid 3:5 chipid */
 	/* psl_dsnctl = 0x02e8100000000000ULL | (node << (63-2)) | (pos << (63-5)); */
-	psl_dsnctl = 0x02E8900002000000ULL | (chipid << (63-5));
+	psl_dsnctl = 0x02E890000E000000ULL | (chipid << (63-5));
 
 	capi_p1_write(adapter, CAPI_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
 	capi_p1_write(adapter, CAPI_PSL_RESLCKTO, 0x20000000200);
@@ -598,7 +598,8 @@ int init_capi_pci(struct pci_dev *dev)
 
 			/* FIXME: mask the MMIO timeout for
 			   now.  need to * fix this long term */
-			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000080000000);
+//			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
+			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
 			afu_reset(afu);
 			dump_afu_descriptor(dev, afu->afu_desc_mmio);
 			val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
