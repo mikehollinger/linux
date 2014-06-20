@@ -76,13 +76,13 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 static int
 afu_open(struct inode *inode, struct file *file)
 {
-	return __afu_open(inode, file, true);
+	return __afu_open(inode, file, false);
 }
 
 static int
-afu_ctx_open(struct inode *inode, struct file *file)
+afu_master_open(struct inode *inode, struct file *file)
 {
-	return __afu_open(inode, file, false);
+	return __afu_open(inode, file, true);
 }
 
 
@@ -324,7 +324,7 @@ static const struct file_operations afu_fops = {
 
 static const struct file_operations afu_master_fops = {
 	.owner		= THIS_MODULE,
-	.open           = afu_ctx_open,
+	.open           = afu_master_open,
 	.poll		= afu_poll,
 	.read		= afu_read,
 	.release        = afu_release,
