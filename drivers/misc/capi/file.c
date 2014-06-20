@@ -112,10 +112,55 @@ afu_release(struct inode *inode, struct file *file)
 }
 
 static long
+afu_ioctl_start_work(struct capi_context_t *ctx,
+		     struct capi_ioctl_start_work __user *uwork)
+{
+	struct capi_ioctl_start_work work;
+	u64 amr;
+	int rc;
+
+	pr_devel("afu_ioctl: CAPI_START_WORK\n");
+
+	if (copy_from_user(&work, uwork,
+			   sizeof(struct capi_ioctl_start_work)))
+		return -EFAULT;
+	/*
+	 * Possible TODO: Have an administrative way to limit
+	 * the max interrupts per process? This wouldn't be
+	 * useful for most AFUs given how domain specific they
+	 * tend to be, but may be useful for generic
+	 * accelerators used transparently by common libraries
+	 * (e.g. zlib accelerator). OTOH it might not help so
+	 * much if an evil user can just keep opening new contexts
+	 */
+	if (work.num_interrupts == -1)
+		work.num_interrupts = ctx->afu->pp_irqs;
+	else if (work.num_interrupts < ctx->afu->pp_irqs)
+		return -EINVAL;
+	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
+		return rc;
+
+	amr = work.amr & mfspr(SPRN_UAMOR);
+
+	work.process_element = (ctx->elem - ctx->afu->spa) /
+		sizeof(struct capi_process_element);
+
+	/* Returns PE and number of interrupts */
+	if (copy_to_user(uwork, &work,
+			 sizeof(struct capi_ioctl_start_work)))
+		return -EFAULT;
+
+	/* fixme me: decide this based on the AFU */
+	if ((rc = capi_ops->init_process(ctx, false, work.wed, amr)))
+		return rc;
+
+	return 0;
+}
+
+static long
 afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
-	int rc;
 
 #if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
 	if (current->mm != ctx->afu->mm) {
@@ -128,39 +173,8 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	pr_devel("afu_ioctl\n");
 	switch (cmd) {
 		case CAPI_IOCTL_START_WORK:
-		{
-			struct capi_ioctl_start_work __user *uwork =
-				(struct capi_ioctl_start_work __user *)arg;
-			struct capi_ioctl_start_work work;
-			u64 amr;
-
-			pr_devel("afu_ioctl: CAPI_START_WORK\n");
-
-			if (copy_from_user(&work, uwork, sizeof(struct capi_ioctl_start_work)))
-				return -EFAULT;
-			/*
-			 * Possible TODO: Have an administrative way to limit
-			 * the max interrupts per process? This wouldn't be
-			 * useful for most AFUs given how domain specific they
-			 * tend to be, but may be useful for generic
-			 * accelerators used transparently by common libraries
-			 * (e.g. zlib accelerator). OTOH it might not help so
-			 * much if an evil user can just keep opening new contexts
-			 */
-			if (work.num_interrupts == -1)
-				work.num_interrupts = ctx->afu->pp_irqs;
-			else if (work.num_interrupts < ctx->afu->pp_irqs)
-				return -EINVAL;
-			if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
-				return rc;
-
-			amr = work.amr & mfspr(SPRN_UAMOR);
-
-			/* fixme me: decide this based on the AFU */
-			if ((rc = capi_ops->init_process(ctx, false, work.wed, amr)))
-				return rc;
-			return 0;
-		}
+			return afu_ioctl_start_work(ctx,
+				(struct capi_ioctl_start_work __user *)arg);
 		case CAPI_IOCTL_LOAD_AFU_IMAGE:
 		{
 			struct capi_ioctl_load_afu_image __user *uwork =
@@ -263,6 +277,8 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	}
 
 	memset(&event, 0, sizeof(event));
+	event.header.process_element = (ctx->elem - ctx->afu->spa) /
+		sizeof(struct capi_process_element);
 	if (ctx->pending_irq) {
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event.header.size = sizeof(struct capi_event_afu_interrupt);
