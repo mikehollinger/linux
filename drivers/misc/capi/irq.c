@@ -182,7 +182,7 @@ static irqreturn_t capi_irq_afu(int irq, void *data)
 	}
 	BUG_ON(r >= CAPI_IRQ_RANGES);
 
-	pr_devel("Received AFU interrupt %i for afu context %p (virq %i hwirq %lu)\n",
+	pr_devel("Received AFU interrupt %i for afu context %p (virq %i hwirq %lx)\n",
 	       afu_irq, ctx, irq, hwirq);
 
 	spin_lock(&ctx->lock);
