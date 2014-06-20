@@ -188,7 +188,7 @@ static irqreturn_t capi_irq_afu(int irq, void *data)
 
 	BUG_ON(!ctx->irq_bitmap);
 	spin_lock(&ctx->lock);
-	set_bit(afu_irq-1, ctx->irq_bitmap);
+	set_bit(afu_irq, ctx->irq_bitmap);
 	ctx->pending_irq = true;
 	spin_unlock(&ctx->lock);
 
