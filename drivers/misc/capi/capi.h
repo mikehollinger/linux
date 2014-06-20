@@ -364,7 +364,8 @@ struct capi_context_t {
 	/* Only used in PR mode */
 	u64 process_token;
 
-	u8 pending_irq_mask; /* Accessed from IRQ context */
+	bool pending_irq;
+	unsigned long *irq_bitmap; /* Accessed from IRQ context */
 	bool pending_fault;
 	u64 fault_addr;
 	u64 afu_err;
@@ -513,7 +514,7 @@ void del_capi_dev(struct capi_t *capi, int adapter_num);
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void capi_unmap_irq(unsigned int virq, void *cookie);
-void afu_register_irqs(struct capi_context_t *ctx, u32 count);
+int afu_register_irqs(struct capi_context_t *ctx, u32 count);
 void afu_enable_irqs(struct capi_context_t *ctx);
 void afu_disable_irqs(struct capi_context_t *ctx);
 void afu_release_irqs(struct capi_context_t *ctx);

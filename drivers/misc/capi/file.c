@@ -9,6 +9,7 @@
 
 #include <linux/export.h>
 #include <linux/kernel.h>
+#include <linux/bitmap.h>
 #include <linux/sched.h>
 #include <linux/poll.h>
 #include <linux/pid.h>
@@ -55,8 +56,9 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	/* FIXME: Move these to afu context initialiser */
 	init_waitqueue_head(&ctx->wq);
 	spin_lock_init(&ctx->lock);
-	ctx->pending_irq_mask = 0;
 
+	ctx->irq_bitmap = NULL;
+	ctx->pending_irq = false;
 	ctx->pending_fault = false;
 	ctx->pending_afu_err = false;
 
@@ -66,10 +68,6 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 		return i;
 	ctx->ph = i;
 	ctx->elem = &ctx->afu->spa[i];
-
-	/* FIXME: Allow userspace to request more IRQs & maybe have an
-	 * administrative way to restrict excess per process allocations */
-	afu_register_irqs(ctx, ctx->afu->pp_irqs);
 
 	return 0;
 }
@@ -117,7 +115,7 @@ static long
 afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
-	int result;
+	int rc;
 
 #if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
 	if (current->mm != ctx->afu->mm) {
@@ -140,11 +138,27 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 			if (copy_from_user(&work, uwork, sizeof(struct capi_ioctl_start_work)))
 				return -EFAULT;
+			/*
+			 * Possible TODO: Have an administrative way to limit
+			 * the max interrupts per process? This wouldn't be
+			 * useful for most AFUs given how domain specific they
+			 * tend to be, but may be useful for generic
+			 * accelerators used transparently by common libraries
+			 * (e.g. zlib accelerator). OTOH it might not help so
+			 * much if an evil user can just keep opening new contexts
+			 */
+			if (work.num_interrupts == -1)
+				work.num_interrupts = ctx->afu->pp_irqs;
+			else if (work.num_interrupts < ctx->afu->pp_irqs)
+				return -EINVAL;
+			if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
+				return rc;
+
 			amr = work.amr & mfspr(SPRN_UAMOR);
 
 			/* fixme me: decide this based on the AFU */
-			if ((result = capi_ops->init_process(ctx, false, work.wed, amr)))
-				return result;
+			if ((rc = capi_ops->init_process(ctx, false, work.wed, amr)))
+				return rc;
 			return 0;
 		}
 		case CAPI_IOCTL_LOAD_AFU_IMAGE:
@@ -203,7 +217,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 	pr_devel("afu_poll wait done\n");
 
 	spin_lock_irqsave(&ctx->lock, flags);
-	if (ctx->pending_irq_mask || ctx->pending_fault ||
+	if (ctx->pending_irq || ctx->pending_fault ||
 	    ctx->pending_afu_err)
 		mask |= POLLIN | POLLRDNORM;
 	spin_unlock_irqrestore(&ctx->lock, flags);
@@ -227,7 +241,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 
 	while (1) {
 		spin_lock_irqsave(&ctx->lock, flags);
-		if (ctx->pending_irq_mask || ctx->pending_fault ||
+		if (ctx->pending_irq || ctx->pending_fault ||
 		    ctx->pending_afu_err)
 			break;
 		spin_unlock_irqrestore(&ctx->lock, flags);
@@ -236,7 +250,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 			return -EAGAIN;
 
 		prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
-		if (!(ctx->pending_irq_mask || ctx->pending_fault ||
+		if (!(ctx->pending_irq || ctx->pending_fault ||
 		      ctx->pending_afu_err)) {
 			pr_devel("afu_read going to sleep...\n");
 			schedule();
@@ -249,15 +263,17 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	}
 
 	memset(&event, 0, sizeof(event));
-	if (ctx->pending_irq_mask) {
+	if (ctx->pending_irq) {
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event.header.size = sizeof(struct capi_event_afu_interrupt);
 		event.header.type = CAPI_EVENT_AFU_INTERRUPT;
-		event.irq.irq = ctx->pending_irq_mask;
+		event.irq.irq = find_first_bit(ctx->irq_bitmap, ctx->irq_count);
 
 		/* Only clear the IRQ if we can send the whole event: */
 		if (count >= event.header.size) {
-			ctx->pending_irq_mask = 0;
+			clear_bit(event.irq.irq, ctx->irq_bitmap);
+			if (bitmap_empty(ctx->irq_bitmap, ctx->irq_count))
+				ctx->pending_irq = false;
 		}
 	} else if (ctx->pending_fault) {
 		pr_devel("afu_read delivering data storage fault\n");

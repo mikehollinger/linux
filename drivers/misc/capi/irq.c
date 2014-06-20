@@ -8,6 +8,7 @@
 #include <linux/workqueue.h>
 #include <linux/sched.h>
 #include <linux/wait.h>
+#include <linux/slab.h>
 #include <linux/pid.h>
 #include <linux/of.h>
 #include <asm/cputable.h>
@@ -185,8 +186,10 @@ static irqreturn_t capi_irq_afu(int irq, void *data)
 	pr_devel("Received AFU interrupt %i for afu context %p (virq %i hwirq %lx)\n",
 	       afu_irq, ctx, irq, hwirq);
 
+	BUG_ON(!ctx->irq_bitmap);
 	spin_lock(&ctx->lock);
-	ctx->pending_irq_mask |= 1 << (afu_irq-1);
+	set_bit(afu_irq-1, ctx->irq_bitmap);
+	ctx->pending_irq = true;
 	spin_unlock(&ctx->lock);
 
 	wake_up_all(&ctx->wq);
@@ -228,7 +231,7 @@ void capi_unmap_irq(unsigned int virq, void *cookie)
 	irq_dispose_mapping(virq);
 }
 
-void afu_register_irqs(struct capi_context_t *ctx, u32 count)
+int afu_register_irqs(struct capi_context_t *ctx, u32 count)
 {
 	irq_handler_t handler = capi_irq;
 	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
@@ -244,6 +247,10 @@ void afu_register_irqs(struct capi_context_t *ctx, u32 count)
 	if (ctx->afu->adapter->driver->alloc_irqs(ranges, ctx->afu->adapter, count))
 
 	ctx->irq_count = count;
+	ctx->irq_bitmap = kcalloc(BITS_TO_LONGS(count),
+				  sizeof(*ctx->irq_bitmap), GFP_KERNEL);
+	if (!ctx->irq_bitmap)
+		return -ENOMEM;
 	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
 		hwirq = ranges->offsets[r];
 		for (i = 0; i < ranges->ranges[r]; hwirq++, i++) {
@@ -252,6 +259,8 @@ void afu_register_irqs(struct capi_context_t *ctx, u32 count)
 			handler = capi_irq_afu;
 		}
 	}
+
+	return 0;
 }
 
 void afu_enable_irqs(struct capi_context_t *ctx)
