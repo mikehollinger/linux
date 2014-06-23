@@ -619,6 +619,18 @@ int init_capi_pci(struct pci_dev *dev)
 
 			val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
 			afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
+			if (val & (1ull << (63 - 6)))
+				afu->pp_mmio = true;
+			else {
+				pr_devel("AFU doesn't support per process mmio space\n");
+				afu->pp_mmio = false;
+			}
+			if (val & (1ull << (63 - 7)))
+				afu->mmio = true;
+			else {
+				pr_devel("AFU doesn't support mmio space\n");
+				afu->mmio = false;
+			}
 
 			val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
 			afu->pp_offset = val;
