@@ -236,7 +236,7 @@ int afu_register_irqs(struct capi_context_t *ctx, u32 count)
 	irq_handler_t handler = capi_irq;
 	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
 	irq_hw_number_t hwirq;
-	int r, i;
+	int rc, r, i;
 
 	/* FIXME: Assign all PSL IRQs to same IRQ to reduce wastage
 	 * FIXME: Will be completely broken on phyp & BML/Mambo until we add an
@@ -244,7 +244,8 @@ int afu_register_irqs(struct capi_context_t *ctx, u32 count)
 	 * refactored to remove pnv phb dependency */
 	BUG_ON(!ctx->afu->adapter->driver);
 	BUG_ON(!ctx->afu->adapter->driver->alloc_irqs);
-	if (ctx->afu->adapter->driver->alloc_irqs(ranges, ctx->afu->adapter, count))
+	if ((rc = ctx->afu->adapter->driver->alloc_irqs(ranges, ctx->afu->adapter, count)))
+		return rc;
 
 	ctx->irq_count = count;
 	ctx->irq_bitmap = kcalloc(BITS_TO_LONGS(count),
