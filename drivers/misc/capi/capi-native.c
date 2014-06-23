@@ -185,27 +185,8 @@ static void release_adapter_native(struct capi_t *adapter)
 	iounmap(adapter->p1_mmio);
 }
 
-static int alloc_spa(struct capi_afu_t *afu)
+static int spa_max_procs(int spa_size)
 {
-	u64 spap;
-
-// FIXME do this dynamically.  Now get atleast 512
-#ifdef CONFIG_PPC_64K_PAGES
-	int pages = 2;
-#else
-	int pages = 32;
-#endif
-
-	/* TODO: Calculate required size to fit that many procs and try to
-	 * allocate enough contiguous pages to support it, but fall back to
-	 * less pages if allocation is not possible.
-	 */
-	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, ilog2(pages)))) {
-		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
-		return -ENOMEM;
-	}
-	afu->spa_size = PAGE_SIZE * pages;
-
 	/* From the CAIA:
 	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
 	 * Most of that junk is really just an overly-complicated way of saying
@@ -218,9 +199,31 @@ static int alloc_spa(struct capi_afu_t *afu)
 	 * Ignore the alignment (which is safe in this case as long as we are
 	 * careful with our rounding) and solve for n:
 	 */
-	afu->spa_max_procs = (((afu->spa_size / 8) - 96) / 17);
-	pr_devel("afu->spa_max_procs: %i   afu->num_procs: %i\n",
-		 afu->spa_max_procs, afu->num_procs);
+	return ((spa_size / 8) - 96) / 17;
+}
+
+static int alloc_spa(struct capi_afu_t *afu)
+{
+	u64 spap;
+	int pages = 0;
+
+	/* Work out how many pages to allocate */
+	do {
+		pages++;
+		afu->spa_size = pages * PAGE_SIZE;
+		afu->spa_max_procs = spa_max_procs(afu->spa_size);
+	} while (afu->spa_max_procs < afu->num_procs);
+
+	/* TODO: Calculate required size to fit that many procs and try to
+	 * allocate enough contiguous pages to support it, but fall back to
+	 * less pages if allocation is not possible.
+	 */
+	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, ilog2(pages)))) {
+		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
+		return -ENOMEM;
+	}
+	pr_devel("spa pages: %i afu->spa_max_procs: %i   afu->num_procs: %i\n",
+		 pages, afu->spa_max_procs, afu->num_procs);
 	BUG_ON(afu->spa_max_procs < afu->num_procs);
 
 	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->spa_max_procs + 3) * 128));
