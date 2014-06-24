@@ -244,7 +244,7 @@ int afu_register_irqs(struct capi_context_t *ctx, u32 count)
 	 * refactored to remove pnv phb dependency */
 	BUG_ON(!ctx->afu->adapter->driver);
 	BUG_ON(!ctx->afu->adapter->driver->alloc_irqs);
-	if ((rc = ctx->afu->adapter->driver->alloc_irqs(ranges, ctx->afu->adapter, count)))
+	if ((rc = ctx->afu->adapter->driver->alloc_irqs(ranges, ctx->afu->adapter, count + 1)))
 		return rc;
 
 	ctx->irq_count = count;
