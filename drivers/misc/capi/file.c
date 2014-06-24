@@ -283,11 +283,11 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event.header.size = sizeof(struct capi_event_afu_interrupt);
 		event.header.type = CAPI_EVENT_AFU_INTERRUPT;
-		event.irq.irq = find_first_bit(ctx->irq_bitmap, ctx->irq_count);
+		event.irq.irq = find_first_bit(ctx->irq_bitmap, ctx->irq_count) + 1;
 
 		/* Only clear the IRQ if we can send the whole event: */
 		if (count >= event.header.size) {
-			clear_bit(event.irq.irq, ctx->irq_bitmap);
+			clear_bit(event.irq.irq - 1, ctx->irq_bitmap);
 			if (bitmap_empty(ctx->irq_bitmap, ctx->irq_count))
 				ctx->pending_irq = false;
 		}
