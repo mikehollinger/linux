@@ -323,7 +323,8 @@ struct capi_afu_t {
 	struct capi_t *adapter;
 	struct device device, device_master;
 	bool afu_directed_mode;
-
+	bool mmio;
+	bool pp_mmio;
 
 	u64 enabled;
 

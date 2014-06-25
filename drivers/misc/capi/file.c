@@ -206,6 +206,12 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	u64 len = vm->vm_end - vm->vm_start;
 	len = min(len, ctx->psn_size);
 
+	/* make sure there is a valid per process space for this AFU */
+	if ((ctx->master && !ctx->afu->mmio) || (!ctx->afu->pp_mmio)) {
+		pr_devel("AFU doesn't support mmio space\n");
+		return EINVAL;
+	}
+
 	/* Can't mmap until the AFU is enabled
 	   FIXME: check on teardown */
 	if (!ctx->afu->enabled)
@@ -644,6 +650,8 @@ int add_capi_dev(struct capi_t *capi, int adapter_num)
 	cdev_init(&(capi->afu_master_cdev), &afu_master_fops);
 	cdev_init(&(capi->afu_cdev), &afu_fops);
 
+
+	/* fixme do this per slice */
 	rc = cdev_add(&(capi->cdev), MKDEV(capi_major, capi_minor), 1);
 	if (rc) {
 		pr_err("Unable to register CAPI character device: %i\n", rc);
@@ -656,6 +664,7 @@ int add_capi_dev(struct capi_t *capi, int adapter_num)
 		return -1;
 	}
 
+	/* FIXME check afu->pp_mmio to see if we need this file */
 	rc = cdev_add(&(capi->afu_cdev), MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1), capi->slices);
 	if (rc) {
 		pr_err("Unable to register CAPI AFU character devices: %i\n", rc);
