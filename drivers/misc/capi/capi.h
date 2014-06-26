@@ -290,13 +290,13 @@ extern struct bus_type capi_bus_type;
 
 #if CAIA_VERSION < 11
 struct capi_sste {
-	u64 vsid_data;
-	u64 esid_data;
+	__be64 vsid_data;
+	__be64 esid_data;
 };
 #else
 struct capi_sste {
-	u64 esid_data;
-	u64 vsid_data;
+	__be64 esid_data;
+	__be64 vsid_data;
 };
 #endif
 

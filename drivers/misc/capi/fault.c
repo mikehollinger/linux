@@ -206,8 +206,8 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 	pr_devel("CAPI Populating SST[%li]: %#llx %#llx\n",
 			sste - ctx->sstp, vsid_data, esid_data);
 
-	sste->vsid_data = vsid_data;
-	sste->esid_data = esid_data;
+	sste->vsid_data = cpu_to_be64(vsid_data);
+	sste->esid_data = cpu_to_be64(esid_data);
 
 	return 0;
 }
