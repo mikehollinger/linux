@@ -555,7 +555,7 @@ int init_capi_pci(struct pci_dev *dev)
 
 	err_hwirq = _alloc_hwirqs(dev, 1);
 
-	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
+	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, &dev->dev, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
 		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
 		goto err3;
 	}

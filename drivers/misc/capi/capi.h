@@ -498,6 +498,7 @@ static inline void __iomem * _capi_afu_ps_addr(struct capi_afu_t *afu, int reg)
 /* TODO: Clean up the alloc/init process */
 int capi_init_adapter(struct capi_t *adapter,
 		      struct capi_driver_ops *driver,
+		      struct device *parent,
 		      int slices, u64 handle,
 		      u64 p1_base, u64 p1_size,
 		      u64 p2_base, u64 p2_size,

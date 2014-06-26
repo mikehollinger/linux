@@ -127,6 +127,7 @@ int capi_get_num_adapters(void)
  * Maybe better to have the caller fill in the struct and call us? */
 int capi_init_adapter(struct capi_t *adapter,
 		     struct capi_driver_ops *driver,
+		     struct device *parent,
 		     int slices, u64 handle,
 		     u64 p1_base, u64 p1_size,
 		     u64 p2_base, u64 p2_size,
@@ -138,12 +139,11 @@ int capi_init_adapter(struct capi_t *adapter,
 	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx err: %#lx",
 			handle, p1_base, p1_size, p2_base, p2_size, err_hwirq);
 
-
 	spin_lock(&adapter_list_lock);
 	adapter_num = capi_get_num_adapters();
 
 	adapter->driver = driver;
-	adapter->device.parent = NULL; /* FIXME: Set to PHB on Sapphire? */
+	adapter->device.parent = parent;
 	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
 	adapter->device.bus = &capi_bus_type;
 	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);

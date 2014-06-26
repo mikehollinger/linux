@@ -111,7 +111,7 @@ static int __init init_capi_of(void)
 		/* FIXME: Restructure to avoid needing to iterate over AFUs twice */
 		for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++);
 
-		if ((ret = capi_init_adapter(adapter, NULL, slice, handle,
+		if ((ret = capi_init_adapter(adapter, NULL, NULL, slice, handle,
 					      p1_base, p1_size,
 					      0, 0, err_hwirq)))
 			goto bail;
