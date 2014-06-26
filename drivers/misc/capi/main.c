@@ -19,6 +19,8 @@ static DEFINE_SPINLOCK(adapter_list_lock);
 static LIST_HEAD(adapter_list);
 const struct capi_backend_ops *capi_ops;
 
+extern struct class *capi_class;
+
 int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
 	u64 rt = 0;
@@ -142,6 +144,7 @@ int capi_init_adapter(struct capi_t *adapter,
 	spin_lock(&adapter_list_lock);
 	adapter_num = capi_get_num_adapters();
 
+	adapter->device.class = capi_class;
 	adapter->driver = driver;
 	adapter->device.parent = parent;
 	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
