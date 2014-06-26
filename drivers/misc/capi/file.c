@@ -650,7 +650,6 @@ int add_capi_dev(struct capi_t *capi, int adapter_num)
 	cdev_init(&(capi->afu_master_cdev), &afu_master_fops);
 	cdev_init(&(capi->afu_cdev), &afu_fops);
 
-
 	/* fixme do this per slice */
 	rc = cdev_add(&(capi->cdev), MKDEV(capi_major, capi_minor), 1);
 	if (rc) {

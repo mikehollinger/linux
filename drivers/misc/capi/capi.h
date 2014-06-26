@@ -413,6 +413,7 @@ struct capi_t {
 	struct dentry *psl_err_chk;
 	struct dentry *afx_chk;
 	struct list_head list;
+	struct bin_attribute capi_attr;
 };
 
 struct capi_driver_ops {

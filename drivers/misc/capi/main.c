@@ -113,6 +113,20 @@ struct capi_t * get_capi_adapter(int num)
 	return ret;
 }
 
+static ssize_t capi_read(struct file *filp, struct kobject *kobj,
+				 struct bin_attribute *bin_attr,
+				 char *buf, loff_t pos, size_t size)
+{
+	printk(KERN_ALERT "Hello\n");
+}
+
+static ssize_t capi_write(struct file *filp, struct kobject *kobj,
+				 struct bin_attribute *bin_attr,
+				 char *buf, loff_t pos, size_t size)
+{
+	printk(KERN_ALERT "World\n");
+}
+
 int capi_get_num_adapters(void)
 {
 	struct capi_t *adapter;
@@ -144,7 +158,12 @@ int capi_init_adapter(struct capi_t *adapter,
 	spin_lock(&adapter_list_lock);
 	adapter_num = capi_get_num_adapters();
 
-	adapter->device.class = capi_class;
+	capi_class = class_create(THIS_MODULE, "capi_class");
+	if (IS_ERR(capi_class)) {
+		pr_warn("Unable to create capi class\n");
+		return PTR_ERR(capi_class);
+	}
+
 	adapter->driver = driver;
 	adapter->device.parent = parent;
 	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
@@ -153,6 +172,14 @@ int capi_init_adapter(struct capi_t *adapter,
 
 	if ((rc = device_register(&adapter->device)))
 		goto out_unlock;
+
+	sysfs_bin_attr_init(adapter->capi_attr);
+	adapter->capi_attr.attr.name = "capi_attr";
+	adapter->capi_attr.attr.mode = S_IRUGO | S_IWUSR;
+	adapter->capi_attr.read = capi_read;
+	adapter->capi_attr.write = capi_write;
+	adapter->capi_attr.size = 4;
+	sysfs_create_bin_file(&adapter->device.kobj, &adapter->capi_attr);
 
 	if ((rc = capi_ops->init_adapter(adapter, handle,
 					p1_base, p1_size,

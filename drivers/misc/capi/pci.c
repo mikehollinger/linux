@@ -44,7 +44,6 @@ MODULE_DEVICE_TABLE(pci, capi_pci_tbl);
 struct capi_pci_t {
 	struct pci_dev *pdev;
 	struct capi_t adapter;
-	struct bin_attribute capi_attr;
 };
 
 struct class *capi_class;
@@ -485,20 +484,6 @@ int enable_capi_protocol(struct pci_dev *dev)
 
 extern int afu_reset(struct capi_afu_t *afu); // FIXME remove
 
-static ssize_t capi_read(struct file *filp, struct kobject *kobj,
-				 struct bin_attribute *bin_attr,
-				 char *buf, loff_t pos, size_t size)
-{
-	printk(KERN_ALERT "Hello\n");
-}
-
-static ssize_t capi_write(struct file *filp, struct kobject *kobj,
-				 struct bin_attribute *bin_attr,
-				 char *buf, loff_t pos, size_t size)
-{
-	printk(KERN_ALERT "World\n");
-}
-
 int init_capi_pci(struct pci_dev *dev)
 {
 	u64 p1_base, p1_size;
@@ -522,20 +507,6 @@ int init_capi_pci(struct pci_dev *dev)
 	memset(wrap, 0, sizeof(struct capi_pci_t));
 	wrap->pdev = dev;
 	adapter = &wrap->adapter;
-
-	sysfs_bin_attr_init(wrap->capi_attr);
-	wrap->capi_attr.attr.name = "capi";
-	wrap->capi_attr.attr.mode = S_IRUGO | S_IWUSR;
-	wrap->capi_attr.read = capi_read;
-	wrap->capi_attr.write = capi_write;
-	wrap->capi_attr.size = 4;
-	sysfs_create_bin_file(&dev->dev.kobj, &wrap->capi_attr);
-
-	capi_class = class_create(THIS_MODULE, "capi");
-	if (IS_ERR(capi_class)) {
-		pr_warn("Unable to create capi class\n");
-		return PTR_ERR(capi_class);
-	}       
 
 	if (pci_request_region(dev, 2, "priv 2 regs"))
 		goto err1;
