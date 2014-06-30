@@ -48,6 +48,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	    return -ENOMEM;
 	ctx->sstp = NULL;
 	ctx->afu = &adapter->slice[slice];
+	ctx->master = master;
 
 	file->private_data = (void *)ctx;
 
