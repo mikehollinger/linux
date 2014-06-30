@@ -217,7 +217,8 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	if (!ctx->afu->enabled)
 		return -EBUSY;
 
-	pr_devel("%s: mmio physical: %llx\n", __FUNCTION__, ctx->psn_phys);
+	pr_devel("%s: mmio physical: %llx pe: %i master:%i\n", __FUNCTION__,
+		 ctx->psn_phys, ctx->ph , ctx->master);
 	/* FIXME: Return error if virtualised AFU */
 	vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
 	return vm_iomap_memory(vm, ctx->psn_phys, len);
