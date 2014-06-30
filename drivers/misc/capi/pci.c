@@ -46,8 +46,6 @@ struct capi_pci_t {
 	struct capi_t adapter;
 };
 
-struct class *capi_class;
-
 static int find_capi_vsec(struct pci_dev *dev)
 {
 	int vsec = 0;

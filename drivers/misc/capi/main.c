@@ -12,6 +12,7 @@
 #include <linux/mm.h>
 #include <linux/of.h>
 #include <asm/cputable.h>
+#include <linux/slab.h>
 
 #include "capi.h"
 
@@ -19,7 +20,7 @@ static DEFINE_SPINLOCK(adapter_list_lock);
 static LIST_HEAD(adapter_list);
 const struct capi_backend_ops *capi_ops;
 
-extern struct class *capi_class;
+static struct class *capi_class;
 
 int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
@@ -118,6 +119,7 @@ static ssize_t capi_read(struct file *filp, struct kobject *kobj,
 				 char *buf, loff_t pos, size_t size)
 {
 	printk(KERN_ALERT "Hello\n");
+	return -EINVAL;
 }
 
 static ssize_t capi_write(struct file *filp, struct kobject *kobj,
@@ -125,6 +127,7 @@ static ssize_t capi_write(struct file *filp, struct kobject *kobj,
 				 char *buf, loff_t pos, size_t size)
 {
 	printk(KERN_ALERT "World\n");
+	return -EINVAL;
 }
 
 int capi_get_num_adapters(void)
@@ -158,28 +161,29 @@ int capi_init_adapter(struct capi_t *adapter,
 	spin_lock(&adapter_list_lock);
 	adapter_num = capi_get_num_adapters();
 
-	capi_class = class_create(THIS_MODULE, "capi_class");
+	capi_class = class_create(THIS_MODULE, "capi");
 	if (IS_ERR(capi_class)) {
 		pr_warn("Unable to create capi class\n");
 		return PTR_ERR(capi_class);
 	}
 
 	adapter->driver = driver;
-	adapter->device.parent = parent;
-	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
-	adapter->device.bus = &capi_bus_type;
-	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);
-
-	if ((rc = device_register(&adapter->device)))
+	adapter->device = device_create(capi_class, parent,
+			    MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS),
+					NULL, "capi%c", 'a' + adapter_num);
+	if (IS_ERR(adapter->device)) {
+		rc = PTR_ERR(adapter->device);
 		goto out_unlock;
-
+	}
+	
 	sysfs_bin_attr_init(adapter->capi_attr);
 	adapter->capi_attr.attr.name = "capi_attr";
 	adapter->capi_attr.attr.mode = S_IRUGO | S_IWUSR;
 	adapter->capi_attr.read = capi_read;
 	adapter->capi_attr.write = capi_write;
 	adapter->capi_attr.size = 4;
-	sysfs_create_bin_file(&adapter->device.kobj, &adapter->capi_attr);
+	if ((rc = sysfs_create_bin_file(&adapter->device->kobj, &adapter->capi_attr)))
+		goto out_unlock; // FIXME: We probably should unregister the class, device, etc...
 
 	if ((rc = capi_ops->init_adapter(adapter, handle,
 					p1_base, p1_size,
@@ -257,10 +261,10 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 
 	afu->adapter = adapter;
 
-	afu->device_master.parent = get_device(&adapter->device);
-	dev_set_name(&afu->device_master, "%s%im", dev_name(&adapter->device), slice + 1);
+	afu->device_master.parent = get_device(adapter->device);
+	dev_set_name(&afu->device_master, "%s%im", dev_name(adapter->device), slice + 1);
 	afu->device_master.bus = &capi_bus_type;
-	afu->device_master.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + 1 + slice);
+	afu->device_master.devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + 1 + slice);
 
 	if (device_register(&afu->device_master)) {
 		/* FIXME: chardev for this AFU should return errors */
@@ -268,10 +272,10 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	}
 
 
-	afu->device.parent = get_device(&adapter->device);
-	dev_set_name(&afu->device, "%s%i", dev_name(&adapter->device), slice + 1);
+	afu->device.parent = get_device(adapter->device);
+	dev_set_name(&afu->device, "%s%i", dev_name(adapter->device), slice + 1);
 	afu->device.bus = &capi_bus_type;
-	afu->device.devt = MKDEV(MAJOR(adapter->device.devt), MINOR(adapter->device.devt) + CAPI_MAX_SLICES + 1 + slice);
+	afu->device.devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + CAPI_MAX_SLICES + 1 + slice);
 
 	spin_lock_init(&afu->spa_lock);
 
