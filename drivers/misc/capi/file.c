@@ -143,8 +143,7 @@ afu_ioctl_start_work(struct capi_context_t *ctx,
 
 	amr = work.amr & mfspr(SPRN_UAMOR);
 
-	work.process_element = (ctx->elem - ctx->afu->spa) /
-		sizeof(struct capi_process_element);
+	work.process_element = ctx->ph;
 
 	/* Returns PE and number of interrupts */
 	if (copy_to_user(uwork, &work,
