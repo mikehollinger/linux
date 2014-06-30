@@ -434,6 +434,8 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	ctx->elem->sdr = cpu_to_be64(mfspr(SPRN_SDR1));
 
 	sr = CAPI_PSL_SR_An_SC;
+	if (ctx->master)
+		sr |= CAPI_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
 		sr |= CAPI_PSL_SR_An_TC;
 	if (!kernel) {
@@ -500,6 +502,8 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	capi_p1n_write(afu, CAPI_PSL_SDR_An, mfspr(SPRN_SDR1));
 
 	sr = CAPI_PSL_SR_An_SC;
+	if (ctx->master)
+		sr |= CAPI_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
 		sr |= CAPI_PSL_SR_An_TC;
 	if (!kernel) {

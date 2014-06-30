@@ -153,6 +153,7 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_PSL_SR_An_US  (1ull << (63-56)) /* User state,    GA1: X */
 #define CAPI_PSL_SR_An_SC  (1ull << (63-58)) /* Segment Table secondary hash */
 #define CAPI_PSL_SR_An_R   MSR_DR            /* Relocate,      GA1: 1 */
+#define CAPI_PSL_SR_An_MP  (1ull << (63-62)) /* Master Process */
 
 /****** CAPI_PSL_LLCMD_An ****************************************************/
 #define CAPI_LLCMD_TERMINATE   0x0001000000000000ULL
