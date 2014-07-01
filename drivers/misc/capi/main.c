@@ -144,6 +144,8 @@ int capi_get_num_adapters(void)
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the caller fill in the struct and call us? */
+struct kobject *afu_kobj;
+
 int capi_init_adapter(struct capi_t *adapter,
 		     struct capi_driver_ops *driver,
 		     struct device *parent,
@@ -175,7 +177,14 @@ int capi_init_adapter(struct capi_t *adapter,
 		rc = PTR_ERR(adapter->device);
 		goto out_unlock;
 	}
-	
+
+	printk(KERN_ALERT "SD1 : %p\n", adapter->device->kobj.sd);
+	afu_kobj = kobject_create_and_add("afu", &adapter->device->kobj);
+	if (IS_ERR(afu_kobj)) {
+		rc = PTR_ERR(afu_kobj);
+		goto out_unlock;
+	}
+
 	sysfs_bin_attr_init(adapter->capi_attr);
 	adapter->capi_attr.attr.name = "capi_attr";
 	adapter->capi_attr.attr.mode = S_IRUGO | S_IWUSR;
