@@ -52,7 +52,6 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 
 	file->private_data = (void *)ctx;
 
-	ctx->master = master;
 	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
 	/* FIXME: Move these to afu context initialiser */
