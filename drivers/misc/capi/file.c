@@ -284,8 +284,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	}
 
 	memset(&event, 0, sizeof(event));
-	event.header.process_element = (ctx->elem - ctx->afu->spa) /
-		sizeof(struct capi_process_element);
+	event.header.process_element = ctx->ph;
 	if (ctx->pending_irq) {
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event.header.size = sizeof(struct capi_event_afu_interrupt);
