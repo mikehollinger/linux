@@ -48,6 +48,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	    return -ENOMEM;
 	ctx->sstp = NULL;
 	ctx->afu = &adapter->slice[slice];
+	ctx->master = master;
 
 	file->private_data = (void *)ctx;
 
@@ -143,8 +144,7 @@ afu_ioctl_start_work(struct capi_context_t *ctx,
 
 	amr = work.amr & mfspr(SPRN_UAMOR);
 
-	work.process_element = (ctx->elem - ctx->afu->spa) /
-		sizeof(struct capi_process_element);
+	work.process_element = ctx->ph;
 
 	/* Returns PE and number of interrupts */
 	if (copy_to_user(uwork, &work,
@@ -218,7 +218,8 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	if (!ctx->afu->enabled)
 		return -EBUSY;
 
-	pr_devel("%s: mmio physical: %llx\n", __FUNCTION__, ctx->psn_phys);
+	pr_devel("%s: mmio physical: %llx pe: %i master:%i\n", __FUNCTION__,
+		 ctx->psn_phys, ctx->ph , ctx->master);
 	/* FIXME: Return error if virtualised AFU */
 	vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
 	return vm_iomap_memory(vm, ctx->psn_phys, len);
