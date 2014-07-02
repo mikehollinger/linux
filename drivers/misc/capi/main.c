@@ -20,7 +20,7 @@ static DEFINE_SPINLOCK(adapter_list_lock);
 static LIST_HEAD(adapter_list);
 const struct capi_backend_ops *capi_ops;
 
-static struct class *capi_class;
+struct class *capi_class;
 
 int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
@@ -178,7 +178,6 @@ int capi_init_adapter(struct capi_t *adapter,
 		goto out_unlock;
 	}
 
-	printk(KERN_ALERT "SD1 : %p\n", adapter->device->kobj.sd);
 	afu_kobj = kobject_create_and_add("afu", &adapter->device->kobj);
 	if (IS_ERR(afu_kobj)) {
 		rc = PTR_ERR(afu_kobj);
@@ -273,6 +272,7 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	afu->device_master.parent = get_device(adapter->device);
 	dev_set_name(&afu->device_master, "%s%im", dev_name(adapter->device), slice + 1);
 	afu->device_master.bus = &capi_bus_type;
+//	afu->device_master.class = capi_class;
 	afu->device_master.devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + 1 + slice);
 
 	if (device_register(&afu->device_master)) {
@@ -280,18 +280,21 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		return -EFAULT;
 	}
 
-
-	afu->device.parent = get_device(adapter->device);
-	dev_set_name(&afu->device, "%s%i", dev_name(adapter->device), slice + 1);
-	afu->device.bus = &capi_bus_type;
-	afu->device.devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + CAPI_MAX_SLICES + 1 + slice);
-
+	afu->device = kzalloc(sizeof(struct device), GFP_KERNEL);
+	afu->device->parent = get_device(adapter->device);
+	dev_set_name(afu->device, "%s%i", dev_name(adapter->device), slice + 1);
+	afu->device->bus = NULL; //&capi_bus_type;
+	afu->device->class = capi_class;
+	afu->device->devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + CAPI_MAX_SLICES + 1 + slice);
 	spin_lock_init(&afu->spa_lock);
 
-	if (device_register(&afu->device)) {
+	if (device_register(afu->device)) {
 		/* FIXME: chardev for this AFU should return errors */
 		return -EFAULT;
 	}
+
+	BUG_ON(sysfs_create_link(afu_kobj, &afu->device->kobj, "slave"));
+
 	/* FIXME: Do this first, and only then create the char dev */
 	return capi_ops->init_afu(afu, handle, err_irq);
 }
@@ -350,7 +353,7 @@ static void exit_capi(void)
 //			afu_release_irqs(&(adapter->slice[slice]));
 
 			capi_ops->release_afu(&(adapter->slice[slice]));
-			put_device(adapter->slice[slice].device.parent);
+			put_device(adapter->slice[slice].device->parent);
 		}
 		del_capi_dev(adapter, adapter_num++);
 		if (capi_ops->release_adapter)
