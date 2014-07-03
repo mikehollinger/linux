@@ -639,8 +639,6 @@ void unregister_capi_dev(void)
 	unregister_chrdev_region(capi_dev, CAPI_NUM_MINORS);
 }
 
-extern struct kobject *afu_kobj;
-
 int add_capi_dev(struct capi_t *capi, int adapter_num)
 {
 	int rc;
@@ -669,13 +667,6 @@ int add_capi_dev(struct capi_t *capi, int adapter_num)
 	rc = cdev_add(&(capi->afu_cdev), MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1), capi->slices);
 	if (rc) {
 		pr_err("Unable to register CAPI AFU character devices: %i\n", rc);
-		return -1;
-	}
-
-	/* Create sysfs links */
-	rc = sysfs_create_link(afu_kobj, &capi->device->kobj, "master");
-	if (rc) {
-		pr_err("Unable to create sysfs link\n");
 		return -1;
 	}
 

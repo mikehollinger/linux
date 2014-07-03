@@ -322,7 +322,7 @@ struct capi_afu_t {
 	void __iomem *afu_desc_mmio;
 	u64 afu_desc_size;
 	struct capi_t *adapter;
-	struct device *device, device_master;
+	struct device device, device_master;
 	bool afu_directed_mode;
 	bool mmio;
 	bool pp_mmio;
@@ -414,6 +414,7 @@ struct capi_t {
 	struct dentry *afx_chk;
 	struct list_head list;
 	struct bin_attribute capi_attr;
+	struct kobject *afu_kobj;
 };
 
 struct capi_driver_ops {

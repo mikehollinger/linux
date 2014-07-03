@@ -144,8 +144,6 @@ int capi_get_num_adapters(void)
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the caller fill in the struct and call us? */
-struct kobject *afu_kobj;
-
 int capi_init_adapter(struct capi_t *adapter,
 		     struct capi_driver_ops *driver,
 		     struct device *parent,
@@ -178,9 +176,9 @@ int capi_init_adapter(struct capi_t *adapter,
 		goto out_unlock;
 	}
 
-	afu_kobj = kobject_create_and_add("afu", &adapter->device->kobj);
-	if (IS_ERR(afu_kobj)) {
-		rc = PTR_ERR(afu_kobj);
+	adapter->afu_kobj = kobject_create_and_add("afu", &adapter->device->kobj);
+	if (IS_ERR(adapter->afu_kobj)) {
+		rc = PTR_ERR(adapter->afu_kobj);
 		goto out_unlock;
 	}
 
@@ -260,40 +258,40 @@ err:
 }
 EXPORT_SYMBOL(capi_map_slice_regs);
 
+/* We only support 4 slices so we only need one character for slice names */
+#define AFU_NAME_LEN 2
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
 		  irq_hw_number_t err_irq)
 {
+	char afu_name[AFU_NAME_LEN];
+
 	pr_devel("capi_init_afu: slice: %i, handle: %#llx, err_irq: %#lx\n",
 			slice, handle, err_irq);
 
 	afu->adapter = adapter;
 
-	afu->device_master.parent = get_device(adapter->device);
+	afu->device.parent = get_device(adapter->device);
+	dev_set_name(&afu->device, "%s%i", dev_name(adapter->device), slice + 1);
+	afu->device.devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + CAPI_MAX_SLICES + 1 + slice);
+	spin_lock_init(&afu->spa_lock);
+
+	if (device_register(&afu->device)) {
+		/* FIXME: chardev for this AFU should return errors */
+		return -EFAULT;
+	}
+
+	snprintf(afu_name, AFU_NAME_LEN, "%d", slice);
+	BUG_ON(sysfs_create_link(adapter->afu_kobj, &afu->device.kobj, afu_name));
+
+	afu->device_master.parent = get_device(&afu->device);
 	dev_set_name(&afu->device_master, "%s%im", dev_name(adapter->device), slice + 1);
-	afu->device_master.bus = &capi_bus_type;
-//	afu->device_master.class = capi_class;
 	afu->device_master.devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + 1 + slice);
 
 	if (device_register(&afu->device_master)) {
 		/* FIXME: chardev for this AFU should return errors */
 		return -EFAULT;
 	}
-
-	afu->device = kzalloc(sizeof(struct device), GFP_KERNEL);
-	afu->device->parent = get_device(adapter->device);
-	dev_set_name(afu->device, "%s%i", dev_name(adapter->device), slice + 1);
-	afu->device->bus = NULL; //&capi_bus_type;
-	afu->device->class = capi_class;
-	afu->device->devt = MKDEV(MAJOR(adapter->device->devt), MINOR(adapter->device->devt) + CAPI_MAX_SLICES + 1 + slice);
-	spin_lock_init(&afu->spa_lock);
-
-	if (device_register(afu->device)) {
-		/* FIXME: chardev for this AFU should return errors */
-		return -EFAULT;
-	}
-
-	BUG_ON(sysfs_create_link(afu_kobj, &afu->device->kobj, "slave"));
 
 	/* FIXME: Do this first, and only then create the char dev */
 	return capi_ops->init_afu(afu, handle, err_irq);
@@ -353,7 +351,8 @@ static void exit_capi(void)
 //			afu_release_irqs(&(adapter->slice[slice]));
 
 			capi_ops->release_afu(&(adapter->slice[slice]));
-			put_device(adapter->slice[slice].device->parent);
+			put_device(adapter->slice[slice].device_master.parent);
+			put_device(adapter->slice[slice].device.parent);
 		}
 		del_capi_dev(adapter, adapter_num++);
 		if (capi_ops->release_adapter)
