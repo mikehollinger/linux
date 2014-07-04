@@ -704,13 +704,11 @@ out:
 	return rc;
 }
 
-#define AFU_NAME_LEN 2
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 {
 	int rc;
 	unsigned int capi_major = MAJOR(afu->adapter->device.devt);
 	unsigned int capi_minor = MINOR(afu->adapter->device.devt);
-	char afu_name[AFU_NAME_LEN];
 
 	/* Add the AFU slave device */
 	/* FIXME check afu->pp_mmio to see if we need this file */
@@ -745,8 +743,7 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	}
 
 	/* Create sysfs links */
-	snprintf(afu_name, AFU_NAME_LEN, "%d", slice);
-	if ((rc = sysfs_create_link(afu->adapter->afu_kobj, &afu->device.kobj, afu_name)))
+	if ((rc = sysfs_create_link(afu->adapter->afu_kobj, &afu->device.kobj, dev_name(&afu->device))))
 		goto out3;
 
 	return 0;
