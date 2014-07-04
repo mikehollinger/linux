@@ -482,6 +482,100 @@ int enable_capi_protocol(struct pci_dev *dev)
 
 extern int afu_reset(struct capi_afu_t *afu); // FIXME remove
 
+/* FIXME: clean up parameters */
+int init_capi_afu(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_off, u64 ps_size, u64 vsec, u64 afu_desc_off, u64 afu_desc_size, int slice, int err_hwirq, struct pci_dev *dev)
+{
+	int rc;
+	struct capi_afu_t *afu = &(adapter->slice[slice]);
+	u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
+
+	const u64 p1n_size = 0x100;
+	const u64 p2n_size = 0x1000;
+
+	p1n_base = p1_base + 0x10000 + (slice * p1n_size);
+	p2n_base = p2_base + (slice * p2n_size);
+	psn_base = p2_base + (ps_off + (slice * ps_size));
+	if (vsec) {
+		afu_desc = p2_base + afu_desc_off + (slice * afu_desc_size);
+	}
+
+	if ((rc = capi_map_slice_regs(afu,
+				      p1n_base, p1n_size,
+				      p2n_base, p2n_size,
+				      psn_base, ps_size,
+				      afu_desc, afu_desc_size))) {
+		return rc;
+	}
+
+	if (afu->afu_desc_mmio) {
+		u64 val;
+
+		pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
+
+		/* FIXME: mask the MMIO timeout for
+		   now.  need to * fix this long term */
+//			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
+		capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
+		afu_reset(afu);
+		dump_afu_descriptor(dev, afu->afu_desc_mmio);
+		val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
+		afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
+		afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
+		if (val & (1ull << (63-61))) {
+			afu->afu_directed_mode = true;
+		} else if (val & (1ull << (63-59))) {
+			afu->afu_directed_mode = false;
+		} else {
+			afu->afu_directed_mode = false;
+			pr_err("No programing mode found in AFU desc\n");
+			WARN_ON(1);
+		}
+
+		// FIXME : check req_prog_model and bugon
+
+		val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
+		afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
+		if (val & (1ull << (63 - 6)))
+			afu->pp_mmio = true;
+		else {
+			pr_devel("AFU doesn't support per process mmio space\n");
+			afu->pp_mmio = false;
+		}
+		if (val & (1ull << (63 - 7)))
+			afu->mmio = true;
+		else {
+			pr_devel("AFU doesn't support mmio space\n");
+			afu->mmio = false;
+		}
+
+		val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
+		afu->pp_offset = val;
+		/* FIXME check PerProcessPSA_control to see if above
+		 * needed */
+		WARN_ON(afu->psn_size < (afu->pp_offset +
+					 afu->pp_size*afu->num_procs));
+		WARN_ON(afu->pp_size < PAGE_SIZE);
+
+		/* XXX TODO: Read num_ints_per_process from AFU descriptor */
+	} else
+		BUG(); /* no afu descriptor */
+
+	err_hwirq = _alloc_hwirqs(dev, 1);
+
+	if ((rc = capi_init_afu(adapter, afu, slice, 0, err_hwirq))) {
+		dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
+		goto out;
+	}
+
+	printk(KERN_ALERT "CAPI AFU INITED\n");
+	return 0;
+
+out:
+	/* Unalloc hwirqs */
+	/* Unmap slice regs */
+	return rc;
+}
+
 int init_capi_pci(struct pci_dev *dev)
 {
 	u64 p1_base, p1_size;
@@ -560,92 +654,9 @@ int init_capi_pci(struct pci_dev *dev)
 		goto err3;
 	}
 
-	for (slice = 0; slice < nAFUs; slice++) {
-		struct capi_afu_t *afu = &(adapter->slice[slice]);
-		u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
-
-		const u64 p1n_size = 0x100;
-		const u64 p2n_size = 0x1000;
-
-		p1n_base = p1_base + 0x10000 + (slice * p1n_size);
-		p2n_base = p2_base + (slice * p2n_size);
-		psn_base = p2_base + (ps_off + (slice * ps_size));
-		if (vsec) {
-			afu_desc = p2_base + afu_desc_off + (slice * afu_desc_size);
-		}
-
-
-		if ((rc = capi_map_slice_regs(afu,
-				p1n_base, p1n_size,
-				p2n_base, p2n_size,
-				psn_base, ps_size,
-				afu_desc, afu_desc_size))) {
-			return rc;
-		}
-
-
-#if 1 /* PSL bug doesn't allow us to read the AFU descriptor until the AFU is enabled, supposed to be fixed in PSL 185 */
-		if (afu->afu_desc_mmio) {
-			u64 val;
-
-			pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
-
-			/* FIXME: mask the MMIO timeout for
-			   now.  need to * fix this long term */
-//			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
-			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
-			afu_reset(afu);
-			dump_afu_descriptor(dev, afu->afu_desc_mmio);
-			val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
-			afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
-			afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
-			if (val & (1ull << (63-61))) {
-				afu->afu_directed_mode = true;
-			} else if (val & (1ull << (63-59))) {
-				afu->afu_directed_mode = false;
-			} else {
-				afu->afu_directed_mode = false;
-				pr_err("No programing mode found in AFU desc\n");
-				WARN_ON(1);
-			}
-
-			// FIXME : check req_prog_model and bugon
-
-			val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
-			afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
-			if (val & (1ull << (63 - 6)))
-				afu->pp_mmio = true;
-			else {
-				pr_devel("AFU doesn't support per process mmio space\n");
-				afu->pp_mmio = false;
-			}
-			if (val & (1ull << (63 - 7)))
-				afu->mmio = true;
-			else {
-				pr_devel("AFU doesn't support mmio space\n");
-				afu->mmio = false;
-			}
-
-			val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
-			afu->pp_offset = val;
-			/* FIXME check PerProcessPSA_control to see if above
-			 * needed */
-			WARN_ON(afu->psn_size < (afu->pp_offset +
-						afu->pp_size*afu->num_procs));
-			WARN_ON(afu->pp_size < PAGE_SIZE);
-
-			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
-		} else
-			BUG(); /* no afu descriptor */
-#endif
-
-		err_hwirq = _alloc_hwirqs(dev, 1);
-
-		if ((rc = capi_init_afu(adapter, afu, slice, 0, err_hwirq))) {
-			dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
+	for (slice = 0; slice < nAFUs; slice++)
+		if (( rc = init_capi_afu(adapter, p1_base, p2_base, ps_off, ps_size, vsec, afu_desc_off, afu_desc_size, slice, err_hwirq, dev)))
 			goto err4;
-		}
-	}
 
 	return 0;
 err4:

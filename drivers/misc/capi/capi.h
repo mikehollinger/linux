@@ -321,6 +321,7 @@ struct capi_afu_t {
 	u64 pp_size;
 	void __iomem *afu_desc_mmio;
 	u64 afu_desc_size;
+	int slice;
 	struct capi_t *adapter;
 	struct device device, device_master;
 	bool afu_directed_mode;
@@ -407,7 +408,7 @@ struct capi_t {
 	struct cdev cdev;
 	struct cdev afu_cdev;
 	struct cdev afu_master_cdev;
-	struct device *device;
+	struct device device;
 	int slices;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
@@ -518,6 +519,7 @@ int register_capi_dev(void);
 void unregister_capi_dev(void);
 int add_capi_dev(struct capi_t *capi, int adapter_num);
 void del_capi_dev(struct capi_t *capi, int adapter_num);
+int add_capi_afu_dev(struct capi_afu_t *afu, int slice);
 
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
