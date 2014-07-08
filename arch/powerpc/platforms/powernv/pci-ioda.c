@@ -1000,8 +1000,8 @@ int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 	/* Assign XIVE to PE */
 	rc = opal_pci_set_xive_pe(phb->opal_id, pe->pe_number, xive_num);
 	if (rc) {
-		pr_warn("%s: OPAL error %d setting pci_dev %p pnv_phb %p msi_base 0x%x hwirq 0x%x XIVE 0x%x PE\n",
-			pci_name(dev), rc, dev, phb, phb->msi_base, hwirq, xive_num);
+		pr_warn("%s: OPAL error %d setting msi_base 0x%x hwirq 0x%x XIVE 0x%x PE\n",
+			pci_name(dev), rc, phb->msi_base, hwirq, xive_num);
 		return -EIO;
 	}
 	set_msi_irq_chip(phb, virq);

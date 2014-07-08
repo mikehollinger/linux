@@ -279,9 +279,6 @@ static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned i
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
 
-	dev_info(&dev->dev, "CAPI setup_capi_msi pci_dev: %p, pnv_phb: %p, msi_base: 0x%x hwirq: 0x%x virq: %i\n",
-			dev, phb, phb->msi_base, hwirq, virq);
-
 	return pnv_capi_ioda_msi_setup(phb, dev, hwirq, virq);
 }
 
@@ -305,9 +302,6 @@ static int alloc_hwirq_ranges(struct capi_irq_ranges *irqs, struct pci_dev *dev,
 	int range = 0;
 	int hwirq;
 	int try;
-
-	dev_info(&dev->dev, "CAPI alloc_hwirq_ranges pci_dev: %p, pnv_phb: %p, msi_base: 0x%x\n",
-			dev, phb, phb->msi_base);
 
 	memset(irqs, 0, sizeof(struct capi_irq_ranges));
 
