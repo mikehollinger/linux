@@ -344,6 +344,12 @@ struct capi_afu_t {
 	spinlock_t spa_lock;
 };
 
+struct capi_irq_ranges {
+	irq_hw_number_t offset[CAPI_IRQ_RANGES];
+	irq_hw_number_t range[CAPI_IRQ_RANGES];
+};
+
+
 /* This is a capi context.  If the PSL is in dedicated mode, there will be one
  * of these per AFU.  If in AFU directed there can be lots of these. */
 struct capi_context_t {
@@ -368,6 +374,7 @@ struct capi_context_t {
 
 	bool pending_irq;
 	unsigned long *irq_bitmap; /* Accessed from IRQ context */
+	struct capi_irq_ranges irqs;
 	bool pending_fault;
 	u64 fault_addr;
 	u64 afu_err;
@@ -408,16 +415,11 @@ struct capi_t {
 	struct list_head list;
 };
 
-struct capi_ivte_ranges {
-	__be16 offsets[4];
-	__be16 ranges[4];
-};
-
 struct capi_driver_ops {
 	int (*init_adapter) (struct capi_t *adapter);
 	int (*init_afu) (struct capi_afu_t *afu);
-	int (*alloc_irqs) (struct capi_ivte_ranges *ranges, struct capi_t *adapter, unsigned int num);
-	void (*release_irqs) (struct capi_ivte_ranges *ranges, struct capi_t *adapter);
+	int (*alloc_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter, unsigned int num);
+	void (*release_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter);
 	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
 };
 
@@ -442,7 +444,8 @@ struct capi_process_element {
 	__be64 sdr;
 	__be64 haurp;
 	__be32 ctxtime;
-	struct capi_ivte_ranges ivte;
+	__be16 ivte_offsets[4];
+	__be16 ivte_ranges[4];
 	__be32 lpid;
 	struct capi_process_element_common common;
 	__be32 software_state;

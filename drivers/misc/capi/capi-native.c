@@ -173,7 +173,7 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 	adapter->err_hwirq = err_hwirq;
 	pr_devel("capi_err_ivte: %#lx\n", adapter->err_hwirq);
 	adapter->err_virq = capi_map_irq(adapter, adapter->err_hwirq, capi_irq_err, (void*)adapter);
-	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq);
+	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq & 0xffff);
 
 	return 0;
 }
@@ -250,7 +250,7 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 		pr_devel("capi slice error IVTE: %#lx\n", afu->err_hwirq);
 		afu->err_virq = capi_map_irq(afu->adapter, afu->err_hwirq, capi_slice_irq_err, (void*)afu);
 		val = capi_p1n_read(afu, CAPI_PSL_SERR_An);
-		val = (val & 0x00ffffffffff0000ULL) | afu->err_hwirq;
+		val = (val & 0x00ffffffffff0000ULL) | (afu->err_hwirq & 0xffff);
 		capi_p1n_write(afu, CAPI_PSL_SERR_An, val);
 	}
 
@@ -418,7 +418,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 {
 
 	u64 sr, sstp0, sstp1;
-	int result;
+	int r, result;
 
 	/* FIXME:
 	 * - Add to exising SPA list if one already exists
@@ -465,7 +465,10 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	ctx->elem->common.sstp0 = cpu_to_be64(sstp0);
 	ctx->elem->common.sstp1 = cpu_to_be64(sstp1);
 
-	/* ctx->elem->ivte set up elsewhere */
+	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
+		ctx->elem->ivte_offsets[r] = cpu_to_be16(ctx->irqs.offset[r]);
+		ctx->elem->ivte_ranges[r] = cpu_to_be16(ctx->irqs.range[r]);
+	}
 
 	ctx->elem->common.amr = cpu_to_be64(amr);
 	ctx->elem->common.wed = cpu_to_be64(wed);
@@ -480,7 +483,6 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 			      u64 wed, u64 amr)
 {
 	struct capi_afu_t * afu = ctx->afu;
-	struct capi_ivte_ranges *ranges = &ctx->elem->ivte;
 	u64 sr, sstp0, sstp1;
 	int result;
 
@@ -532,15 +534,15 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 
 	capi_write_sstp(afu, sstp0, sstp1);
 	capi_p1n_write(afu, CAPI_PSL_IVTE_Offset_An,
-		       ((u64)ranges->offsets[0] << 48) |
-		       ((u64)ranges->offsets[1] << 32) |
-		       ((u64)ranges->offsets[2] << 16) |
-		       (u64)ranges->offsets[3]);
+		       (((u64)ctx->irqs.offset[0] & 0xffff) << 48) |
+		       (((u64)ctx->irqs.offset[1] & 0xffff) << 32) |
+		       (((u64)ctx->irqs.offset[2] & 0xffff) << 16) |
+		        ((u64)ctx->irqs.offset[3] & 0xffff));
 	capi_p1n_write(afu, CAPI_PSL_IVTE_Limit_An, (u64)
-		       ((u64)ranges->ranges[0] << 48) |
-		       ((u64)ranges->ranges[1] << 32) |
-		       ((u64)ranges->ranges[2] << 16) |
-		        (u64)ranges->ranges[3]);
+		       (((u64)ctx->irqs.range[0] & 0xffff) << 48) |
+		       (((u64)ctx->irqs.range[1] & 0xffff) << 32) |
+		       (((u64)ctx->irqs.range[2] & 0xffff) << 16) |
+		        ((u64)ctx->irqs.range[3] & 0xffff));
 
 	capi_p2n_write(afu, CAPI_PSL_AMR_An, amr);
 

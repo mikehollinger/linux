@@ -177,11 +177,11 @@ init_dedicated_process_hv(struct capi_context_t *ctx, bool kernel,
 	elem->common.sstp0          = cpu_to_be64(sstp0);
 	elem->common.sstp1          = cpu_to_be64(sstp1);
 	elem->common.amr            = cpu_to_be64(amr);
-	elem->pslVirtualIsn         = cpu_to_be32(ctx->elem->ivte.offsets[0]);
+	elem->pslVirtualIsn         = cpu_to_be32(ctx->irqs.offset[0]);
 	for (r = 0; r < CAPI_IRQ_RANGES; r++) {
 		/* FIXME: Test this and maybe optimise - can we use bitmap.h? */
-		irq = ctx->elem->ivte.offsets[r];
-		for (i = 0; i < ctx->elem->ivte.ranges[r]; i++) {
+		irq = ctx->irqs.offset[r];
+		for (i = 0; i < ctx->irqs.range[r]; i++) {
 			if (r == 0 && i == 0) /* PSL interrupt, set above */
 				continue;
 			elem->applicationVirtualIsnBitmap[irq / 8] |= 0x80 >> (irq % 8);
