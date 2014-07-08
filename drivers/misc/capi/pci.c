@@ -41,11 +41,6 @@ DEFINE_PCI_DEVICE_TABLE(capi_pci_tbl) = {
 };
 MODULE_DEVICE_TABLE(pci, capi_pci_tbl);
 
-struct capi_pci_t {
-	struct pci_dev *pdev;
-	struct capi_t adapter;
-};
-
 static int find_capi_vsec(struct pci_dev *dev)
 {
 	int vsec = 0;
@@ -213,7 +208,7 @@ extern struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev);
 
 static int init_implementation_adapter_regs(struct capi_t *adapter)
 {
-	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct device_node *np;
 	const __be32 *prop;
 	u64 psl_dsnctl;
@@ -274,8 +269,7 @@ extern int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 
 static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned int virq)
 {
-	struct capi_pci_t *wrap = container_of(adapter, struct capi_pci_t, adapter);
-	struct pci_dev *dev = wrap->pdev;
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
 
@@ -343,7 +337,7 @@ static int alloc_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter, un
 
 static void release_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter)
 {
-	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
 	int range = 0;
@@ -581,7 +575,6 @@ int init_capi_pci(struct pci_dev *dev)
 	u64 p1_base, p1_size;
 	u64 p2_base, p2_size;
 	int vsec = find_capi_vsec(dev);
-	struct capi_pci_t *wrap;
 	struct capi_t *adapter;
 	u32 afu_desc_off, afu_desc_size;
 	u32 ps_off, ps_size;
@@ -592,13 +585,10 @@ int init_capi_pci(struct pci_dev *dev)
 	int rc = -EBUSY;
 	int err_hwirq;
 
-	if (!(wrap = kmalloc(sizeof(struct capi_pci_t), GFP_KERNEL))) {
+	if (!(adapter = kzalloc(sizeof(struct capi_t), GFP_KERNEL))) {
 		rc = -ENOMEM;
 		goto err1;
 	}
-	memset(wrap, 0, sizeof(struct capi_pci_t));
-	wrap->pdev = dev;
-	adapter = &wrap->adapter;
 
 	if (pci_request_region(dev, 2, "priv 2 regs"))
 		goto err1;
@@ -666,7 +656,7 @@ err3:
 err2:
 	pci_release_region(dev, 2);
 err1:
-	kfree(wrap);
+	kfree(adapter);
 	return rc;
 }
 
