@@ -279,6 +279,9 @@ static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned i
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
 
+	dev_info(&dev->dev, "CAPI setup_capi_msi pci_dev: %p, pnv_phb: %p, msi_base: 0x%x hwirq: 0x%x virq: %i\n",
+			dev, phb, phb->msi_base, hwirq, virq);
+
 	return pnv_capi_ioda_msi_setup(phb, dev, hwirq, virq);
 }
 
@@ -303,6 +306,9 @@ static int alloc_hwirq_ranges(struct capi_ivte_ranges *ranges, struct pci_dev *d
 	int hwirq;
 	int try;
 
+	dev_info(&dev->dev, "CAPI alloc_hwirq_ranges pci_dev: %p, pnv_phb: %p, msi_base: 0x%x\n",
+			dev, phb, phb->msi_base);
+
 	memset(ranges, 0, sizeof(struct capi_ivte_ranges));
 
 	for (range = 0; range < 4 && num; range++) {
@@ -318,7 +324,7 @@ static int alloc_hwirq_ranges(struct capi_ivte_ranges *ranges, struct pci_dev *d
 
 		ranges->offsets[range] = phb->msi_base + hwirq;
 		ranges->ranges[range] = try;
-		dev_info(&dev->dev, "capi alloc irq range 0x%x: offset: %i  limit: %i\n",
+		dev_info(&dev->dev, "capi alloc irq range 0x%x: offset: 0x%x  limit: %i\n",
 			 range, ranges->offsets[range], ranges->ranges[range]);
 		num -= try;
 	}
