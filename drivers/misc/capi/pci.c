@@ -318,7 +318,7 @@ static int alloc_hwirq_ranges(struct capi_irq_ranges *irqs, struct pci_dev *dev,
 
 		irqs->offset[range] = phb->msi_base + hwirq;
 		irqs->range[range] = try;
-		dev_info(&dev->dev, "capi alloc irq range 0x%x: offset: 0x%x  limit: %i\n",
+		dev_info(&dev->dev, "capi alloc irq range 0x%x: offset: 0x%lx  limit: %li\n",
 			 range, irqs->offset[range], irqs->range[range]);
 		num -= try;
 	}
@@ -352,7 +352,7 @@ static void release_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter)
 	for (range = 0; range < 4; range++) {
 		hwirq = irqs->offset[range] - phb->msi_base;
 		if (irqs->range[range]) {
-			dev_info(&dev->dev, "capi release irq range 0x%x: offset: %i  limit: %i\n",
+			dev_info(&dev->dev, "capi release irq range 0x%x: offset: 0x%lx  limit: %i\n",
 				 range, irqs->offset[range],
 				 irqs->range[range]);
 			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
