@@ -39,6 +39,7 @@ int afu_reset(struct capi_afu_t *afu)
 	pr_devel("AFU reset\n");
 	return 0;
 }
+EXPORT_SYMBOL(afu_reset);
 
 static int afu_enable(struct capi_afu_t *afu)
 {
@@ -183,6 +184,7 @@ static void release_adapter_native(struct capi_t *adapter)
 {
 	capi_unmap_irq(adapter->err_virq, (void*)adapter);
 	iounmap(adapter->p1_mmio);
+	iounmap(adapter->p2_mmio);
 }
 
 static int spa_max_procs(int spa_size)
@@ -239,14 +241,12 @@ static int alloc_spa(struct capi_afu_t *afu)
 }
 
 static int
-init_afu_native(struct capi_afu_t *afu, u64 handle,
-		irq_hw_number_t err_hwirq)
+init_afu_native(struct capi_afu_t *afu, u64 handle)
 {
 	u64 val;
 	int rc = 0;
 
-	afu->err_hwirq = err_hwirq;
-	if (err_hwirq) { /* Can drop this test when the BML support is pulled out - under phyp we use capi-of.c */
+	if (afu->err_hwirq) { /* Can drop this test when the BML support is pulled out - under phyp we use capi-of.c */
 		pr_devel("capi slice error IVTE: %#lx\n", afu->err_hwirq);
 		afu->err_virq = capi_map_irq(afu->adapter, afu->err_hwirq, capi_slice_irq_err, (void*)afu);
 		val = capi_p1n_read(afu, CAPI_PSL_SERR_An);

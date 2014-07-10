@@ -176,6 +176,8 @@ int capi_init_adapter(struct capi_t *adapter,
 	}
 
 	list_add_tail(&(adapter)->list, &adapter_list);
+	spin_unlock(&adapter_list_lock);
+
 	return 0;
 
 out2:
@@ -239,9 +241,10 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 
 	afu->adapter = adapter;
 	afu->slice = slice;
+	afu->err_hwirq = err_irq;
 
 	/* Initialise the hardware? */
-	if ((rc = capi_ops->init_afu(afu, handle, err_irq)))
+	if ((rc = capi_ops->init_afu(afu, handle)))
 	    return rc;
 
 	/* Add afu character devices */
@@ -251,22 +254,6 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	return 0;
 }
 EXPORT_SYMBOL(capi_init_afu);
-
-struct bus_type capi_bus_type = {
-	.name = "capi",
-	/*
-	 * .match
-	 * .uevent
-	 * .probe
-	 * .remove
-	 * .shutdown
-	 * .dev_attrs
-	 * .bus_attrs
-	 * .drv_attrs
-	 * .pm
-	 */
-};
-
 
 static int __init init_capi(void)
 {
@@ -293,10 +280,19 @@ static int __init init_capi(void)
 	return ret;
 }
 
-static void exit_capi(void)
+void capi_unregister_afu(struct capi_afu_t *afu)
 {
-	struct capi_t *adapter, *tmp;
+	/* Delete SYSFS links */
+	/* Unregister CAPI AFU devices */
+}
+EXPORT_SYMBOL(capi_unregister_afu);
+
+void capi_unregister_adapter(struct capi_t *adapter)
+{
+	struct capi_t *tmp;
 	int adapter_num = 0, slice;
+
+	/* Unregister CAPI adapter device */
 
 	spin_lock(&adapter_list_lock);
 	list_for_each_entry_safe(adapter, tmp, &adapter_list, list) {
@@ -308,15 +304,22 @@ static void exit_capi(void)
 			capi_ops->release_afu(&(adapter->slice[slice]));
 		}
 		del_capi_dev(adapter, adapter_num++);
+
+		/* CAPI-HV/Native adapter release */
 		if (capi_ops->release_adapter)
 			capi_ops->release_adapter(adapter);
+
 		list_del(&adapter->list);
 	}
 	spin_unlock(&adapter_list_lock);
 
 	unregister_capi_dev();
+}
+EXPORT_SYMBOL(capi_unregister_adapter);
 
-	bus_unregister(&capi_bus_type);
+static void exit_capi(void)
+{
+	/* Unregister CAPI class */
 }
 
 module_init(init_capi);

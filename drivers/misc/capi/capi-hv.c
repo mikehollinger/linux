@@ -22,9 +22,7 @@ init_adapter_hv(struct capi_t *adapter, u64 handle,
 }
 
 static int
-init_afu_hv(struct capi_afu_t *afu, u64 handle,
-	    irq_hw_number_t unused)
-
+init_afu_hv(struct capi_afu_t *afu, u64 handle)
 {
 	int result;
 

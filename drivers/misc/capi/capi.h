@@ -514,6 +514,8 @@ int capi_map_slice_regs(struct capi_afu_t *afu,
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
 		  irq_hw_number_t err_irq);
+void capi_unregister_adapter(struct capi_t *adapter);
+void capi_unregister_afu(struct capi_afu_t *afu);
 
 int register_capi_dev(void);
 void unregister_capi_dev(void);
@@ -567,8 +569,7 @@ struct capi_backend_ops {
 			     u64 p2_base, u64 p2_size,
 			     irq_hw_number_t err_hwirq);
 	/* FIXME: Clean this up */
-	int (*init_afu) (struct capi_afu_t *afu, u64 handle,
-			 irq_hw_number_t err_irq);
+	int (*init_afu) (struct capi_afu_t *afu, u64 handle);
 
 	int (*init_process) (struct capi_context_t *ctx, bool kernel,
 			               u64 wed, u64 amr);

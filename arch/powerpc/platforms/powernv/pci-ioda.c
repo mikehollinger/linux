@@ -1008,6 +1008,7 @@ int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 
 	return 0;
 }
+EXPORT_SYMBOL(pnv_capi_ioda_msi_setup);
 
 static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 				  unsigned int hwirq, unsigned int virq,

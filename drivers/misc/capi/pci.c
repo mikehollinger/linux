@@ -289,6 +289,13 @@ static int _alloc_hwirqs(struct pci_dev *dev, int num)
 	return phb->msi_base + hwirq;
 }
 
+static void _release_hwirqs(struct pci_dev *dev, int offset, int num)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	msi_bitmap_free_hwirqs(&phb->msi_bmp, offset, num);
+}
+
 static int alloc_hwirq_ranges(struct capi_irq_ranges *irqs, struct pci_dev *dev, int num)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
@@ -331,7 +338,7 @@ fail:
 
 static int alloc_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter, unsigned int num)
 {
-	struct pci_dev *dev = container_of(adapter, struct capi_pci_t, adapter)->pdev;
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	return alloc_hwirq_ranges(irqs, dev, num);
 }
 
@@ -587,8 +594,10 @@ int init_capi_pci(struct pci_dev *dev)
 
 	if (!(adapter = kzalloc(sizeof(struct capi_t), GFP_KERNEL))) {
 		rc = -ENOMEM;
-		goto err1;
+		goto err;
 	}
+
+	pci_set_drvdata(dev, adapter);
 
 	if (pci_request_region(dev, 2, "priv 2 regs"))
 		goto err1;
@@ -657,6 +666,7 @@ err2:
 	pci_release_region(dev, 2);
 err1:
 	kfree(adapter);
+err:
 	return rc;
 }
 
@@ -676,8 +686,6 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 	dev_info(&dev->dev, "capi protocol enabled\n");
 
-//	dump_capi_config_space(dev);
-
 	/* FIXME: I should wait for PHB to come back in CAPI mode and re-probe */
 	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
@@ -692,25 +700,23 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	return 0;
 }
 
-static void capi_early_fixup(struct pci_dev *dev)
-{
-#if 0
-	/* Just trying to understand how setting up BARs work in Linux */
-	dump_capi_config_space(dev);
-
-	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00020000);
-	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00000000);
-
-	dump_capi_config_space(dev);
-#endif
-}
-DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_IBM, 0x0477, capi_early_fixup);
-
 static void capi_remove(struct pci_dev *dev)
 {
+	struct capi_t *adapter = pci_get_drvdata(dev);
+	int slice;
+
 	dev_warn(&dev->dev, "pci remove\n");
 
-	/* FIXME: Free allocated adapters */
+	for (slice = 0; slice < adapter->slices; slice++)
+		capi_unregister_afu(&adapter->slice[slice]);
+
+	capi_unregister_adapter(adapter);
+	pci_release_region(dev, 0);
+	pci_release_region(dev, 2);
+	_release_hwirqs(dev, adapter->err_hwirq, 1);
+	kfree(adapter);
+
+	pci_disable_device(dev);
 
 	/* TODO: Implement everything from Documentation/PCI/pci.txt */
 
@@ -721,12 +727,12 @@ static struct pci_driver capi_pci_driver = {
 	.id_table = capi_pci_tbl,
 	.probe = capi_probe,
 	.remove = capi_remove,
-#if 0
-#ifdef CONFIG_PM
-	.suspend = ...,
-	.resume = ...,
-#endif
-#endif
+
+	/* TODO:
+	 * #ifdef CONFIG_PM
+	 *	.suspend = ...,
+	 *	.resume = ...,
+	 * #endif */
 };
 
 module_driver(capi_pci_driver, pci_register_driver, pci_unregister_driver);
