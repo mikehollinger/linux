@@ -263,7 +263,7 @@ static int __init init_capi(void)
 
 	pr_devel("---------- init_capi called ---------\n");
 
-	capi_class = class_create(THIS_MODULE, "capi");
+	capi_class = class_create(THIS_MODULE, "caccel");
 	if (IS_ERR(capi_class)) {
 		pr_warn("Unable to create capi class\n");
 		return PTR_ERR(capi_class);
