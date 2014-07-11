@@ -410,6 +410,7 @@ struct capi_t {
 	struct cdev afu_cdev;
 	struct cdev afu_master_cdev;
 	struct device device;
+	int adapter_num;
 	int slices;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
