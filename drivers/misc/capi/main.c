@@ -20,7 +20,9 @@ static DEFINE_SPINLOCK(adapter_list_lock);
 static LIST_HEAD(adapter_list);
 const struct capi_backend_ops *capi_ops;
 
+/* FIXME: Move this to file.c */
 struct class *capi_class;
+EXPORT_SYMBOL(capi_class);
 
 int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {

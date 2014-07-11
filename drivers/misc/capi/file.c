@@ -704,6 +704,8 @@ out:
 	return rc;
 }
 
+extern struct class *capi_class;
+
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 {
 	int rc;
@@ -715,6 +717,7 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device.parent = &afu->adapter->device;
 	dev_set_name(&afu->device, "%s%i", dev_name(&afu->adapter->device), slice + 1);
 	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
+	afu->device.class = capi_class;
 	spin_lock_init(&afu->spa_lock);
 
 	if ((rc = device_register(&afu->device)))
@@ -730,6 +733,7 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	/* Add the AFU master device */
 	afu->device_master.parent = &afu->device;
 	dev_set_name(&afu->device_master, "%s%im", dev_name(&afu->adapter->device), slice + 1);
+	afu->device_master.class = capi_class;
 	afu->device_master.devt = MKDEV(capi_major, capi_minor + 1 + slice);
 
 	if ((rc = device_register(&afu->device_master)))
