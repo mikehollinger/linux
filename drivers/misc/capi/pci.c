@@ -585,6 +585,7 @@ int init_capi_pci(struct pci_dev *dev)
 	int slice;
 	int rc = -EBUSY;
 	int err_hwirq;
+	struct capi_native_data backend_data;
 
 	if (!(adapter = kzalloc(sizeof(struct capi_t), GFP_KERNEL))) {
 		rc = -ENOMEM;
@@ -627,7 +628,12 @@ int init_capi_pci(struct pci_dev *dev)
 	}
 
 	err_hwirq = _alloc_hwirqs(dev, 1);
-	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, &dev->dev, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
+	backend_data.p1_base = p1_base;
+	backend_data.p1_size = p1_size;
+	backend_data.p2_base = p2_base;
+	backend_data.p2_size = p2_size;
+	backend_data.err_hwirq = err_hwirq;
+	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, &dev->dev, nAFUs, &backend_data))) {
 		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
 		goto err3;
 	}

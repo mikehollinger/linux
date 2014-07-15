@@ -147,19 +147,17 @@ static int psl_purge(struct capi_afu_t *afu)
 }
 
 static int
-init_adapter_native(struct capi_t *adapter, u64 unused,
-		    u64 p1_base, u64 p1_size,
-		    u64 p2_base, u64 p2_size,
-		    irq_hw_number_t err_hwirq)
+init_adapter_native(struct capi_t *adapter, void *backend_data)
 {
+	struct capi_native_data *data = backend_data;
 	int rc;
 
 	pr_devel("capi_mmio_p1:        ");
-	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
+	if (!(adapter->p1_mmio = ioremap(data->p1_base, data->p1_size)))
 		return -ENOMEM;
 
-	if (p2_base) {
-		if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
+	if (data->p2_base) {
+		if (!(adapter->p2_mmio = ioremap(data->p2_base, data->p2_size)))
 			return -ENOMEM;
 	}
 
@@ -171,7 +169,7 @@ init_adapter_native(struct capi_t *adapter, u64 unused,
 	pr_devel("capi implementation specific PSL_VERSION: 0x%llx\n",
 			capi_p1_read(adapter, CAPI_PSL_VERSION));
 
-	adapter->err_hwirq = err_hwirq;
+	adapter->err_hwirq = data->err_hwirq;
 	pr_devel("capi_err_ivte: %#lx\n", adapter->err_hwirq);
 	adapter->err_virq = capi_map_irq(adapter, adapter->err_hwirq, capi_irq_err, (void*)adapter);
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq & 0xffff);

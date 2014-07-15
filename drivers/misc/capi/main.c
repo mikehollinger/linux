@@ -129,45 +129,37 @@ int capi_get_num_adapters(void)
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the caller fill in the struct and call us? */
 int capi_init_adapter(struct capi_t *adapter,
-		     struct capi_driver_ops *driver,
-		     struct device *parent,
-		     int slices, u64 handle,
-		     u64 p1_base, u64 p1_size,
-		     u64 p2_base, u64 p2_size,
-		     irq_hw_number_t err_hwirq)
+		      struct capi_driver_ops *driver,
+		      struct device *parent,
+		      int slices, void *backend_data)
 {
 	int adapter_num;
 	int rc = 0;
 
-	pr_devel("capi_alloc_adapter: handle: %#llx p1: %#.16llx %#llx p2: %#.16llx %#llx err: %#lx",
-			handle, p1_base, p1_size, p2_base, p2_size, err_hwirq);
+	pr_devel("capi_alloc_adapter");
 
 	/* There must be at least one AFU */
-//	if (!adapter->slices)
-//		return -EINVAL;
+	if (!slices)
+		return -EINVAL;
 
 	spin_lock(&adapter_list_lock);
 	adapter_num = capi_get_num_adapters();
 
 	adapter->driver = driver;
-
-	/* Register the adapter device */
 	adapter->device.class = capi_class;
 	adapter->device.parent = parent;
+	adapter->slices = slices;
+	pr_devel("%i slices\n", adapter->slices);
+
+	/* Prepare the backend hardware */
+	if ((rc = capi_ops->init_adapter(adapter, backend_data)))
+		goto out2;
+
+	/* Register the adapter device */
 	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
 	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);
 	if ((rc = device_register(&adapter->device)))
 		goto out;
-
-	/* FIXME: Shouldn't this be done first? */
-	if ((rc = capi_ops->init_adapter(adapter, handle,
-					p1_base, p1_size,
-					p2_base, p2_size,
-					err_hwirq)))
-		goto out2;
-
-	adapter->slices = slices;
-	pr_devel("%i slices\n", adapter->slices);
 
 	/* Add adapter character device and sysfs entries */
 	if (add_capi_dev(adapter, adapter_num)) {

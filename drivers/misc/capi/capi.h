@@ -502,10 +502,8 @@ static inline void __iomem * _capi_afu_ps_addr(struct capi_afu_t *afu, int reg)
 int capi_init_adapter(struct capi_t *adapter,
 		      struct capi_driver_ops *driver,
 		      struct device *parent,
-		      int slices, u64 handle,
-		      u64 p1_base, u64 p1_size,
-		      u64 p2_base, u64 p2_size,
-		      irq_hw_number_t err_hwirq);
+		      int slices,
+		      void *backend_data);
 int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
@@ -564,10 +562,7 @@ struct capi_irq_info {
 };
 
 struct capi_backend_ops {
-	int (*init_adapter) (struct capi_t *adapter, u64 handle,
-			     u64 p1_base, u64 p1_size,
-			     u64 p2_base, u64 p2_size,
-			     irq_hw_number_t err_hwirq);
+	int (*init_adapter) (struct capi_t *adapter, void *backend_data);
 	/* FIXME: Clean this up */
 	int (*init_afu) (struct capi_afu_t *afu, u64 handle);
 
@@ -583,6 +578,18 @@ struct capi_backend_ops {
 	int (*load_afu_image) (struct capi_afu_t *afu, u64 vaddress, u64 length);
 };
 extern const struct capi_backend_ops *capi_ops;
+
+struct capi_native_data {
+	u64 p1_base;
+	u64 p1_size;
+	u64 p2_base;
+	u64 p2_size;
+	irq_hw_number_t err_hwirq;
+};
+
+struct capi_hv_data {
+	u64 handle;
+};
 
 /* XXX: LAB DEBUGGING */
 void capi_stop_trace(struct capi_t *capi);
