@@ -484,11 +484,13 @@ int enable_capi_protocol(struct pci_dev *dev)
 extern int afu_reset(struct capi_afu_t *afu); // FIXME remove
 
 /* FIXME: clean up parameters */
-int init_capi_afu(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_off, u64 ps_size, u64 vsec, u64 afu_desc_off, u64 afu_desc_size, int slice, int err_hwirq, struct pci_dev *dev)
+static int init_slice(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_off, u64 ps_size, u64 afu_desc_off, u64 afu_desc_size, int slice, struct pci_dev *dev)
 {
 	int rc;
 	struct capi_afu_t *afu = &(adapter->slice[slice]);
 	u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
+	int err_hwirq;
+	u64 val;
 
 	const u64 p1n_size = 0x100;
 	const u64 p2n_size = 0x1000;
@@ -496,9 +498,7 @@ int init_capi_afu(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_off, 
 	p1n_base = p1_base + 0x10000 + (slice * p1n_size);
 	p2n_base = p2_base + (slice * p2n_size);
 	psn_base = p2_base + (ps_off + (slice * ps_size));
-	if (vsec) {
-		afu_desc = p2_base + afu_desc_off + (slice * afu_desc_size);
-	}
+	afu_desc = p2_base + afu_desc_off + (slice * afu_desc_size);
 
 	if ((rc = capi_map_slice_regs(afu,
 				      p1n_base, p1n_size,
@@ -508,58 +508,53 @@ int init_capi_afu(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_off, 
 		return rc;
 	}
 
-	if (afu->afu_desc_mmio) {
-		u64 val;
+	pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
 
-		pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
-
-		/* FIXME: mask the MMIO timeout for
-		   now.  need to * fix this long term */
+	/* FIXME: mask the MMIO timeout for
+	   now.  need to * fix this long term */
 //			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
-		capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
-		afu_reset(afu);
-		dump_afu_descriptor(dev, afu->afu_desc_mmio);
-		val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
-		afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
-		afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
-		if (val & (1ull << (63-61))) {
-			afu->afu_directed_mode = true;
-		} else if (val & (1ull << (63-59))) {
-			afu->afu_directed_mode = false;
-		} else {
-			afu->afu_directed_mode = false;
-			pr_err("No programing mode found in AFU desc\n");
-			WARN_ON(1);
-		}
+	capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
+	afu_reset(afu);
+	dump_afu_descriptor(dev, afu->afu_desc_mmio);
+	val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
+	afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
+	afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
+	if (val & (1ull << (63-61))) {
+		afu->afu_directed_mode = true;
+	} else if (val & (1ull << (63-59))) {
+		afu->afu_directed_mode = false;
+	} else {
+		afu->afu_directed_mode = false;
+		pr_err("No programing mode found in AFU desc\n");
+		WARN_ON(1);
+	}
 
-		// FIXME : check req_prog_model and bugon
+	// FIXME : check req_prog_model and bugon
 
-		val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
-		afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
-		if (val & (1ull << (63 - 6)))
-			afu->pp_mmio = true;
-		else {
-			pr_devel("AFU doesn't support per process mmio space\n");
-			afu->pp_mmio = false;
-		}
-		if (val & (1ull << (63 - 7)))
-			afu->mmio = true;
-		else {
-			pr_devel("AFU doesn't support mmio space\n");
-			afu->mmio = false;
-		}
+	val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
+	afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
+	if (val & (1ull << (63 - 6)))
+		afu->pp_mmio = true;
+	else {
+		pr_devel("AFU doesn't support per process mmio space\n");
+		afu->pp_mmio = false;
+	}
+	if (val & (1ull << (63 - 7)))
+		afu->mmio = true;
+	else {
+		pr_devel("AFU doesn't support mmio space\n");
+		afu->mmio = false;
+	}
 
-		val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
-		afu->pp_offset = val;
-		/* FIXME check PerProcessPSA_control to see if above
-		 * needed */
-		WARN_ON(afu->psn_size < (afu->pp_offset +
-					 afu->pp_size*afu->num_procs));
-		WARN_ON(afu->pp_size < PAGE_SIZE);
+	val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
+	afu->pp_offset = val;
+	/* FIXME check PerProcessPSA_control to see if above
+	 * needed */
+	WARN_ON(afu->psn_size < (afu->pp_offset +
+				 afu->pp_size*afu->num_procs));
+	WARN_ON(afu->pp_size < PAGE_SIZE);
 
-		/* XXX TODO: Read num_ints_per_process from AFU descriptor */
-	} else
-		BUG(); /* no afu descriptor */
+	/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 
 	err_hwirq = _alloc_hwirqs(dev, 1);
 
@@ -585,7 +580,6 @@ int init_capi_pci(struct pci_dev *dev)
 	struct capi_t *adapter;
 	u32 afu_desc_off, afu_desc_size;
 	u32 ps_off, ps_size;
-	u32 nIRQs;
 	u16 vseclen;
 	u8 nAFUs;
 	int slice;
@@ -611,50 +605,36 @@ int init_capi_pci(struct pci_dev *dev)
 
 	/* TODO: Upload PSL */
 
-	if (vsec) {
-		dev_info(&dev->dev, "capi vsec found at offset %#x\n", vsec);
+	BUG_ON(!vsec);
+	dev_info(&dev->dev, "capi vsec found at offset %#x\n", vsec);
+	pci_read_config_word(dev, CAPI_VSEC_LENGTH(vsec), &vseclen);
+	vseclen = vseclen >> 4;
+	pci_read_config_byte(dev, CAPI_VSEC_NAFUS(vsec), &nAFUs);
+	pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
+	pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
+	pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
+	pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
 
-		pci_read_config_word(dev, CAPI_VSEC_LENGTH(vsec), &vseclen);
-		vseclen = vseclen >> 4;
-		pci_read_config_byte(dev, CAPI_VSEC_NAFUS(vsec), &nAFUs);
-		if ((nAFUs == 0) && (vseclen == 0x40)) {
-			dev_info(&dev->dev, "***** WORKAROUND capi vsec length 0x40 and  nAFU=0.  Making nAFUs = 1.\n");
-			nAFUs = 1;
-		}
-		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
-		pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
-		pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
-		pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
+	ps_off  *= 64 * 1024;
+	ps_size *= 64 * 1024;
+	afu_desc_off *= 64 * 1024;
+	afu_desc_size *= 64 * 1024;
 
-		ps_off  *= 64 * 1024;
-		ps_size *= 64 * 1024;
-		afu_desc_off *= 64 * 1024;
-		afu_desc_size *= 64 * 1024;
-
-		if (ps_size > p2_size - ps_off) {
-			dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%llx\n",
-					ps_size, p2_size - ps_off);
-			ps_size = p2_size - ps_off;
-		}
-
-	} else { /* XXX Bringup only */
-		dev_warn(&dev->dev, "capi vsec not found! Using bringup values!\n");
-
-		nAFUs = 1;
-		nIRQs = 3;
-		ps_off  = 0x2000000;
-		ps_size = 0x2000000;
+	if (ps_size > p2_size - ps_off) {
+		dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%llx\n",
+			 ps_size, p2_size - ps_off);
+		ps_size = p2_size - ps_off;
 	}
 
 	err_hwirq = _alloc_hwirqs(dev, 1);
-
 	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, &dev->dev, nAFUs, 0, p1_base, p1_size, p2_base, p2_size, err_hwirq))) {
 		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
 		goto err3;
 	}
 
+	BUG_ON(!afu_desc_off || !afu_desc_size);
 	for (slice = 0; slice < nAFUs; slice++)
-		if (( rc = init_capi_afu(adapter, p1_base, p2_base, ps_off, ps_size, vsec, afu_desc_off, afu_desc_size, slice, err_hwirq, dev)))
+		if (( rc = init_slice(adapter, p1_base, p2_base, ps_off, ps_size, afu_desc_off, afu_desc_size, slice, dev)))
 			goto err4;
 
 	return 0;
