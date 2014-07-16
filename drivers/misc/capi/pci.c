@@ -147,8 +147,6 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register", val);
 	pci_read_config_dword(dev, vsec + 0x58, &val);
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port", val);
-
-	/* TODO: Dump AFU Descriptor & AFU Configuration Record if present */
 }
 
 static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, void __iomem *afu_desc)
@@ -188,8 +186,6 @@ static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, void __iomem
 
 	val = _capi_reg_read(afu_desc + 0x48);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_offset", val);
-
-	/* TODO: Dump AFU Configuration record if it exists */
 }
 
 static int cmpbar(const void *p1, const void *p2)
@@ -353,7 +349,7 @@ static void release_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter)
 	for (range = 0; range < 4; range++) {
 		hwirq = irqs->offset[range] - phb->msi_base;
 		if (irqs->range[range]) {
-			dev_info(&dev->dev, "capi release irq range 0x%x: offset: 0x%lx  limit: %i\n",
+			dev_info(&dev->dev, "capi release irq range 0x%x: offset: 0x%lx  limit: %ld\n",
 				 range, irqs->offset[range],
 				 irqs->range[range]);
 			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
@@ -400,7 +396,6 @@ static void reassign_capi_bars(struct pci_dev *dev)
 	if (!window_prop) {
 		dev_warn(&dev->dev, "WARNING: Using BAR assignment from Linux, this probably will break MMIO access.\n");
 	} else {
-
 		window = of_read_number(window_prop, 2);
 		size = of_read_number(&window_prop[4], 2);
 		off = window;
@@ -450,8 +445,6 @@ static int switch_card_to_capi(struct pci_dev *dev)
 
 	dev_info(&dev->dev, "vsec found at offset %#x\n", vsec);
 
-	/* FIXME: Can probably just read/write one byte and not worry about the
-	 * number of AFUs and status fields */
 	if ((rc = pci_read_config_dword(dev, vsec + 0x8, &val))) {
 		dev_err(&dev->dev, "failed to read current mode control: %i", rc);
 		return rc;
@@ -481,10 +474,11 @@ int enable_capi_protocol(struct pci_dev *dev)
 	return rc;
 }
 
-extern int afu_reset(struct capi_afu_t *afu); // FIXME remove
-
-/* FIXME: clean up parameters */
-static int init_slice(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_off, u64 ps_size, u64 afu_desc_off, u64 afu_desc_size, int slice, struct pci_dev *dev)
+static int init_slice(struct capi_t *adapter,
+		      u64 p1_base, u64 p2_base,
+		      u64 ps_off, u64 ps_size,
+		      u64 afu_desc_off, u64 afu_desc_size,
+		      int slice, struct pci_dev *dev)
 {
 	int rc;
 	struct capi_afu_t *afu = &(adapter->slice[slice]);
@@ -512,24 +506,24 @@ static int init_slice(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_o
 
 	/* FIXME: mask the MMIO timeout for
 	   now.  need to * fix this long term */
-//			capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
 	capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
-	afu_reset(afu);
+	capi_ops->afu_reset(afu);
 	dump_afu_descriptor(dev, afu->afu_desc_mmio);
+
 	val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
 	afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
 	afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
-	if (val & (1ull << (63-61))) {
+	afu->afu_directed_mode = false;
+	afu->afu_dedicated_mode = false;
+	if (val & (1ull << (63-61)))
 		afu->afu_directed_mode = true;
-	} else if (val & (1ull << (63-59))) {
-		afu->afu_directed_mode = false;
-	} else {
-		afu->afu_directed_mode = false;
-		pr_err("No programing mode found in AFU desc\n");
-		WARN_ON(1);
+	if (val & (1ull << (63-59)))
+		afu->afu_dedicated_mode = true;
+	if (!afu->afu_directed_mode && !afu->afu_dedicated_mode) {
+		pr_err("No supported AFU programing models available\n");
+		rc = -ENODEV;
+		goto out;
 	}
-
-	// FIXME : check req_prog_model and bugon
 
 	val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
 	afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
@@ -546,30 +540,41 @@ static int init_slice(struct capi_t *adapter, u64 p1_base, u64 p2_base, u64 ps_o
 		afu->mmio = false;
 	}
 
-	val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
-	afu->pp_offset = val;
-	/* FIXME check PerProcessPSA_control to see if above
-	 * needed */
+	val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
+	if (val & (1ull << (63-6))) {
+		val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
+		afu->pp_offset = val;
+	}
+	else
+		afu->pp_offset = 0;
+
 	WARN_ON(afu->psn_size < (afu->pp_offset +
 				 afu->pp_size*afu->num_procs));
 	WARN_ON(afu->pp_size < PAGE_SIZE);
 
-	/* XXX TODO: Read num_ints_per_process from AFU descriptor */
-
 	err_hwirq = _alloc_hwirqs(dev, 1);
-
 	if ((rc = capi_init_afu(adapter, afu, slice, 0, err_hwirq))) {
 		dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
-		goto out;
+		goto out1;
 	}
 
-	printk(KERN_ALERT "CAPI AFU INITED\n");
 	return 0;
 
+out1:
+	_release_hwirqs(dev, err_hwirq, 1);
 out:
-	/* Unalloc hwirqs */
-	/* Unmap slice regs */
+	capi_unmap_slice_regs(afu);
 	return rc;
+}
+
+static void remove_slice(struct capi_t *adapter, int slice)
+{
+	struct capi_afu_t *afu = &(adapter->slice[slice]);
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+
+	capi_unmap_slice_regs(afu);
+	_release_hwirqs(dev, afu->err_hwirq, 1);
+	capi_unregister_afu(afu);
 }
 
 int init_capi_pci(struct pci_dev *dev)
@@ -604,9 +609,11 @@ int init_capi_pci(struct pci_dev *dev)
 	p2_base = pci_resource_start(dev, 0);
 	p2_size = pci_resource_len(dev, 0);
 
-	/* TODO: Upload PSL */
+	if (!vsec) {
+		dev_err(&dev->dev, "no capi vsec found\n");
+		goto err3;
+	}
 
-	BUG_ON(!vsec);
 	dev_info(&dev->dev, "capi vsec found at offset %#x\n", vsec);
 	pci_read_config_word(dev, CAPI_VSEC_LENGTH(vsec), &vseclen);
 	vseclen = vseclen >> 4;
@@ -640,12 +647,14 @@ int init_capi_pci(struct pci_dev *dev)
 
 	BUG_ON(!afu_desc_off || !afu_desc_size);
 	for (slice = 0; slice < nAFUs; slice++)
-		if (( rc = init_slice(adapter, p1_base, p2_base, ps_off, ps_size, afu_desc_off, afu_desc_size, slice, dev)))
+		if ((rc = init_slice(adapter, p1_base, p2_base, ps_off, ps_size, afu_desc_off, afu_desc_size, slice, dev)))
 			goto err4;
 
 	return 0;
 err4:
-	/* FIXME: Cleanup AFUs */
+	for (slice -= 1; slice >= 0; slice--)
+		remove_slice(adapter, slice);
+	capi_unregister_adapter(adapter);
 err3:
 	pci_release_region(dev, 0);
 err2:
@@ -672,7 +681,6 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 	dev_info(&dev->dev, "capi protocol enabled\n");
 
-	/* FIXME: I should wait for PHB to come back in CAPI mode and re-probe */
 	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
 		return rc;
@@ -689,19 +697,13 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 static void capi_remove(struct pci_dev *dev)
 {
 	struct capi_t *adapter = pci_get_drvdata(dev);
-	int slice;
 
 	dev_warn(&dev->dev, "pci remove\n");
-
-	for (slice = 0; slice < adapter->slices; slice++)
-		capi_unregister_afu(&adapter->slice[slice]);
-
 	capi_unregister_adapter(adapter);
 	pci_release_region(dev, 0);
 	pci_release_region(dev, 2);
 	_release_hwirqs(dev, adapter->err_hwirq, 1);
 	kfree(adapter);
-
 	pci_disable_device(dev);
 
 	/* TODO: Implement everything from Documentation/PCI/pci.txt */

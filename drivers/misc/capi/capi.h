@@ -325,6 +325,7 @@ struct capi_afu_t {
 	struct capi_t *adapter;
 	struct device device, device_master;
 	bool afu_directed_mode;
+	bool afu_dedicated_mode;
 	bool mmio;
 	bool pp_mmio;
 
@@ -509,6 +510,7 @@ int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 p2n_base, u64 p2n_size,
 		  u64 psn_base, u64 psn_size,
 		  u64 afu_desc, u64 afu_desc_size);
+void capi_unmap_slice_regs(struct capi_afu_t *afu);
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
 		  irq_hw_number_t err_irq);
@@ -520,6 +522,7 @@ void unregister_capi_dev(void);
 int add_capi_dev(struct capi_t *capi, int adapter_num);
 void del_capi_dev(struct capi_t *capi, int adapter_num);
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice);
+void del_capi_afu_dev(struct capi_afu_t *afu);
 
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
@@ -576,6 +579,7 @@ struct capi_backend_ops {
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);
 	int (*load_afu_image) (struct capi_afu_t *afu, u64 vaddress, u64 length);
+	int (*afu_reset) (struct capi_afu_t *afu);
 };
 extern const struct capi_backend_ops *capi_ops;
 

@@ -689,6 +689,58 @@ out:
 	return rc;
 }
 
+int capi_map_slice_regs(struct capi_afu_t *afu,
+		  u64 p1n_base, u64 p1n_size,
+		  u64 p2n_base, u64 p2n_size,
+		  u64 psn_base, u64 psn_size,
+		  u64 afu_desc, u64 afu_desc_size)
+{
+	pr_devel("capi_map_slice_regs: p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx, afu_desc: %#.16llx %#llx\n",
+			p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size, afu_desc, afu_desc_size);
+
+	afu->p1n_mmio = NULL;
+	afu->afu_desc_mmio = NULL;
+	if (p1n_base)
+		if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
+			goto err;
+	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
+		goto err1;
+	if (!(afu->psn_mmio = ioremap(psn_base, psn_size)))
+		goto err2;
+	if (afu_desc)
+		if (!(afu->afu_desc_mmio = ioremap(afu_desc, afu_desc_size)))
+			goto err3;
+	afu->psn_phys = psn_base;
+	afu->psn_size = psn_size;
+	afu->afu_desc_size = afu_desc_size;
+
+	return 0;
+err3:
+	iounmap(afu->psn_mmio);
+err2:
+	iounmap(afu->p2n_mmio);
+err1:
+	if (afu->p1n_mmio)
+		iounmap(afu->p1n_mmio);
+err:
+	WARN(1, "Error mapping AFU MMIO regions\n");
+	return -EFAULT;
+}
+EXPORT_SYMBOL(capi_map_slice_regs);
+
+void capi_unmap_slice_regs(struct capi_afu_t *afu)
+{
+	if (afu->psn_mmio)
+		iounmap(afu->psn_mmio);
+
+	if (afu->p1n_mmio)
+		iounmap(afu->p2n_mmio);
+
+	if (afu->p1n_mmio)
+		iounmap(afu->p1n_mmio);
+}
+EXPORT_SYMBOL(capi_unmap_slice_regs);
+
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
@@ -699,6 +751,7 @@ static const struct capi_backend_ops capi_native_ops = {
 	.release_adapter = release_adapter_native,
 	.release_afu = release_afu_native,
 	.load_afu_image = load_afu_image_native,
+	.afu_reset = afu_reset,
 };
 
 void init_capi_native()
