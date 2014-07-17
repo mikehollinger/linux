@@ -153,18 +153,18 @@ int capi_init_adapter(struct capi_t *adapter,
 
 	/* Prepare the backend hardware */
 	if ((rc = capi_ops->init_adapter(adapter, backend_data)))
-		goto out2;
+		goto out;
 
 	/* Register the adapter device */
 	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
 	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);
 	if ((rc = device_register(&adapter->device)))
-		goto out;
+		goto out1;
 
 	/* Add adapter character device and sysfs entries */
 	if (add_capi_dev(adapter, adapter_num)) {
 		rc = -1;
-		goto out1;
+		goto out2;
 	}
 
 	list_add_tail(&(adapter)->list, &adapter_list);
@@ -173,9 +173,9 @@ int capi_init_adapter(struct capi_t *adapter,
 	return 0;
 
 out2:
-	/* FIXME: Remove capi devs */
-out1:
 	device_unregister(&adapter->device);
+out1:
+	capi_ops->release_adapter(adapter);
 out:
 	spin_unlock(&adapter_list_lock);
 	pr_devel("capi_init_adapter: %i\n", rc);
@@ -235,9 +235,8 @@ static int __init init_capi(void)
 
 void capi_unregister_afu(struct capi_afu_t *afu)
 {
-	/* Delete SYSFS links */
-
-	/* Unregister CAPI AFU devices */
+	del_capi_afu_dev(afu);
+	capi_ops->release_afu(afu);
 }
 EXPORT_SYMBOL(capi_unregister_afu);
 
@@ -250,11 +249,8 @@ void capi_unregister_adapter(struct capi_t *adapter)
 
 	spin_lock(&adapter_list_lock);
 	list_for_each_entry_safe(adapter, tmp, &adapter_list, list) {
-		for (slice = 0; slice < adapter->slices; slice++) {
-			/* FIXME: Unregister IRQs */
-			del_capi_afu_dev(&(adapter->slice[slice]));
-			capi_ops->release_afu(&(adapter->slice[slice]));
-		}
+		for (slice = 0; slice < adapter->slices; slice++)
+			capi_unregister_afu(&adapter->slice[slice]);
 		del_capi_dev(adapter, adapter_num++);
 
 		/* CAPI-HV/Native adapter release */

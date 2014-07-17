@@ -425,6 +425,8 @@ struct capi_driver_ops {
 	int (*alloc_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter, unsigned int num);
 	void (*release_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter);
 	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
+	void (*release_adapter) (struct capi_t *adapter);
+	void (*release_afu) (struct capi_afu_t *afu);
 };
 
 /* common == phyp + powernv */

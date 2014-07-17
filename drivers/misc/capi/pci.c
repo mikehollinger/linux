@@ -285,11 +285,11 @@ static int _alloc_hwirqs(struct pci_dev *dev, int num)
 	return phb->msi_base + hwirq;
 }
 
-static void _release_hwirqs(struct pci_dev *dev, int offset, int num)
+static void _release_hwirqs(struct pci_dev *dev, int hwirq, int num)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
-	msi_bitmap_free_hwirqs(&phb->msi_bmp, offset, num);
+	msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq - phb->msi_base, num);
 }
 
 static int alloc_hwirq_ranges(struct capi_irq_ranges *irqs, struct pci_dev *dev, int num)
@@ -358,12 +358,28 @@ static void release_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter)
 	}
 }
 
+static void capi_release_adapter(struct capi_t *adapter)
+{
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+
+	_release_hwirqs(dev, adapter->err_hwirq, 1);
+}
+
+static void capi_release_afu(struct capi_afu_t *afu)
+{
+	struct pci_dev *dev = to_pci_dev(afu->adapter->device.parent);
+
+	_release_hwirqs(dev, afu->err_hwirq, 1);
+}
+
 static struct capi_driver_ops capi_pci_driver_ops = {
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
 	.alloc_irqs = alloc_hwirqs,
 	.release_irqs = release_hwirqs,
 	.setup_irq = setup_capi_msi,
+	.release_adapter = capi_release_adapter,
+	.release_afu = capi_release_afu,
 };
 
 
@@ -553,6 +569,11 @@ static int init_slice(struct capi_t *adapter,
 	WARN_ON(afu->pp_size < PAGE_SIZE);
 
 	err_hwirq = _alloc_hwirqs(dev, 1);
+	if (err_hwirq < 0) {
+		rc = err_hwirq;
+		goto out;
+	}
+
 	if ((rc = capi_init_afu(adapter, afu, slice, 0, err_hwirq))) {
 		dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 		goto out1;
@@ -635,6 +656,11 @@ int init_capi_pci(struct pci_dev *dev)
 	}
 
 	err_hwirq = _alloc_hwirqs(dev, 1);
+	if (err_hwirq < 0) {
+		rc = err_hwirq;
+		goto err3;
+	}
+
 	backend_data.p1_base = p1_base;
 	backend_data.p1_size = p1_size;
 	backend_data.p2_base = p2_base;
@@ -642,19 +668,21 @@ int init_capi_pci(struct pci_dev *dev)
 	backend_data.err_hwirq = err_hwirq;
 	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, &dev->dev, nAFUs, &backend_data))) {
 		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
-		goto err3;
+		goto err4;
 	}
 
 	BUG_ON(!afu_desc_off || !afu_desc_size);
 	for (slice = 0; slice < nAFUs; slice++)
 		if ((rc = init_slice(adapter, p1_base, p2_base, ps_off, ps_size, afu_desc_off, afu_desc_size, slice, dev)))
-			goto err4;
+			goto err5;
 
 	return 0;
-err4:
+err5:
 	for (slice -= 1; slice >= 0; slice--)
 		remove_slice(adapter, slice);
 	capi_unregister_adapter(adapter);
+err4:
+	_release_hwirqs(dev, err_hwirq, 1);
 err3:
 	pci_release_region(dev, 0);
 err2:
@@ -702,7 +730,6 @@ static void capi_remove(struct pci_dev *dev)
 	capi_unregister_adapter(adapter);
 	pci_release_region(dev, 0);
 	pci_release_region(dev, 2);
-	_release_hwirqs(dev, adapter->err_hwirq, 1);
 	kfree(adapter);
 	pci_disable_device(dev);
 

@@ -157,13 +157,15 @@ init_adapter_native(struct capi_t *adapter, void *backend_data)
 		return -ENOMEM;
 
 	if (data->p2_base) {
-		if (!(adapter->p2_mmio = ioremap(data->p2_base, data->p2_size)))
-			return -ENOMEM;
+		if (!(adapter->p2_mmio = ioremap(data->p2_base, data->p2_size))) {
+			rc = -ENOMEM;
+			goto out;
+		}
 	}
 
 	if (adapter->driver && adapter->driver->init_adapter) {
 		if ((rc = adapter->driver->init_adapter(adapter)))
-			return rc;
+			goto out1;
 	}
 
 	pr_devel("capi implementation specific PSL_VERSION: 0x%llx\n",
@@ -171,18 +173,34 @@ init_adapter_native(struct capi_t *adapter, void *backend_data)
 
 	adapter->err_hwirq = data->err_hwirq;
 	pr_devel("capi_err_ivte: %#lx\n", adapter->err_hwirq);
+
 	adapter->err_virq = capi_map_irq(adapter, adapter->err_hwirq, capi_irq_err, (void*)adapter);
+	if (!adapter->err_virq) {
+		rc = -ENOSPC;
+		goto out2;
+	}
+
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq & 0xffff);
 
 	return 0;
+
+out:
+	iounmap(adapter->p1_mmio);
+out1:
+	iounmap(adapter->p2_mmio);
+out2:
+	if (adapter->driver && adapter->driver->release_adapter)
+		adapter->driver->release_adapter(adapter);
+	return rc;
 }
 
-/* XXX: Untested */
 static void release_adapter_native(struct capi_t *adapter)
 {
-	capi_unmap_irq(adapter->err_virq, (void*)adapter);
 	iounmap(adapter->p1_mmio);
 	iounmap(adapter->p2_mmio);
+	capi_unmap_irq(adapter->err_virq, (void*)adapter);
+	if (adapter->driver && adapter->driver->release_adapter)
+		adapter->driver->release_adapter(adapter);
 }
 
 static int spa_max_procs(int spa_size)
@@ -283,6 +301,10 @@ static void release_afu_native(struct capi_afu_t *afu)
 	iounmap(afu->p1n_mmio);
 	iounmap(afu->p2n_mmio);
 	iounmap(afu->psn_mmio);
+
+	capi_unmap_irq(afu->err_virq, (void*)afu);
+	if (afu->adapter->driver && afu->adapter->driver->release_afu)
+		afu->adapter->driver->release_afu(afu);
 }
 
 static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
