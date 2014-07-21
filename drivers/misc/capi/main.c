@@ -18,7 +18,9 @@
 
 static DEFINE_SPINLOCK(adapter_list_lock);
 static LIST_HEAD(adapter_list);
+
 const struct capi_backend_ops *capi_ops;
+EXPORT_SYMBOL(capi_ops);
 
 struct class *capi_class;
 

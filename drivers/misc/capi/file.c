@@ -417,90 +417,6 @@ static const struct file_operations psl_err_chk_fops = {
 	.llseek = seq_lseek,
 };
 
-static struct afx_chk_regs {
-	const char *name;
-	int reg;
-} afx_chk_regs[] = {
-	{ "AFX PRng", 0x418 },
-	{ "AFX Status Register", 0x40 },
-	{ "AFX Flags0 Reg", 0x48 },
-	{ "AFX Flags1 Reg", 0x50 },
-	{ "AFX More Flags Reg", 0x58 },
-	{ "AFX IAR", 0x4F8 },
-	{ "AFX IAR again", 0x4F8 },
-	{ "AFX SRR0", 0x420 },
-	{ "AFX IRC", 0x428 },
-	{ "AFX PSL Enable Config", 0x0 },
-	{ "AFX PSL Types Config", 0x4E8 },
-	{ "AFX Configuration", 0x8 },
-	{ "AFX CTR", 0x4F0 },
-	{ "AFX Condition Reg", 0x400 },
-	{ "AFX PRng", 0x418 },
-	{ "AFX Link Reg", 0x408 },
-	{ "PSL AFX0 Control", 0x90 },
-	{ "GPR 0", 0x100 },
-	{ "GPR 1", 0x108 },
-	{ "GPR 2", 0x110 },
-	{ "GPR 3", 0x118 },
-	{ "GPR 4", 0x120 },
-	{ "GPR 5", 0x128 },
-	{ "GPR 6", 0x130 },
-	{ "GPR 7", 0x138 },
-	{ "GPR 8", 0x140 },
-	{ "GPR 9", 0x148 },
-	{ "GPR 10", 0x150 },
-	{ "GPR 11", 0x158 },
-	{ "GPR 12", 0x160 },
-	{ "GPR 13", 0x168 },
-	{ "GPR 14", 0x170 },
-	{ "GPR 15", 0x178 },
-	{ "GPR 16", 0x180 },
-	{ "GPR 17", 0x188 },
-	{ "GPR 18", 0x190 },
-	{ "GPR 19", 0x198 },
-	{ "GPR 20", 0x1a0 },
-	{ "GPR 21", 0x1a8 },
-	{ "GPR 22", 0x1b0 },
-	{ "GPR 23", 0x1b8 },
-	{ "GPR 24", 0x1c0 },
-	{ "GPR 25", 0x1c8 },
-	{ "GPR 26", 0x1d0 },
-	{ "GPR 27", 0x1d8 },
-	{ "GPR 28", 0x1e0 },
-	{ "GPR 29", 0x1e8 },
-	{ "GPR 30", 0x1f0 },
-	{ "GPR 31", 0x1f8 },
-};
-
-static int afx_chk_show(struct seq_file *m, void *p)
-{
-	struct capi_afu_t *afu = m->private;
-	int i;
-
-	seq_puts(m, "************************ Checking AFX Registers **************************");
-
-	for (i=0; i < ARRAY_SIZE(afx_chk_regs); i++) {
-		seq_write(m, capi_dbg_sep, sizeof(capi_dbg_sep));
-		seq_printf(m, "%s = %16llx", afx_chk_regs[i].name,
-			capi_afu_ps_read(afu, afx_chk_regs[i].reg));
-	}
-	seq_putc(m, '\n');
-
-	return 0;
-}
-
-static int afx_chk_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, afx_chk_show, inode->i_private);
-}
-
-static const struct file_operations afx_chk_fops = {
-	.open = afx_chk_open,
-	.release = seq_release,
-	.read = seq_read,
-	.llseek = seq_lseek,
-};
-
 struct trcdsc
 {
 	unsigned char name[8];
@@ -694,8 +610,6 @@ int add_capi_dev(struct capi_t *adapter, int adapter_num)
 		adapter->trace = debugfs_create_file(tmp, 0444, NULL, adapter, &trace_fops);
 		snprintf(tmp, 32, "capi%i_psl_err_chk", adapter_num);
 		adapter->psl_err_chk = debugfs_create_file(tmp, 0444, NULL, adapter, &psl_err_chk_fops);
-		snprintf(tmp, 32, "capi%i_afx_chk", adapter_num);
-		adapter->afx_chk = debugfs_create_file(tmp, 0444, NULL, &adapter->slice[0], &afx_chk_fops);
 	}
 	return 0;
 
@@ -778,7 +692,6 @@ void del_capi_dev(struct capi_t *adapter, int adapter_num)
 {
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
-	debugfs_remove(adapter->afx_chk);
 	sysfs_remove_bin_file(&adapter->device.kobj, &adapter->capi_attr);
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;

@@ -698,7 +698,7 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	int rc;
 
 	dev_info(&dev->dev, "pci probe\n");
-
+	pci_dev_get(dev);
 	dump_capi_config_space(dev);
 
 	reassign_capi_bars(dev);
