@@ -336,6 +336,7 @@ struct capi_afu_t {
 	 * is sw_command_status, which we store a separate pointer to.
 	 * Everything else in the SPA is only used by hardware */
 	struct capi_process_element *spa;
+	int spa_order;
 	unsigned int spa_size;
 	int spa_max_procs;
 	__be64 *sw_command_status;
