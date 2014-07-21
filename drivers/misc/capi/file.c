@@ -26,6 +26,8 @@
 
 dev_t capi_dev;
 
+extern struct class *capi_class;
+
 static int
 __afu_open(struct inode *inode, struct file *file, bool master)
 {
@@ -695,6 +697,7 @@ int add_capi_dev(struct capi_t *adapter, int adapter_num)
 		snprintf(tmp, 32, "capi%i_afx_chk", adapter_num);
 		adapter->afx_chk = debugfs_create_file(tmp, 0444, NULL, &adapter->slice[0], &afx_chk_fops);
 	}
+	return 0;
 
 out1:
 	kobject_put(adapter->afu_kobj);
@@ -706,6 +709,11 @@ out:
 
 extern struct class *capi_class;
 
+void capi_release(struct device *dev)
+{
+	pr_devel("capi release\n");
+}
+
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 {
 	int rc;
@@ -715,9 +723,11 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	/* Add the AFU slave device */
 	/* FIXME check afu->pp_mmio to see if we need this file */
 	afu->device.parent = &afu->adapter->device;
+	afu->device.class = capi_class;
 	dev_set_name(&afu->device, "%s%i", dev_name(&afu->adapter->device), slice + 1);
 	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
 	afu->device.class = capi_class;
+	afu->device.release = capi_release;
 	spin_lock_init(&afu->spa_lock);
 
 	if ((rc = device_register(&afu->device)))
@@ -732,9 +742,11 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 
 	/* Add the AFU master device */
 	afu->device_master.parent = &afu->device;
+	afu->device_master.class = capi_class;
 	dev_set_name(&afu->device_master, "%s%im", dev_name(&afu->adapter->device), slice + 1);
 	afu->device_master.class = capi_class;
 	afu->device_master.devt = MKDEV(capi_major, capi_minor + 1 + slice);
+	afu->device_master.release = capi_release;
 
 	if ((rc = device_register(&afu->device_master)))
 		goto out1;
@@ -765,11 +777,22 @@ out:
 
 void del_capi_dev(struct capi_t *adapter, int adapter_num)
 {
-	cdev_del(&adapter->cdev);
-	cdev_del(&adapter->afu_master_cdev);
-	cdev_del(&adapter->afu_cdev);
-
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
 	debugfs_remove(adapter->afx_chk);
+	sysfs_remove_bin_file(&adapter->device.kobj, &adapter->capi_attr);
+	kobject_put(adapter->afu_kobj);
+	adapter->afu_kobj = NULL;
+	cdev_del(&adapter->cdev);
+	adapter->device.release = capi_release;
+	device_unregister(&adapter->device);
+}
+
+void del_capi_afu_dev(struct capi_afu_t *afu)
+{
+	sysfs_remove_link(&afu->device.kobj, dev_name(&afu->device));
+	cdev_del(&afu->adapter->afu_master_cdev);
+	device_unregister(&afu->device_master);
+	cdev_del(&afu->adapter->afu_cdev);
+	device_unregister(&afu->device);
 }

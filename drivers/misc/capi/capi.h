@@ -325,6 +325,7 @@ struct capi_afu_t {
 	struct capi_t *adapter;
 	struct device device, device_master;
 	bool afu_directed_mode;
+	bool afu_dedicated_mode;
 	bool mmio;
 	bool pp_mmio;
 
@@ -424,6 +425,8 @@ struct capi_driver_ops {
 	int (*alloc_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter, unsigned int num);
 	void (*release_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter);
 	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
+	void (*release_adapter) (struct capi_t *adapter);
+	void (*release_afu) (struct capi_afu_t *afu);
 };
 
 /* common == phyp + powernv */
@@ -502,15 +505,14 @@ static inline void __iomem * _capi_afu_ps_addr(struct capi_afu_t *afu, int reg)
 int capi_init_adapter(struct capi_t *adapter,
 		      struct capi_driver_ops *driver,
 		      struct device *parent,
-		      int slices, u64 handle,
-		      u64 p1_base, u64 p1_size,
-		      u64 p2_base, u64 p2_size,
-		      irq_hw_number_t err_hwirq);
+		      int slices,
+		      void *backend_data);
 int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
 		  u64 psn_base, u64 psn_size,
 		  u64 afu_desc, u64 afu_desc_size);
+void capi_unmap_slice_regs(struct capi_afu_t *afu);
 int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 		  int slice, u64 handle,
 		  irq_hw_number_t err_irq);
@@ -522,6 +524,7 @@ void unregister_capi_dev(void);
 int add_capi_dev(struct capi_t *capi, int adapter_num);
 void del_capi_dev(struct capi_t *capi, int adapter_num);
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice);
+void del_capi_afu_dev(struct capi_afu_t *afu);
 
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
@@ -564,10 +567,7 @@ struct capi_irq_info {
 };
 
 struct capi_backend_ops {
-	int (*init_adapter) (struct capi_t *adapter, u64 handle,
-			     u64 p1_base, u64 p1_size,
-			     u64 p2_base, u64 p2_size,
-			     irq_hw_number_t err_hwirq);
+	int (*init_adapter) (struct capi_t *adapter, void *backend_data);
 	/* FIXME: Clean this up */
 	int (*init_afu) (struct capi_afu_t *afu, u64 handle);
 
@@ -581,8 +581,21 @@ struct capi_backend_ops {
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);
 	int (*load_afu_image) (struct capi_afu_t *afu, u64 vaddress, u64 length);
+	int (*afu_reset) (struct capi_afu_t *afu);
 };
 extern const struct capi_backend_ops *capi_ops;
+
+struct capi_native_data {
+	u64 p1_base;
+	u64 p1_size;
+	u64 p2_base;
+	u64 p2_size;
+	irq_hw_number_t err_hwirq;
+};
+
+struct capi_hv_data {
+	u64 handle;
+};
 
 /* XXX: LAB DEBUGGING */
 void capi_stop_trace(struct capi_t *capi);

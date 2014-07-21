@@ -10,12 +10,9 @@
 #include "capi_hcalls.h"
 
 static int
-init_adapter_hv(struct capi_t *adapter, u64 handle,
-		u64 p1_base, u64 p1_size,
-		u64 p2_base, u64 p2_size,
-		irq_hw_number_t unused3)
+init_adapter_hv(struct capi_t *adapter, void *backend_data)
 {
-	adapter->handle = handle;
+	adapter->handle = ((struct capi_hv_data *) backend_data)->handle;
 	pr_devel("PSL Handle: 0x%.16llx", adapter->handle);
 
 	return 0;
