@@ -1,4 +1,4 @@
-capi-y				+= main.o file.o irq.o fault.o capi-native.o capi-hv.o
+capi-y				+= main.o file.o irq.o fault.o capi-native.o capi-hv.o sysfs.o
 obj-$(CONFIG_CAPI)		+= capi.o
 obj-$(CONFIG_CAPI_PCI)		+= pci.o
 obj-$(CONFIG_CAPI_OF)		+= of.o

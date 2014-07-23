@@ -527,6 +527,12 @@ void del_capi_dev(struct capi_t *capi, int adapter_num);
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice);
 void del_capi_afu_dev(struct capi_afu_t *afu);
 
+int capi_sysfs_adapter_add(struct capi_t *adapter);
+void capi_sysfs_adapter_remove(struct capi_t *adapter);
+int capi_sysfs_afu_add(struct capi_afu_t *afu);
+void capi_sysfs_afu_remove(struct capi_afu_t *afu);
+
+
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void capi_unmap_irq(unsigned int virq, void *cookie);

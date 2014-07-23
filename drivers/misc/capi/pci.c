@@ -678,7 +678,7 @@ int init_capi_pci(struct pci_dev *dev)
 
 	return 0;
 err5:
-	for (slice -= 1; slice >= 0; slice--)
+	for (slice--; slice >= 0; slice--)
 		remove_slice(adapter, slice);
 	capi_unregister_adapter(adapter);
 err4:

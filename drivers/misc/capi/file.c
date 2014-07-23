@@ -656,22 +656,6 @@ void unregister_capi_dev(void)
 	unregister_chrdev_region(capi_dev, CAPI_NUM_MINORS);
 }
 
-static ssize_t capi_read(struct file *filp, struct kobject *kobj,
-				 struct bin_attribute *bin_attr,
-				 char *buf, loff_t pos, size_t size)
-{
-	printk(KERN_ALERT "Hello\n");
-	return -EINVAL;
-}
-
-static ssize_t capi_write(struct file *filp, struct kobject *kobj,
-				 struct bin_attribute *bin_attr,
-				 char *buf, loff_t pos, size_t size)
-{
-	printk(KERN_ALERT "World\n");
-	return -EINVAL;
-}
-
 int add_capi_dev(struct capi_t *adapter, int adapter_num)
 {
 	int rc;
@@ -693,16 +677,13 @@ int add_capi_dev(struct capi_t *adapter, int adapter_num)
 		goto out;
 	}
 
-	sysfs_bin_attr_init(adapter->capi_attr);
-	adapter->capi_attr.attr.name = "capi_attr";
-	adapter->capi_attr.attr.mode = S_IRUGO | S_IWUSR;
-	adapter->capi_attr.read = capi_read;
-	adapter->capi_attr.write = capi_write;
-	adapter->capi_attr.size = 4;
-	if ((rc = sysfs_create_bin_file(&adapter->device.kobj, &adapter->capi_attr)))
+	if (capi_sysfs_adapter_add(adapter))
 		goto out1;
 
 	/* Create debugfs entries */
+	/* FIXME: Drop these for upstreaming. Maybe move them somewhere more
+	 * appropriate under sysfs or debugfs for debugging - capi%i isn't
+	 * great since it assumes 1 afu per card */
 	pr_devel("Creating CAPI debugfs entries\n");
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
 		snprintf(tmp, 32, "capi%i_trace", adapter_num);
@@ -766,21 +747,26 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	if ((rc = device_register(&afu->device_master)))
 		goto out1;
 
+	if ((rc = capi_sysfs_afu_add(afu)))
+		goto out2;
+
 	cdev_init(&afu->adapter->afu_master_cdev, &afu_master_fops);
 	rc = cdev_add(&afu->adapter->afu_master_cdev, MKDEV(capi_major, capi_minor + 1 + slice), afu->adapter->slices);
 	if (rc) {
 		pr_err("Unable to register CAPI AFU master character devices: %i\n", rc);
-		goto out2;
+		goto out3;
 	}
 
 	/* Create sysfs links */
 	if ((rc = sysfs_create_link(afu->adapter->afu_kobj, &afu->device.kobj, dev_name(&afu->device))))
-		goto out3;
+		goto out4;
 
 	return 0;
 
-out3:
+out4:
 	cdev_del(&afu->adapter->afu_master_cdev);
+out3:
+	capi_sysfs_afu_remove(afu);
 out2:
 	device_unregister(&afu->device_master);
 out1:
@@ -795,7 +781,7 @@ void del_capi_dev(struct capi_t *adapter, int adapter_num)
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
 	debugfs_remove(adapter->afx_chk);
-	sysfs_remove_bin_file(&adapter->device.kobj, &adapter->capi_attr);
+	capi_sysfs_adapter_remove(adapter);
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;
 	cdev_del(&adapter->cdev);
@@ -806,6 +792,7 @@ void del_capi_dev(struct capi_t *adapter, int adapter_num)
 void del_capi_afu_dev(struct capi_afu_t *afu)
 {
 	sysfs_remove_link(&afu->device.kobj, dev_name(&afu->device));
+	capi_sysfs_afu_remove(afu);
 	cdev_del(&afu->adapter->afu_master_cdev);
 	device_unregister(&afu->device_master);
 	cdev_del(&afu->adapter->afu_cdev);
