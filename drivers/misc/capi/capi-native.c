@@ -421,7 +421,7 @@ remove_process_element(struct capi_context_t *ctx)
 
 static void assign_psn_space(struct capi_context_t *ctx)
 {
-	if (ctx->master) {
+	if (!ctx->afu->pp_size || ctx->master) {
 		ctx->psn_phys = ctx->afu->psn_phys;
 		ctx->psn_size = ctx->afu->psn_size;
 	} else {
