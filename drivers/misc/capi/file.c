@@ -209,7 +209,7 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	/* make sure there is a valid per process space for this AFU */
 	if ((ctx->master && !ctx->afu->mmio) || (!ctx->afu->pp_mmio)) {
 		pr_devel("AFU doesn't support mmio space\n");
-		return EINVAL;
+		return -EINVAL;
 	}
 
 	/* Can't mmap until the AFU is enabled
