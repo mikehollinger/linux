@@ -273,9 +273,12 @@ init_afu_native(struct capi_afu_t *afu, u64 handle,
 
 	if ((rc = afu_reset(afu)))
 		return rc;
-	if ((rc = afu_enable(afu)))
-		return rc;
-	afu->enabled = true;
+
+	if (afu->afu_directed_mode) {
+		if ((rc = afu_enable(afu)))
+			return rc;
+		afu->enabled = true;
+	}
 
 	return rc;
 }
