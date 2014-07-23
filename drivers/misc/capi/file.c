@@ -207,7 +207,8 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	len = min(len, ctx->psn_size);
 
 	/* make sure there is a valid per process space for this AFU */
-	if ((ctx->master && !ctx->afu->mmio) || (!ctx->afu->pp_mmio)) {
+	if ((ctx->master && !ctx->afu->mmio) ||
+	    (!ctx->master && !ctx->afu->pp_mmio)) {
 		pr_devel("AFU doesn't support mmio space\n");
 		return -EINVAL;
 	}
