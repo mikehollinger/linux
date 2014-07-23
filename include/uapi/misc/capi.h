@@ -8,6 +8,7 @@
 /* Argument is a pointer to a struct capi_ioctl_start_work */
 #define CAPI_IOCTL_START_WORK      0
 #define CAPI_IOCTL_LOAD_AFU_IMAGE  1
+#define CAPI_IOCTL_CHECK_ERROR     2
 
 struct capi_ioctl_start_work {
 	__u64 wed;

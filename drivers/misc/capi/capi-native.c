@@ -763,6 +763,11 @@ void capi_unmap_slice_regs(struct capi_afu_t *afu)
 }
 EXPORT_SYMBOL(capi_unmap_slice_regs);
 
+static int check_error(struct capi_afu_t *afu)
+{
+	return (capi_p1n_read(afu, CAPI_PSL_SCNTL_An) == ~0ULL);
+}
+
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
@@ -773,6 +778,7 @@ static const struct capi_backend_ops capi_native_ops = {
 	.release_adapter = release_adapter_native,
 	.release_afu = release_afu_native,
 	.load_afu_image = load_afu_image_native,
+	.check_error = check_error,
 	.afu_reset = afu_reset,
 };
 

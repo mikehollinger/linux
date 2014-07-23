@@ -160,6 +160,19 @@ afu_ioctl_start_work(struct capi_context_t *ctx,
 }
 
 static long
+afu_ioctl_check_error(struct capi_context_t *ctx)
+{
+	if (capi_ops->check_error && capi_ops->check_error(ctx->afu)) {
+		/* FIXME: This reset isn't sufficient to recover from the
+		 * condition I tested - this will basically need a hotplug or
+		 * PERST. May need several tests for different severities and
+		 * appropriate actions for each. */
+		return capi_ops->afu_reset(ctx->afu);
+	}
+	return -EPERM;
+}
+
+static long
 afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
@@ -189,6 +202,8 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			// FIXME: check no one is using this
 			return capi_ops->load_afu_image(ctx->afu, work.vaddress, work.length);
 		}
+		case CAPI_IOCTL_CHECK_ERROR:
+			return afu_ioctl_check_error(ctx);
 	}
 	return -EINVAL;
 }

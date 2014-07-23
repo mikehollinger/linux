@@ -582,6 +582,7 @@ struct capi_backend_ops {
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);
 	int (*load_afu_image) (struct capi_afu_t *afu, u64 vaddress, u64 length);
+	int (*check_error) (struct capi_afu_t *afu);
 	int (*afu_reset) (struct capi_afu_t *afu);
 };
 extern const struct capi_backend_ops *capi_ops;
