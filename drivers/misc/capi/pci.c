@@ -632,7 +632,7 @@ int init_capi_pci(struct pci_dev *dev)
 			 * needed */
 			WARN_ON(afu->psn_size < (afu->pp_offset +
 						afu->pp_size*afu->num_procs));
-			WARN_ON(afu->pp_size < PAGE_SIZE);
+			WARN_ON(afu->pp_mmio && (afu->pp_size < PAGE_SIZE));
 
 			/* XXX TODO: Read num_ints_per_process from AFU descriptor */
 		} else
