@@ -211,6 +211,8 @@ EXPORT_SYMBOL(capi_init_afu);
 
 static char *capi_devnode(struct device *dev, umode_t *mode)
 {
+	if (MINOR(dev->devt) % CAPI_DEV_MINORS == 0)
+		return NULL;
 	return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(dev));
 }
 
