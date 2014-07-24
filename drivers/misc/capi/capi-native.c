@@ -561,6 +561,7 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	if ((result = afu_enable(afu)))
 		return result;
 
+	afu->enabled = true;
 	return 0;
 }
 
