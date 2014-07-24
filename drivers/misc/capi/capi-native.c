@@ -39,6 +39,7 @@ int afu_reset(struct capi_afu_t *afu)
 	pr_devel("AFU reset\n");
 	return 0;
 }
+EXPORT_SYMBOL(afu_reset);
 
 static int afu_enable(struct capi_afu_t *afu)
 {
@@ -146,43 +147,60 @@ static int psl_purge(struct capi_afu_t *afu)
 }
 
 static int
-init_adapter_native(struct capi_t *adapter, u64 unused,
-		    u64 p1_base, u64 p1_size,
-		    u64 p2_base, u64 p2_size,
-		    irq_hw_number_t err_hwirq)
+init_adapter_native(struct capi_t *adapter, void *backend_data)
 {
+	struct capi_native_data *data = backend_data;
 	int rc;
 
 	pr_devel("capi_mmio_p1:        ");
-	if (!(adapter->p1_mmio = ioremap(p1_base, p1_size)))
+	if (!(adapter->p1_mmio = ioremap(data->p1_base, data->p1_size)))
 		return -ENOMEM;
 
-	if (p2_base) {
-		if (!(adapter->p2_mmio = ioremap(p2_base, p2_size)))
-			return -ENOMEM;
+	if (data->p2_base) {
+		if (!(adapter->p2_mmio = ioremap(data->p2_base, data->p2_size))) {
+			rc = -ENOMEM;
+			goto out;
+		}
 	}
 
 	if (adapter->driver && adapter->driver->init_adapter) {
 		if ((rc = adapter->driver->init_adapter(adapter)))
-			return rc;
+			goto out1;
 	}
 
 	pr_devel("capi implementation specific PSL_VERSION: 0x%llx\n",
 			capi_p1_read(adapter, CAPI_PSL_VERSION));
 
-	adapter->err_hwirq = err_hwirq;
+	adapter->err_hwirq = data->err_hwirq;
 	pr_devel("capi_err_ivte: %#lx\n", adapter->err_hwirq);
+
 	adapter->err_virq = capi_map_irq(adapter, adapter->err_hwirq, capi_irq_err, (void*)adapter);
+	if (!adapter->err_virq) {
+		rc = -ENOSPC;
+		goto out2;
+	}
+
 	capi_p1_write(adapter, CAPI_PSL_ErrIVTE, adapter->err_hwirq & 0xffff);
 
 	return 0;
+
+out:
+	iounmap(adapter->p1_mmio);
+out1:
+	iounmap(adapter->p2_mmio);
+out2:
+	if (adapter->driver && adapter->driver->release_adapter)
+		adapter->driver->release_adapter(adapter);
+	return rc;
 }
 
-/* XXX: Untested */
 static void release_adapter_native(struct capi_t *adapter)
 {
-	capi_unmap_irq(adapter->err_virq, (void*)adapter);
 	iounmap(adapter->p1_mmio);
+	iounmap(adapter->p2_mmio);
+	capi_unmap_irq(adapter->err_virq, (void*)adapter);
+	if (adapter->driver && adapter->driver->release_adapter)
+		adapter->driver->release_adapter(adapter);
 }
 
 static int spa_max_procs(int spa_size)
@@ -239,14 +257,12 @@ static int alloc_spa(struct capi_afu_t *afu)
 }
 
 static int
-init_afu_native(struct capi_afu_t *afu, u64 handle,
-		irq_hw_number_t err_hwirq)
+init_afu_native(struct capi_afu_t *afu, u64 handle)
 {
 	u64 val;
 	int rc = 0;
 
-	afu->err_hwirq = err_hwirq;
-	if (err_hwirq) { /* Can drop this test when the BML support is pulled out - under phyp we use capi-of.c */
+	if (afu->err_hwirq) { /* Can drop this test when the BML support is pulled out - under phyp we use capi-of.c */
 		pr_devel("capi slice error IVTE: %#lx\n", afu->err_hwirq);
 		afu->err_virq = capi_map_irq(afu->adapter, afu->err_hwirq, capi_slice_irq_err, (void*)afu);
 		val = capi_p1n_read(afu, CAPI_PSL_SERR_An);
@@ -288,6 +304,10 @@ static void release_afu_native(struct capi_afu_t *afu)
 	iounmap(afu->p1n_mmio);
 	iounmap(afu->p2n_mmio);
 	iounmap(afu->psn_mmio);
+
+	capi_unmap_irq(afu->err_virq, (void*)afu);
+	if (afu->adapter->driver && afu->adapter->driver->release_afu)
+		afu->adapter->driver->release_afu(afu);
 }
 
 static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
@@ -404,7 +424,7 @@ remove_process_element(struct capi_context_t *ctx)
 
 static void assign_psn_space(struct capi_context_t *ctx)
 {
-	if (ctx->master) {
+	if (!ctx->afu->pp_size || ctx->master) {
 		ctx->psn_phys = ctx->afu->psn_phys;
 		ctx->psn_size = ctx->afu->psn_size;
 	} else {
@@ -695,6 +715,63 @@ out:
 	return rc;
 }
 
+int capi_map_slice_regs(struct capi_afu_t *afu,
+		  u64 p1n_base, u64 p1n_size,
+		  u64 p2n_base, u64 p2n_size,
+		  u64 psn_base, u64 psn_size,
+		  u64 afu_desc, u64 afu_desc_size)
+{
+	pr_devel("capi_map_slice_regs: p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx, afu_desc: %#.16llx %#llx\n",
+			p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size, afu_desc, afu_desc_size);
+
+	afu->p1n_mmio = NULL;
+	afu->afu_desc_mmio = NULL;
+	if (p1n_base)
+		if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
+			goto err;
+	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
+		goto err1;
+	if (!(afu->psn_mmio = ioremap(psn_base, psn_size)))
+		goto err2;
+	if (afu_desc)
+		if (!(afu->afu_desc_mmio = ioremap(afu_desc, afu_desc_size)))
+			goto err3;
+	afu->psn_phys = psn_base;
+	afu->psn_size = psn_size;
+	afu->afu_desc_size = afu_desc_size;
+
+	return 0;
+err3:
+	iounmap(afu->psn_mmio);
+err2:
+	iounmap(afu->p2n_mmio);
+err1:
+	if (afu->p1n_mmio)
+		iounmap(afu->p1n_mmio);
+err:
+	WARN(1, "Error mapping AFU MMIO regions\n");
+	return -EFAULT;
+}
+EXPORT_SYMBOL(capi_map_slice_regs);
+
+void capi_unmap_slice_regs(struct capi_afu_t *afu)
+{
+	if (afu->psn_mmio)
+		iounmap(afu->psn_mmio);
+
+	if (afu->p1n_mmio)
+		iounmap(afu->p2n_mmio);
+
+	if (afu->p1n_mmio)
+		iounmap(afu->p1n_mmio);
+}
+EXPORT_SYMBOL(capi_unmap_slice_regs);
+
+static int check_error(struct capi_afu_t *afu)
+{
+	return (capi_p1n_read(afu, CAPI_PSL_SCNTL_An) == ~0ULL);
+}
+
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
@@ -705,6 +782,8 @@ static const struct capi_backend_ops capi_native_ops = {
 	.release_adapter = release_adapter_native,
 	.release_afu = release_afu_native,
 	.load_afu_image = load_afu_image_native,
+	.check_error = check_error,
+	.afu_reset = afu_reset,
 };
 
 void init_capi_native()

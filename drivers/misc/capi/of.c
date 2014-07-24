@@ -84,10 +84,11 @@ static int __init init_capi_of(void)
 	struct capi_t *adapter;
 	const __be32 *prop;
 	int slice;
-	u64 handle = 0;
 	irq_hw_number_t err_hwirq = 0; /* XXX: Drop for upstream */
 	u64 p1_base = 0, p1_size = 0; /* XXX: BML specific - drop for upstream */
 	int ret = -ENODEV;
+	struct capi_hv_data hv_data;
+	struct capi_native_data native_data;
 
 	pr_devel("init_capi_of\n");
 
@@ -96,6 +97,8 @@ static int __init init_capi_of(void)
 	memset(adapter, 0, sizeof(struct capi_t));
 
 	while ((np = of_find_compatible_node(np, NULL, "ibm,coherent-platform-facility"))) {
+		/* FIXME: Restructure to avoid needing to iterate over AFUs twice */
+		for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++);
 
 		if (cpu_has_feature(CPU_FTR_HVMODE)) {
 			/* XXX: BML Specific, drop for upstream */
@@ -103,18 +106,21 @@ static int __init init_capi_of(void)
 				goto bail;
 			if ((prop = of_get_property(np, "interrupt", NULL)))
 				err_hwirq = be32_to_cpu(prop[0]);
+
+			native_data.p1_base = p1_base;
+			native_data.p1_size = p1_size;
+			native_data.p2_base = 0;
+			native_data.p2_size = 0;
+			native_data.err_hwirq = err_hwirq;
+			if ((ret = capi_init_adapter(adapter, NULL, NULL, slice, &native_data)))
+				goto bail;
 		} else {
-			if (!(ret = read_handle(np, &handle)))
+			if (!(ret = read_handle(np, &hv_data.handle)))
+				goto bail;
+
+			if ((ret = capi_init_adapter(adapter, NULL, NULL, slice, &hv_data)))
 				goto bail;
 		}
-
-		/* FIXME: Restructure to avoid needing to iterate over AFUs twice */
-		for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++);
-
-		if ((ret = capi_init_adapter(adapter, NULL, slice, handle,
-					      p1_base, p1_size,
-					      0, 0, err_hwirq)))
-			goto bail;
 
 		for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++) {
 			if ((ret = init_afu_of(adapter, slice, afu_np)))

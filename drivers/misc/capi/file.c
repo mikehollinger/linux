@@ -26,6 +26,8 @@
 
 dev_t capi_dev;
 
+extern struct class *capi_class;
+
 static int
 __afu_open(struct inode *inode, struct file *file, bool master)
 {
@@ -158,6 +160,19 @@ afu_ioctl_start_work(struct capi_context_t *ctx,
 }
 
 static long
+afu_ioctl_check_error(struct capi_context_t *ctx)
+{
+	if (capi_ops->check_error && capi_ops->check_error(ctx->afu)) {
+		/* FIXME: This reset isn't sufficient to recover from the
+		 * condition I tested - this will basically need a hotplug or
+		 * PERST. May need several tests for different severities and
+		 * appropriate actions for each. */
+		return capi_ops->afu_reset(ctx->afu);
+	}
+	return -EPERM;
+}
+
+static long
 afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
@@ -187,6 +202,8 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			// FIXME: check no one is using this
 			return capi_ops->load_afu_image(ctx->afu, work.vaddress, work.length);
 		}
+		case CAPI_IOCTL_CHECK_ERROR:
+			return afu_ioctl_check_error(ctx);
 	}
 	return -EINVAL;
 }
@@ -642,59 +659,145 @@ void unregister_capi_dev(void)
 	unregister_chrdev_region(capi_dev, CAPI_NUM_MINORS);
 }
 
-int add_capi_dev(struct capi_t *capi, int adapter_num)
+int add_capi_dev(struct capi_t *adapter, int adapter_num)
 {
 	int rc;
 	int capi_major = MAJOR(capi_dev);
 	int capi_minor = adapter_num * CAPI_DEV_MINORS;
 	char tmp[32];
 
-	cdev_init(&(capi->cdev), &capi_fops);
-	cdev_init(&(capi->afu_master_cdev), &afu_master_fops);
-	cdev_init(&(capi->afu_cdev), &afu_fops);
-
-
-	/* fixme do this per slice */
-	rc = cdev_add(&(capi->cdev), MKDEV(capi_major, capi_minor), 1);
+	cdev_init(&(adapter->cdev), &capi_fops);
+	rc = cdev_add(&(adapter->cdev), MKDEV(capi_major, capi_minor), 1);
 	if (rc) {
 		pr_err("Unable to register CAPI character device: %i\n", rc);
-		return -1;
+		return rc;
 	}
 
-	rc = cdev_add(&(capi->afu_master_cdev), MKDEV(capi_major, capi_minor + 1), capi->slices);
-	if (rc) {
-		pr_err("Unable to register CAPI AFU master character devices: %i\n", rc);
-		return -1;
+	/* Create sysfs attributes */
+	adapter->afu_kobj = kobject_create_and_add("afu", &adapter->device.kobj);
+	if (IS_ERR(adapter->afu_kobj)) {
+		rc = PTR_ERR(adapter->afu_kobj);
+		goto out;
 	}
 
-	/* FIXME check afu->pp_mmio to see if we need this file */
-	rc = cdev_add(&(capi->afu_cdev), MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1), capi->slices);
-	if (rc) {
-		pr_err("Unable to register CAPI AFU character devices: %i\n", rc);
-		return -1;
-	}
+	if (capi_sysfs_adapter_add(adapter))
+		goto out1;
 
 	/* Create debugfs entries */
+	/* FIXME: Drop these for upstreaming. Maybe move them somewhere more
+	 * appropriate under sysfs or debugfs for debugging - capi%i isn't
+	 * great since it assumes 1 afu per card */
 	pr_devel("Creating CAPI debugfs entries\n");
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
 		snprintf(tmp, 32, "capi%i_trace", adapter_num);
-		capi->trace = debugfs_create_file(tmp, 0444, NULL, capi, &trace_fops);
+		adapter->trace = debugfs_create_file(tmp, 0444, NULL, adapter, &trace_fops);
 		snprintf(tmp, 32, "capi%i_psl_err_chk", adapter_num);
-		capi->psl_err_chk = debugfs_create_file(tmp, 0444, NULL, capi, &psl_err_chk_fops);
+		adapter->psl_err_chk = debugfs_create_file(tmp, 0444, NULL, adapter, &psl_err_chk_fops);
 		snprintf(tmp, 32, "capi%i_afx_chk", adapter_num);
-		capi->afx_chk = debugfs_create_file(tmp, 0444, NULL, &capi->slice[0], &afx_chk_fops);
+		adapter->afx_chk = debugfs_create_file(tmp, 0444, NULL, &adapter->slice[0], &afx_chk_fops);
+	}
+	return 0;
+
+out1:
+	kobject_put(adapter->afu_kobj);
+	adapter->afu_kobj = NULL;
+out:
+	cdev_del(&adapter->cdev);
+	return rc;
+}
+
+extern struct class *capi_class;
+
+void capi_release(struct device *dev)
+{
+	pr_devel("capi release\n");
+}
+
+int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
+{
+	int rc;
+	unsigned int capi_major = MAJOR(afu->adapter->device.devt);
+	unsigned int capi_minor = MINOR(afu->adapter->device.devt);
+
+	/* Add the AFU slave device */
+	/* FIXME check afu->pp_mmio to see if we need this file */
+	afu->device.parent = &afu->adapter->device;
+	afu->device.class = capi_class;
+	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, slice);
+	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
+	afu->device.class = capi_class;
+	afu->device.release = capi_release;
+	spin_lock_init(&afu->spa_lock);
+
+	if ((rc = device_register(&afu->device)))
+		return rc;
+
+	cdev_init(&afu->adapter->afu_cdev, &afu_fops);
+	rc = cdev_add(&afu->adapter->afu_cdev, MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice), afu->adapter->slices);
+	if (rc) {
+		pr_err("Unable to register CAPI AFU character devices: %i\n", rc);
+		goto out;
 	}
 
+	/* Add the AFU master device */
+	afu->device_master.parent = &afu->device;
+	afu->device_master.class = capi_class;
+	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, slice);
+	afu->device_master.class = capi_class;
+	afu->device_master.devt = MKDEV(capi_major, capi_minor + 1 + slice);
+	afu->device_master.release = capi_release;
+
+	if ((rc = device_register(&afu->device_master)))
+		goto out1;
+
+	if ((rc = capi_sysfs_afu_add(afu)))
+		goto out2;
+
+	cdev_init(&afu->adapter->afu_master_cdev, &afu_master_fops);
+	rc = cdev_add(&afu->adapter->afu_master_cdev, MKDEV(capi_major, capi_minor + 1 + slice), afu->adapter->slices);
+	if (rc) {
+		pr_err("Unable to register CAPI AFU master character devices: %i\n", rc);
+		goto out3;
+	}
+
+	/* Create sysfs links */
+	if ((rc = sysfs_create_link(afu->adapter->afu_kobj, &afu->device.kobj, dev_name(&afu->device))))
+		goto out4;
+
 	return 0;
+
+out4:
+	cdev_del(&afu->adapter->afu_master_cdev);
+out3:
+	capi_sysfs_afu_remove(afu);
+out2:
+	device_unregister(&afu->device_master);
+out1:
+	cdev_del(&afu->adapter->afu_cdev);
+out:
+	device_unregister(&afu->device);
+	return rc;
 }
 
 void del_capi_dev(struct capi_t *adapter, int adapter_num)
 {
-	cdev_del(&adapter->cdev);
-	cdev_del(&adapter->afu_master_cdev);
-	cdev_del(&adapter->afu_cdev);
-
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
 	debugfs_remove(adapter->afx_chk);
+	capi_sysfs_adapter_remove(adapter);
+	kobject_put(adapter->afu_kobj);
+	adapter->afu_kobj = NULL;
+	cdev_del(&adapter->cdev);
+	adapter->device.release = capi_release;
+	device_unregister(&adapter->device);
+}
+
+void del_capi_afu_dev(struct capi_afu_t *afu)
+{
+	sysfs_remove_link(&afu->device.kobj, dev_name(&afu->device));
+	capi_sysfs_afu_remove(afu);
+	cdev_del(&afu->adapter->afu_master_cdev);
+	device_unregister(&afu->device_master);
+	cdev_del(&afu->adapter->afu_cdev);
+	device_unregister(&afu->device);
 }
