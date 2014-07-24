@@ -420,6 +420,7 @@ struct capi_t {
 };
 
 struct capi_driver_ops {
+	struct module *module;
 	int (*init_adapter) (struct capi_t *adapter);
 	int (*init_afu) (struct capi_afu_t *afu);
 	int (*alloc_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter, unsigned int num);

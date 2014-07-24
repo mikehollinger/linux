@@ -7,6 +7,7 @@
 /* TODO: Split this out into a separate module now that we have some CAPI
  * devices that won't want to use this generic userspace interface */
 
+#include <linux/module.h>
 #include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/bitmap.h>
@@ -44,6 +45,10 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	if (!adapter)
 		return -ENODEV;
 	if (slice > adapter->slices)
+		return -ENODEV;
+
+	/* We need to stop the bus driver from being unloaded */
+	if (!try_module_get(adapter->driver->module))
 		return -ENODEV;
 
 	if (!(ctx = kmalloc(sizeof(struct capi_context_t), GFP_KERNEL)))
@@ -91,6 +96,12 @@ static int
 afu_release(struct inode *inode, struct file *file)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
+	int minor = MINOR(inode->i_rdev);
+	int adapter_num = minor / CAPI_DEV_MINORS;
+	struct capi_t *adapter;
+
+	adapter = get_capi_adapter(adapter_num);
+	WARN_ON(!adapter);
 
 	pr_devel("afu_release\n");
 
@@ -110,6 +121,8 @@ afu_release(struct inode *inode, struct file *file)
 	put_pid(ctx->pid);
 
 	kfree(ctx);
+
+	module_put(adapter->driver->module);
 
 	return 0;
 }

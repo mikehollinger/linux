@@ -373,6 +373,7 @@ static void capi_release_afu(struct capi_afu_t *afu)
 }
 
 static struct capi_driver_ops capi_pci_driver_ops = {
+	.module = THIS_MODULE,
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
 	.alloc_irqs = alloc_hwirqs,
