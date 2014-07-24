@@ -32,6 +32,33 @@
 #define CAPI_VSEC_PS_OFF(vsec)		(vsec + 0x28)
 #define CAPI_VSEC_PS_SIZE(vsec)		(vsec + 0x2c)
 
+/* This works a little different than the p1/p2 register accesses to make it
+ * easier to pull out individual fields */
+#define AFUD_READ(afu, off)		_capi_reg_read(afu->afu_desc_mmio + off)
+#define EXTRACT_PPC_BIT(val, bit)	(!!(val & PPC_BIT(bit)))
+#define EXTRACT_PPC_BITS(val, bs, be)	((val & PPC_BITMASK(bs, be)) >> PPC_BITLSHIFT(be))
+
+#define AFUD_READ_INFO(afu)		AFUD_READ(afu, 0x0)
+#define   AFUD_NUM_INTS_PER_PROC(val)	EXTRACT_PPC_BITS(val,  0, 15)
+#define   AFUD_NUM_PROCS(val)		EXTRACT_PPC_BITS(val, 16, 31)
+#define   AFUD_NUM_CRS(val)		EXTRACT_PPC_BITS(val, 32, 47)
+#define   AFUD_MULTIMODE(val)		EXTRACT_PPC_BIT(val, 48)
+#define   AFUD_PUSH_BLOCK_TRANSFER(val)	EXTRACT_PPC_BIT(val, 55)
+#define   AFUD_DEDICATED_PROCESS(val)	EXTRACT_PPC_BIT(val, 59)
+#define   AFUD_AFU_DIRECTED(val)	EXTRACT_PPC_BIT(val, 61)
+#define   AFUD_TIME_SLICED(val)		EXTRACT_PPC_BIT(val, 63)
+#define AFUD_READ_CR(afu)		AFUD_READ(afu, 0x20)
+#define   AFUD_CR_LEN(val)		EXTRACT_PPC_BITS(val, 8, 63)
+#define AFUD_READ_CR_OFF(afu)		AFUD_READ(afu, 0x28)
+#define AFUD_READ_PPPSA(afu)		AFUD_READ(afu, 0x30)
+#define   AFUD_PPPSA_PP(val)		EXTRACT_PPC_BIT(val, 6)
+#define   AFUD_PPPSA_PSA(val)		EXTRACT_PPC_BIT(val, 7)
+#define   AFUD_PPPSA_LEN(val)		EXTRACT_PPC_BITS(val, 8, 63)
+#define AFUD_READ_PPPSA_OFF(afu)	AFUD_READ(afu, 0x38)
+#define AFUD_READ_EB(afu)		AFUD_READ(afu, 0x40)
+#define   AFUD_EB_LEN(val)		EXTRACT_PPC_BITS(val, 8, 63)
+#define AFUD_READ_EB_OFF(afu)		AFUD_READ(afu, 0x48)
+
 DEFINE_PCI_DEVICE_TABLE(capi_pci_tbl) = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0477), },
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x044b), },
@@ -149,42 +176,48 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port", val);
 }
 
-static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, void __iomem *afu_desc)
+static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, struct capi_afu_t *afu)
 {
 	u64 val;
 
-	val = _capi_reg_read(afu_desc + 0x0);
+	val = AFUD_READ_INFO(afu);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_ints_per_process", ((val & 0xffff000000000000ULL) >> (63-15)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_ints_per_process", AFUD_NUM_INTS_PER_PROC(val));
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_processes",     ((val & 0x0000ffff00000000ULL) >> (63-31)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_processes",     AFUD_NUM_PROCS(val));
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_afu_CRs",       ((val & 0x00000000ffff0000ULL) >> (63-48)));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_afu_CRs",       AFUD_NUM_CRS(val));
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "req_prog_model",       ((val & 0x000000000000ffffULL)));
 
-	val = _capi_reg_read(afu_desc + 0x8);
+	val = AFUD_READ(afu, 0x8);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
-	val = _capi_reg_read(afu_desc + 0x10);
+	val = AFUD_READ(afu, 0x10);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
-	val = _capi_reg_read(afu_desc + 0x18);
+	val = AFUD_READ(afu, 0x18);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
 
-	val = _capi_reg_read(afu_desc + 0x20);
+	val = AFUD_READ_CR(afu);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_format (v0.11)", ((val & 0xff00000000000000ULL) >> (63-7))); /* Reserved >= 0.12 */
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_len",            (val & 0x00ffffffffffffffULL));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_len",            AFUD_CR_LEN(val));
 
-	val = _capi_reg_read(afu_desc + 0x28);
+	val = AFUD_READ_CR_OFF(afu);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_offset", val);
 
-	val = _capi_reg_read(afu_desc + 0x30);
+	val = AFUD_READ_PPPSA(afu);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_control", ((val & 0xff00000000000000ULL) >> (63-7)));
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_length",  (val & 0x00ffffffffffffffULL));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_control", AFUD_PPPSA_LEN(val));
 
-	val = _capi_reg_read(afu_desc + 0x38);
+	val = AFUD_READ_PPPSA_OFF(afu);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_offset", val);
 
-	val = _capi_reg_read(afu_desc + 0x40);
+	val = AFUD_READ_EB(afu);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved",   (val & (0xff00000000000000ULL) >> (63-7)));
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_len", (val & 0x00ffffffffffffffULL));
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_len", AFUD_EB_LEN(val));
 
-	val = _capi_reg_read(afu_desc + 0x48);
+	val = AFUD_READ_EB_OFF(afu);
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_offset", val);
 }
 
@@ -405,7 +438,7 @@ static void reassign_capi_bars(struct pci_dev *dev)
 	/*
 	 * MASSIVE HACK: CAPI requires the m64 address space for BAR
 	 * assignment. Our PHB code in Linux doesn't use it yet, and Linux will
-	 * have assigned BAR's from the m32 space. For now just reassign the
+	 * have assigned BARs from the m32 space. For now just reassign the
 	 * BARs from the m64 space.
 	 */
 	window_prop = of_get_property(np, "ibm,opal-m64-window", NULL);
@@ -524,45 +557,31 @@ static int init_slice(struct capi_t *adapter,
 	   now.  need to * fix this long term */
 	capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
 	capi_ops->afu_reset(afu);
-	dump_afu_descriptor(dev, afu->afu_desc_mmio);
+	dump_afu_descriptor(dev, afu);
 
-	val = _capi_reg_read(afu->afu_desc_mmio + 0x0);
-	afu->pp_irqs = (val & 0xffff000000000000ULL) >> (63-15);
-	afu->num_procs = (val & 0x0000ffff00000000ULL) >> (63-31);
-	afu->afu_directed_mode = false;
-	afu->afu_dedicated_mode = false;
-	if (val & (1ull << (63-61)))
-		afu->afu_directed_mode = true;
-	if (val & (1ull << (63-59)))
-		afu->afu_dedicated_mode = true;
+	val = AFUD_READ_INFO(afu);
+	afu->pp_irqs = AFUD_NUM_INTS_PER_PROC(val);
+	afu->num_procs = AFUD_NUM_PROCS(val);
+	afu->afu_directed_mode = AFUD_AFU_DIRECTED(val);
+	afu->afu_dedicated_mode = AFUD_DEDICATED_PROCESS(val);
 	if (!afu->afu_directed_mode && !afu->afu_dedicated_mode) {
 		pr_err("No supported AFU programing models available\n");
 		rc = -ENODEV;
 		goto out;
 	}
 
-	val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
-	afu->pp_size = (val & 0x00ffffffffffffffULL) * 4096;
-	if (val & (1ull << (63 - 6)))
-		afu->pp_mmio = true;
-	else {
-		pr_devel("AFU doesn't support per process mmio space\n");
-		afu->pp_mmio = false;
-	}
-	if (val & (1ull << (63 - 7)))
-		afu->mmio = true;
-	else {
+	val = AFUD_READ_PPPSA(afu);
+	afu->pp_size = AFUD_PPPSA_LEN(val) * 4096;
+	afu->mmio = AFUD_PPPSA_PSA(val);
+	if (!afu->mmio)
 		pr_devel("AFU doesn't support mmio space\n");
-		afu->mmio = false;
-	}
-
-	val = _capi_reg_read(afu->afu_desc_mmio + 0x30);
-	if (val & (1ull << (63-6))) {
-		val = _capi_reg_read(afu->afu_desc_mmio + 0x38);
-		afu->pp_offset = val;
-	}
-	else
+	afu->pp_mmio = AFUD_PPPSA_PP(val);
+	if (afu->pp_mmio) {
+		afu->pp_offset = AFUD_READ_PPPSA_OFF(afu);
+	} else {
+		pr_devel("AFU doesn't support per process mmio space\n");
 		afu->pp_offset = 0;
+	}
 
 	WARN_ON(afu->psn_size < (afu->pp_offset +
 				 afu->pp_size*afu->num_procs));
