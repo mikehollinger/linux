@@ -577,7 +577,7 @@ static int init_slice(struct capi_t *adapter,
 		afu->pp_offset = 0;
 	}
 
-	WARN_ON(afu->psn_size < (afu->pp_offset +
+	WARN_ON(afu->mmio && afu->psn_size < (afu->pp_offset +
 				 afu->pp_size*afu->num_procs));
 	WARN_ON(afu->pp_mmio && (afu->pp_size < PAGE_SIZE));
 
