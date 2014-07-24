@@ -9,6 +9,7 @@
 #include <linux/sort.h>
 #include <linux/pci.h>
 #include <linux/of.h>
+#include <linux/delay.h>
 #include <asm/opal.h>
 
 #include <asm/msi_bitmap.h>
@@ -372,6 +373,7 @@ static void capi_release_afu(struct capi_afu_t *afu)
 	_release_hwirqs(dev, afu->err_hwirq, 1);
 }
 
+static int capi_reset(struct capi_t *adapter);
 static struct capi_driver_ops capi_pci_driver_ops = {
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
@@ -380,6 +382,7 @@ static struct capi_driver_ops capi_pci_driver_ops = {
 	.setup_irq = setup_capi_msi,
 	.release_adapter = capi_release_adapter,
 	.release_afu = capi_release_afu,
+	.reset = capi_reset,
 };
 
 
@@ -691,6 +694,53 @@ err1:
 	kfree(adapter);
 err:
 	return rc;
+}
+
+bool pci_bus_read_dev_vendor_id(struct pci_bus *bus, int devfn, u32 *pl,
+				int crs_timeout);
+
+static int capi_reset(struct capi_t *adapter)
+{
+	struct pci_dev *pdev = to_pci_dev(adapter->device.parent);
+	int rc;
+	u32 v;
+
+	dev_info(&pdev->dev, "pci reset\n");
+
+	pci_cfg_access_lock(pdev);
+
+	pci_set_pcie_reset_state(pdev, pcie_warm_reset);
+	msleep(10);
+	pci_set_pcie_reset_state(pdev, pcie_deassert_reset);
+	msleep(1000);
+	pci_bus_read_dev_vendor_id(pdev->bus, pdev->devfn, &v, 60*1000);
+	dev_info(&pdev->dev, "v = %08x\n", v);
+
+	/* Now lets setup the device again.. stolen from capi_probe() */
+	dump_capi_config_space(pdev);
+	reassign_capi_bars(pdev);
+
+	/* just do the card as the CAPP unit should still be in CAPI mode */
+	if ((rc = switch_card_to_capi(pdev))){
+		dev_err(&pdev->dev, "enable_capi_protocol failed: %i\n", rc);
+		goto out;
+	}
+	dev_info(&pdev->dev, "capi protocol enabled\n");
+
+/*	if ((rc = pci_enable_device(dev))) {
+		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
+		return rc;
+	}
+*/
+/*	if ((rc = init_capi_pci(dev))) {
+		dev_err(&dev->dev, "init_capi_pci failed: %i\n", rc);
+		return rc;
+	}
+*/
+out:
+	pci_cfg_access_unlock(pdev);
+	return rc;
+
 }
 
 static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)

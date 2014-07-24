@@ -5,13 +5,18 @@
 #include "capi.h"
 
 #define to_afu(d) container_of(d, struct capi_afu_t, device)
+#define to_adapter(d) container_of(d, struct capi_t, device)
 #define master_to_afu(d) container_of(d, struct capi_afu_t, device_master)
 
 static ssize_t reset_store(struct device *device, struct device_attribute *attr,
 		   const char *buf, size_t count)
 {
+	struct capi_t *adapter = to_adapter(device);
+	int rc; 
 	/* TODO: support various types of reset */
-	return -EPERM;
+	if (rc = adapter->driver->reset(adapter))
+		return rc;
+	return count;
 }
 
 static struct device_attribute adapter_attrs[] = {
