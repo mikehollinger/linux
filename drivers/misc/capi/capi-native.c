@@ -14,6 +14,11 @@
 #include "capi.h"
 #include "capi_hcalls.h"
 
+/*
+ * FIXME: add locking to afu_reset/enable/disable
+ * FIXME: merge afu_reset/enable/disable also
+ */
+
 int afu_reset(struct capi_afu_t *afu)
 {
 	u64 AFU_Cntl;
@@ -37,6 +42,9 @@ int afu_reset(struct capi_afu_t *afu)
 	     != CAPI_AFU_Cntl_An_ES_Disabled,
 	     "AFU not disabled after reset!\n");
 	pr_devel("AFU reset\n");
+
+	afu->enabled = false;
+
 	return 0;
 }
 EXPORT_SYMBOL(afu_reset);
@@ -64,6 +72,7 @@ static int afu_enable(struct capi_afu_t *afu)
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
 	pr_devel("AFU enabled\n");
+	afu->enabled = true;
 	return 0;
 }
 
@@ -91,7 +100,15 @@ static int afu_disable(struct capi_afu_t *afu)
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
 	pr_devel("AFU disabled\n");
+	afu->enabled = false;
 	return 0;
+}
+
+static int afu_check_and_enable(struct capi_afu_t *afu)
+{
+	if (afu->enabled)
+		return 0;
+	return afu_enable(afu);
 }
 
 static int psl_purge(struct capi_afu_t *afu)
@@ -295,12 +312,6 @@ init_afu_native(struct capi_afu_t *afu, u64 handle)
 	if ((rc = afu_reset(afu)))
 		return rc;
 
-	if (afu->afu_directed_mode) {
-		if ((rc = afu_enable(afu)))
-			return rc;
-		afu->enabled = true;
-	}
-
 	return rc;
 }
 
@@ -502,6 +513,10 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 	ctx->elem->common.amr = cpu_to_be64(amr);
 	ctx->elem->common.wed = cpu_to_be64(wed);
 
+	/* first guy needs to enable */
+	if ((result = afu_check_and_enable(ctx->afu)))
+		return result;
+
 	add_process_element(ctx);
 
 	return 0;
@@ -587,7 +602,6 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 	if ((result = afu_enable(afu)))
 		return result;
 
-	afu->enabled = true;
 	return 0;
 }
 
