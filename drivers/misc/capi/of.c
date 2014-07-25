@@ -77,6 +77,10 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	return capi_init_afu(adapter, afu, slice, handle, 0);
 }
 
+static struct capi_driver_ops capi_of_driver_ops = {
+	.module = THIS_MODULE,
+};
+
 static int __init init_capi_of(void)
 {
 	struct device_node *np = NULL;
@@ -112,13 +116,13 @@ static int __init init_capi_of(void)
 			native_data.p2_base = 0;
 			native_data.p2_size = 0;
 			native_data.err_hwirq = err_hwirq;
-			if ((ret = capi_init_adapter(adapter, NULL, NULL, slice, &native_data)))
+			if ((ret = capi_init_adapter(adapter, &capi_of_driver_ops, NULL, slice, &native_data)))
 				goto bail;
 		} else {
 			if (!(ret = read_handle(np, &hv_data.handle)))
 				goto bail;
 
-			if ((ret = capi_init_adapter(adapter, NULL, NULL, slice, &hv_data)))
+			if ((ret = capi_init_adapter(adapter, &capi_of_driver_ops, NULL, slice, &hv_data)))
 				goto bail;
 		}
 

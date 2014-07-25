@@ -223,24 +223,24 @@ static int spa_max_procs(int spa_size)
 static int alloc_spa(struct capi_afu_t *afu)
 {
 	u64 spap;
-	int order = 0;
 
 	/* Work out how many pages to allocate */
+	afu->spa_order = 0;
 	do {
-		order++;
-		afu->spa_size = (1 << order) * PAGE_SIZE;
+		afu->spa_order++;
+		afu->spa_size = (1 << afu->spa_order) * PAGE_SIZE;
 		afu->spa_max_procs = spa_max_procs(afu->spa_size);
 	} while (afu->spa_max_procs < afu->num_procs);
 
 	WARN_ON(afu->spa_size > 0x100000); /* Max size supported by the hardware */
 
 	/* TODO: Fall back to less pages if allocation is not possible. */
-	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, order))) {
+	if (!(afu->spa = (struct capi_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, afu->spa_order))) {
 		pr_err("capi_alloc_spa: Unable to allocate scheduled process area\n");
 		return -ENOMEM;
 	}
 	pr_devel("spa pages: %i afu->spa_max_procs: %i   afu->num_procs: %i\n",
-		 1<<order, afu->spa_max_procs, afu->num_procs);
+		 1<<afu->spa_order, afu->spa_max_procs, afu->num_procs);
 	BUG_ON(afu->spa_max_procs < afu->num_procs);
 
 	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->spa_max_procs + 3) * 128));
@@ -254,6 +254,11 @@ static int alloc_spa(struct capi_afu_t *afu)
 	ida_init(&afu->pe_index_ida);
 
 	return 0;
+}
+
+static void release_spa(struct capi_afu_t *afu)
+{
+	free_pages((unsigned long) afu->spa, afu->spa_order);
 }
 
 static int
@@ -301,6 +306,7 @@ init_afu_native(struct capi_afu_t *afu, u64 handle)
 
 static void release_afu_native(struct capi_afu_t *afu)
 {
+	release_spa(afu);
 	iounmap(afu->p1n_mmio);
 	iounmap(afu->p2n_mmio);
 	iounmap(afu->psn_mmio);

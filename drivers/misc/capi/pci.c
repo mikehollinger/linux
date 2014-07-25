@@ -400,6 +400,7 @@ static void capi_release_afu(struct capi_afu_t *afu)
 }
 
 static struct capi_driver_ops capi_pci_driver_ops = {
+	.module = THIS_MODULE,
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
 	.alloc_irqs = alloc_hwirqs,
@@ -711,7 +712,7 @@ static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	int rc;
 
 	dev_info(&dev->dev, "pci probe\n");
-
+	pci_dev_get(dev);
 	dump_capi_config_space(dev);
 
 	reassign_capi_bars(dev);
