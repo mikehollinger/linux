@@ -345,6 +345,7 @@ struct capi_afu_t {
 
 	struct ida pe_index_ida;
 	spinlock_t spa_lock;
+	spinlock_t afu_cntl_lock;
 };
 
 struct capi_irq_ranges {

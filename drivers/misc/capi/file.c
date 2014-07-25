@@ -655,6 +655,7 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device.class = capi_class;
 	afu->device.release = capi_release;
 	spin_lock_init(&afu->spa_lock);
+	spin_lock_init(&afu->afu_cntl_lock);
 
 	if ((rc = device_register(&afu->device)))
 		return rc;

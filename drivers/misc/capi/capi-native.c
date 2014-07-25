@@ -15,7 +15,6 @@
 #include "capi_hcalls.h"
 
 /*
- * FIXME: add locking to afu_reset/enable/disable
  * FIXME: merge afu_reset/enable/disable also
  */
 
@@ -25,6 +24,7 @@ int afu_reset(struct capi_afu_t *afu)
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
 	pr_devel("AFU reset request\n");
+	spin_lock(&afu->afu_cntl_lock);
 	capi_p2n_write(afu, CAPI_AFU_Cntl_An, CAPI_AFU_Cntl_An_RA);
 	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
@@ -41,6 +41,7 @@ int afu_reset(struct capi_afu_t *afu)
 	     & CAPI_AFU_Cntl_An_ES_MASK)
 	     != CAPI_AFU_Cntl_An_ES_Disabled,
 	     "AFU not disabled after reset!\n");
+	spin_unlock(&afu->afu_cntl_lock);
 	pr_devel("AFU reset\n");
 
 	afu->enabled = false;
@@ -55,6 +56,7 @@ static int afu_enable(struct capi_afu_t *afu)
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
 	pr_devel("AFU enable request\n");
+	spin_lock(&afu->afu_cntl_lock);
 	WARN((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
 	     != CAPI_AFU_Cntl_An_ES_Disabled,
 	     "Enabling AFU not in disabled state\n");
@@ -71,6 +73,7 @@ static int afu_enable(struct capi_afu_t *afu)
 		cpu_relax();
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
+	spin_unlock(&afu->afu_cntl_lock);
 	pr_devel("AFU enabled\n");
 	afu->enabled = true;
 	return 0;
@@ -82,6 +85,7 @@ static int afu_disable(struct capi_afu_t *afu)
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
 	pr_devel("AFU disable request\n");
+	spin_lock(&afu->afu_cntl_lock);
 	if ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK) != CAPI_AFU_Cntl_An_ES_Enabled) {
 		pr_devel("Attempted to disable already disabled AFU\n");
 		return 0;
@@ -99,6 +103,7 @@ static int afu_disable(struct capi_afu_t *afu)
 		cpu_relax();
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
+	spin_unlock(&afu->afu_cntl_lock);
 	pr_devel("AFU disabled\n");
 	afu->enabled = false;
 	return 0;
