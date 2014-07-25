@@ -13,6 +13,7 @@ static ssize_t reset_store(struct device *device, struct device_attribute *attr,
 {
 	struct capi_t *adapter = to_adapter(device);
 	int rc;
+
 	/* TODO: support various types of reset */
 	if ((rc = adapter->driver->reset(adapter)))
 		return rc;
@@ -74,6 +75,18 @@ static ssize_t mmio_size_show(struct device *device,
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->psn_size);
 }
 
+static ssize_t reset_store_afu(struct device *device,
+			       struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct capi_afu_t *afu = to_afu(device);
+	int rc;
+
+	if ((rc = capi_ops->afu_reset(afu)))
+		return rc;
+	return count;
+}
+
 static struct device_attribute afu_master_attrs[] = {
 	__ATTR(mmio_size, S_IRUGO, mmio_size_show_master, NULL),
 	//__ATTR_RO(pp_mmio_off),
@@ -85,7 +98,7 @@ static struct device_attribute afu_attrs[] = {
 	//__ATTR_RO(min_irqs),
 	//__ATTR_RO(supported_modes),
 	//__ATTR_RW(mode),
-	//__ATTR_WO(reset),
+	__ATTR(reset, S_IWUGO, NULL, reset_store_afu),
 };
 
 int capi_sysfs_adapter_add(struct capi_t *adapter)
