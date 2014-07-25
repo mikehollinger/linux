@@ -336,6 +336,7 @@ struct capi_afu_t {
 	 * is sw_command_status, which we store a separate pointer to.
 	 * Everything else in the SPA is only used by hardware */
 	struct capi_process_element *spa;
+	int spa_order;
 	unsigned int spa_size;
 	int spa_max_procs;
 	__be64 *sw_command_status;
@@ -414,7 +415,6 @@ struct capi_t {
 	int slices;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
-	struct dentry *afx_chk;
 	struct list_head list;
 	struct bin_attribute capi_attr;
 	struct kobject *afu_kobj;
@@ -422,6 +422,7 @@ struct capi_t {
 };
 
 struct capi_driver_ops {
+	struct module *module;
 	int (*init_adapter) (struct capi_t *adapter);
 	int (*init_afu) (struct capi_afu_t *afu);
 	int (*alloc_irqs) (struct capi_irq_ranges *irqs, struct capi_t *adapter, unsigned int num);
