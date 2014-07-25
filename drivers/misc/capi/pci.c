@@ -25,6 +25,8 @@
 #define CAPI_PROTOCOL_512TB	(1ull << 22)
 #define CAPI_PROTOCOL_1024TB	(1ull << 21)
 #define CAPI_PROTOCOL_ENABLE	(1ull << 16)
+#define CAPI_PERST_RELOAD	(1ull << 29)
+#define CAPI_USER_IMAGE		(1ull << 28)
 
 #define CAPI_VSEC_LENGTH(vsec)		(vsec + 0x6) /* WORD */
 #define CAPI_VSEC_NAFUS(vsec)		(vsec + 0x8) /* BYTE */
@@ -702,10 +704,27 @@ bool pci_bus_read_dev_vendor_id(struct pci_bus *bus, int devfn, u32 *pl,
 static int capi_reset(struct capi_t *adapter)
 {
 	struct pci_dev *pdev = to_pci_dev(adapter->device.parent);
+	int vsec;
 	int rc;
-	u32 v;
+	u32 val;
 
 	dev_info(&pdev->dev, "pci reset\n");
+
+	if (!(vsec = find_capi_vsec(pdev))) {
+		dev_err(&pdev->dev, "capi: WARNING: CAPI VSEC not found, assuming card is already in CAPI mode!\n");
+		/* return -ENODEV; */
+		return 0;
+	}
+	if ((rc = pci_read_config_dword(pdev, vsec + 0x10, &val))) {
+		dev_err(&pdev->dev, "failed to read vsec offset 10 (for image control): %i", rc);
+		return rc;
+	}
+	val |= CAPI_PERST_RELOAD | CAPI_USER_IMAGE;
+	if ((rc = pci_write_config_dword(pdev, vsec + 0x10, val))) {
+		dev_err(&pdev->dev, "failed to enable perst reload: %i", rc);
+		return rc;
+	}
+
 
 	pci_cfg_access_lock(pdev);
 
@@ -713,8 +732,8 @@ static int capi_reset(struct capi_t *adapter)
 	msleep(10);
 	pci_set_pcie_reset_state(pdev, pcie_deassert_reset);
 	msleep(1000);
-	pci_bus_read_dev_vendor_id(pdev->bus, pdev->devfn, &v, 60*1000);
-	dev_info(&pdev->dev, "v = %08x\n", v);
+	pci_bus_read_dev_vendor_id(pdev->bus, pdev->devfn, &val, 60*1000);
+	dev_info(&pdev->dev, "v = %08x\n", val);
 
 	/* Now lets setup the device again.. stolen from capi_probe() */
 	dump_capi_config_space(pdev);
