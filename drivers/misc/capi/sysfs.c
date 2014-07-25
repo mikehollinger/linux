@@ -12,15 +12,47 @@ static ssize_t reset_store(struct device *device, struct device_attribute *attr,
 		   const char *buf, size_t count)
 {
 	struct capi_t *adapter = to_adapter(device);
-	int rc; 
+	int rc;
 	/* TODO: support various types of reset */
 	if (rc = adapter->driver->reset(adapter))
 		return rc;
 	return count;
 }
 
+static ssize_t reset_image_select_store(struct device *device,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct capi_t *adapter = to_adapter(device);
+	int ret;
+
+	ret = strncmp(buf, "factory", 7);
+	if (ret == 0) {
+		adapter->reset_image_factory = true;
+		return count;
+	}
+	ret = strncmp(buf, "user", 4);
+	if (ret == 0) {
+		adapter->reset_image_factory = false;
+		return count;
+	}
+	return -EINVAL;
+}
+
+static ssize_t reset_image_select_show(struct device *device,
+				       struct device_attribute *attr,
+				       char *buf)
+{
+	struct capi_t *adapter = to_adapter(device);
+
+	if (adapter->reset_image_factory)
+		return scnprintf(buf, PAGE_SIZE, "factory\n");
+	return scnprintf(buf, PAGE_SIZE, "user\n");
+}
+
 static struct device_attribute adapter_attrs[] = {
 	__ATTR_WO(reset),
+	__ATTR_RW(reset_image_select),
 };
 
 static ssize_t mmio_size_show_master(struct device *device,

@@ -418,6 +418,7 @@ struct capi_t {
 	struct list_head list;
 	struct bin_attribute capi_attr;
 	struct kobject *afu_kobj;
+	bool reset_image_factory;
 };
 
 struct capi_driver_ops {

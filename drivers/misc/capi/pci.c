@@ -720,6 +720,9 @@ static int capi_reset(struct capi_t *adapter)
 		return rc;
 	}
 	val |= CAPI_PERST_RELOAD | CAPI_USER_IMAGE;
+	if (adapter->reset_image_factory)
+		val &= ~CAPI_USER_IMAGE;
+
 	if ((rc = pci_write_config_dword(pdev, vsec + 0x10, val))) {
 		dev_err(&pdev->dev, "failed to enable perst reload: %i", rc);
 		return rc;
