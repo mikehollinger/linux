@@ -191,10 +191,9 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_PSL_SCNTL_An_Sc          (0x1ull << (63-63))
 
 /* AFU Slice Enable Status (ro) */
-#define CAPI_AFU_Cntl_An_ES_MASK     (0x3ull << (63-1))
-#define CAPI_AFU_Cntl_An_ES_Disabled (0x0ull << (63-1))
-#define CAPI_AFU_Cntl_An_ES_Pending  (0x1ull << (63-1))
-#define CAPI_AFU_Cntl_An_ES_Enabled  (0x2ull << (63-1))
+#define CAPI_AFU_Cntl_An_ES_MASK     (0x7ull << (63-2))
+#define CAPI_AFU_Cntl_An_ES_Disabled (0x0ull << (63-2))
+#define CAPI_AFU_Cntl_An_ES_Enabled  (0x4ull << (63-2))
 /* AFU Slice Enable */
 #define CAPI_AFU_Cntl_An_E           (0x1ull << (63-3))
 /* AFU Slice Reset status (ro) */

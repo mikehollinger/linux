@@ -14,100 +14,61 @@
 #include "capi.h"
 #include "capi_hcalls.h"
 
-/*
- * FIXME: merge afu_reset/enable/disable also
- */
-
-int afu_reset(struct capi_afu_t *afu)
-{
-	u64 AFU_Cntl;
-	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
-
-	pr_devel("AFU reset request\n");
-	spin_lock(&afu->afu_cntl_lock);
-	capi_p2n_write(afu, CAPI_AFU_Cntl_An, CAPI_AFU_Cntl_An_RA);
-	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
-			!= CAPI_AFU_Cntl_An_RS_Complete) {
-		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: AFU reset timed out!\n");
-			return -EBUSY;
-		}
-		pr_devel_ratelimited("AFU resetting... (0x%.16llx)\n", AFU_Cntl);
-		cpu_relax();
-		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	};
-	WARN((capi_p2n_read(afu, CAPI_AFU_Cntl_An)
-	     & CAPI_AFU_Cntl_An_ES_MASK)
-	     != CAPI_AFU_Cntl_An_ES_Disabled,
-	     "AFU not disabled after reset!\n");
-	spin_unlock(&afu->afu_cntl_lock);
-	pr_devel("AFU reset\n");
-
-	afu->enabled = false;
-
-	return 0;
-}
-EXPORT_SYMBOL(afu_reset);
-
-static int afu_enable(struct capi_afu_t *afu)
+static int afu_control(struct capi_afu_t *afu, u64 command,
+		       u64 result, u64 mask, bool enabled)
 {
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
-	pr_devel("AFU enable request\n");
 	spin_lock(&afu->afu_cntl_lock);
-	WARN((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
-	     != CAPI_AFU_Cntl_An_ES_Disabled,
-	     "Enabling AFU not in disabled state\n");
+	pr_devel("AFU command starting: %llx\n", command);
 
-	capi_p2n_write(afu, CAPI_AFU_Cntl_An, AFU_Cntl | CAPI_AFU_Cntl_An_E);
+	capi_p2n_write(afu, CAPI_AFU_Cntl_An, AFU_Cntl | command);
+
 	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	while ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
-			!= CAPI_AFU_Cntl_An_ES_Enabled) {
+	while ((AFU_Cntl & mask) != result) {
 		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: AFU enable timed out!\n");
+			pr_warn("WARNING: AFU control timed out!\n");
 			return -EBUSY;
 		}
-		pr_devel_ratelimited("AFU enabling... (0x%.16llx)\n", AFU_Cntl);
+		pr_devel_ratelimited("AFU control... (0x%.16llx)\n",
+				     AFU_Cntl | command);
 		cpu_relax();
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
+	pr_devel("AFU command complete: %llx\n", command);
+	afu->enabled = enabled;
 	spin_unlock(&afu->afu_cntl_lock);
-	pr_devel("AFU enabled\n");
-	afu->enabled = true;
+
 	return 0;
+}
+
+static int afu_enable(struct capi_afu_t *afu)
+{
+	pr_devel("AFU enable request\n");
+
+	return afu_control(afu, CAPI_AFU_Cntl_An_E,
+			   CAPI_AFU_Cntl_An_ES_Enabled,
+			   CAPI_AFU_Cntl_An_ES_MASK, true);
 }
 
 static int afu_disable(struct capi_afu_t *afu)
 {
-	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
-
 	pr_devel("AFU disable request\n");
-	spin_lock(&afu->afu_cntl_lock);
-	if ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK) != CAPI_AFU_Cntl_An_ES_Enabled) {
-		pr_devel("Attempted to disable already disabled AFU\n");
-		return 0;
-	}
 
-	capi_p2n_write(afu, CAPI_AFU_Cntl_An, AFU_Cntl | CAPI_AFU_Cntl_An_RA);
-	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
-			!= CAPI_AFU_Cntl_An_RS_Complete) {
-		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: PSL disable timed out!\n");
-			return -EBUSY;
-		}
-		pr_devel_ratelimited("AFU disabling... (0x%.16llx)\n", AFU_Cntl);
-		cpu_relax();
-		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	};
-	spin_unlock(&afu->afu_cntl_lock);
-	pr_devel("AFU disabled\n");
-	afu->enabled = false;
-	return 0;
+	return afu_control(afu, 0, CAPI_AFU_Cntl_An_ES_Disabled,
+			   CAPI_AFU_Cntl_An_ES_MASK, false);
 }
+
+int afu_reset(struct capi_afu_t *afu)
+{
+	pr_devel("AFU reset request\n");
+
+	return afu_control(afu, CAPI_AFU_Cntl_An_RA,
+			   CAPI_AFU_Cntl_An_RS_Complete,
+			   CAPI_AFU_Cntl_An_RS_MASK, false);
+}
+EXPORT_SYMBOL(afu_reset);
 
 static int afu_check_and_enable(struct capi_afu_t *afu)
 {
