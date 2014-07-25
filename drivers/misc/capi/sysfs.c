@@ -92,7 +92,7 @@ int capi_sysfs_adapter_add(struct capi_t *adapter)
 {
 	int i, rc;
 
-	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++) {
+	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++) {
 		if ((rc = device_create_file(&adapter->device, &adapter_attrs[i])))
 			goto err;
 	}
