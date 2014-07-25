@@ -14,7 +14,7 @@ static ssize_t reset_store(struct device *device, struct device_attribute *attr,
 	struct capi_t *adapter = to_adapter(device);
 	int rc;
 	/* TODO: support various types of reset */
-	if (rc = adapter->driver->reset(adapter))
+	if ((rc = adapter->driver->reset(adapter)))
 		return rc;
 	return count;
 }
