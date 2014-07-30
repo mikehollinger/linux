@@ -618,7 +618,6 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device.class = capi_class;
 	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, slice);
 	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
-	afu->device.class = capi_class;
 	afu->device.release = capi_release;
 	mutex_init(&afu->spa_mutex);
 	spin_lock_init(&afu->afu_cntl_lock);
@@ -637,7 +636,6 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device_master.parent = &afu->device;
 	afu->device_master.class = capi_class;
 	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, slice);
-	afu->device_master.class = capi_class;
 	afu->device_master.devt = MKDEV(capi_major, capi_minor + 1 + slice);
 	afu->device_master.release = capi_release;
 
