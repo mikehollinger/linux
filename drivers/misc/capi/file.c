@@ -37,7 +37,6 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	int slice = (minor % CAPI_DEV_MINORS - 1) % CAPI_MAX_SLICES;
 	struct capi_t *adapter;
 	struct capi_context_t *ctx;
-	int i;
 
 	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
 
@@ -51,31 +50,13 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	if (!try_module_get(adapter->driver->module))
 		return -ENODEV;
 
-	if (!(ctx = kmalloc(sizeof(struct capi_context_t), GFP_KERNEL)))
-	    return -ENOMEM;
-	ctx->sstp = NULL;
-	ctx->afu = &adapter->slice[slice];
-	ctx->master = master;
+	ctx = capi_context_alloc();
+	if (!ctx)
+		return -ENOMEM;
 
+	capi_context_init(ctx, &adapter->slice[slice], master);
+	capi_context_start(ctx);
 	file->private_data = (void *)ctx;
-
-	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
-
-	/* FIXME: Move these to afu context initialiser */
-	init_waitqueue_head(&ctx->wq);
-	spin_lock_init(&ctx->lock);
-
-	ctx->irq_bitmap = NULL;
-	ctx->pending_irq = false;
-	ctx->pending_fault = false;
-	ctx->pending_afu_err = false;
-
-	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
-			   ctx->afu->num_procs, GFP_KERNEL);
-	if (i < 0)
-		return i;
-	ctx->ph = i;
-	ctx->elem = &ctx->afu->spa[i];
 
 	return 0;
 }
@@ -91,38 +72,23 @@ afu_master_open(struct inode *inode, struct file *file)
 	return __afu_open(inode, file, true);
 }
 
-
 static int
 afu_release(struct inode *inode, struct file *file)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
-	int minor = MINOR(inode->i_rdev);
-	int adapter_num = minor / CAPI_DEV_MINORS;
-	struct capi_t *adapter;
 
-	adapter = get_capi_adapter(adapter_num);
-	WARN_ON(!adapter);
+	/* FIXME: There is very racey ... how do we know an interrupt isn't still running? What about an unbind? Might need some ref counting... */
 
 	pr_devel("afu_release\n");
+	detach_context(ctx);
 
-	/* FIXME: Shut down AFU, ensure that any running interrupts are
-	 * finished and no more interrupts are possible */
-	/* FIXME: If we opened it but never started it, this will WARN */
-	/* FIXME: check this is the last context to shut down */
-	WARN_ON(capi_ops->detach_process(ctx));
-
-	afu_release_irqs(ctx);
-
+	/* It should be safe to remove the context now */
 	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
-
 	free_page((u64)ctx->sstp);
 	ctx->sstp = NULL;
-
 	put_pid(ctx->pid);
-
+	module_put(ctx->afu->adapter->driver->module);
 	kfree(ctx);
-
-	module_put(adapter->driver->module);
 
 	return 0;
 }
@@ -177,6 +143,9 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 
+	if (test_bit(0, &ctx->fatal_error))
+		return -EIO;
+
 #if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
 	if (current->mm != ctx->afu->mm) {
 		pr_err("CAPI: %s (%i) attempted to perform ioctl on AFU with "
@@ -218,25 +187,11 @@ static int
 afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
-	u64 len = vm->vm_end - vm->vm_start;
-	len = min(len, ctx->psn_size);
 
-	/* make sure there is a valid per process space for this AFU */
-	if ((ctx->master && !ctx->afu->mmio) || (!ctx->afu->pp_mmio)) {
-		pr_devel("AFU doesn't support mmio space\n");
-		return EINVAL;
-	}
+	if (ctx->fatal_error)
+		return -EIO;
 
-	/* Can't mmap until the AFU is enabled
-	   FIXME: check on teardown */
-	if (!ctx->afu->enabled)
-		return -EBUSY;
-
-	pr_devel("%s: mmio physical: %llx pe: %i master:%i\n", __FUNCTION__,
-		 ctx->psn_phys, ctx->ph , ctx->master);
-	/* FIXME: Return error if virtualised AFU */
-	vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
-	return vm_iomap_memory(vm, ctx->psn_phys, len);
+	return capi_context_iomap(ctx, vm);
 }
 
 static unsigned int
@@ -246,7 +201,10 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 	int mask = 0;
 	unsigned long flags;
 
-	pr_devel("afu_poll\n");
+	if (ctx->fatal_error)
+		return -EIO;
+
+	pr_warn("afu_poll\n");
 
 	poll_wait(file, &ctx->wq, poll);
 
@@ -254,7 +212,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	if (ctx->pending_irq || ctx->pending_fault ||
-	    ctx->pending_afu_err)
+	    ctx->pending_afu_err || ctx->fatal_error)
 		mask |= POLLIN | POLLRDNORM;
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
@@ -271,6 +229,11 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	unsigned long flags;
 	ssize_t size;
 	DEFINE_WAIT(wait);
+
+	pr_warn("afu_read\n");
+
+	if (ctx->fatal_error)
+		return -EIO;
 
 	if (count < sizeof(struct capi_event_header))
 		return -EINVAL;
@@ -330,12 +293,18 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		/* Only clear the fault if we can send the whole event: */
 		if (count >= event.header.size)
 			ctx->pending_afu_err = false;
+	} else if (ctx->fatal_error) {
+		pr_warn("afu_read fatal error\n");
+		event.header.size = sizeof(struct capi_event_afu_error);
+		event.header.type = CAPI_EVENT_AFU_ERROR;
+		event.afu_err.err = ctx->afu_err;
 	} else BUG();
 
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
 	size = min(count, (size_t)event.header.size);
 	copy_to_user(buf, &event, size);
+
 	return size;
 }
 
@@ -716,11 +685,12 @@ void del_capi_dev(struct capi_t *adapter, int adapter_num)
 void del_capi_afu_dev(struct capi_afu_t *afu)
 {
 	char afu_name[AFU_NAME_LEN];
-	snprintf(afu_name, AFU_NAME_LEN, "%d", afu->slice);
 
+	snprintf(afu_name, AFU_NAME_LEN, "%d", afu->slice);
 	sysfs_remove_link(&afu->device.kobj, afu_name);
 	cdev_del(&afu->adapter->afu_master_cdev);
 	device_unregister(&afu->device_master);
 	cdev_del(&afu->adapter->afu_cdev);
 	device_unregister(&afu->device);
+	detach_all_contexts(afu);
 }

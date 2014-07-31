@@ -197,6 +197,8 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	afu->adapter = adapter;
 	afu->slice = slice;
 	afu->err_hwirq = err_irq;
+	INIT_LIST_HEAD(&afu->contexts);
+	spin_lock_init(&afu->contexts_lock);
 
 	/* Initialise the hardware? */
 	if ((rc = capi_ops->init_afu(afu, handle)))
@@ -269,7 +271,7 @@ EXPORT_SYMBOL(capi_unregister_adapter);
 
 static void exit_capi(void)
 {
-	/* Unregister CAPI class */
+	class_destroy(capi_class);
 }
 
 module_init(init_capi);

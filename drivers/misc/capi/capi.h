@@ -341,6 +341,9 @@ struct capi_afu_t {
 	int spa_max_procs;
 	__be64 *sw_command_status;
 
+	spinlock_t contexts_lock;
+	struct list_head contexts;
+
 	/* FIXME: Below items should be in a separate context struct for virtualisation */
 
 	struct ida pe_index_ida;
@@ -382,8 +385,12 @@ struct capi_context_t {
 	u64 fault_addr;
 	u64 afu_err;
 	bool pending_afu_err;
+	unsigned long fatal_error;
 
 	u32 irq_count;
+
+	/* Used to but each context into the appropriate AFU context list */
+	struct list_head list;
 
 	/* XXX: Is it possible to need multiple work items at once? */
 	struct work_struct work;
@@ -526,6 +533,8 @@ int add_capi_dev(struct capi_t *capi, int adapter_num);
 void del_capi_dev(struct capi_t *capi, int adapter_num);
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice);
 void del_capi_afu_dev(struct capi_afu_t *afu);
+void detach_all_contexts(struct capi_afu_t *afu);
+void detach_context(struct capi_context_t *ctx);
 
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
@@ -546,6 +555,12 @@ int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1);
 
 void init_capi_hv(void);
 void init_capi_native(void);
+
+struct capi_context_t *capi_context_alloc(void);
+int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool master);
+void capi_context_start(struct capi_context_t *ctx);
+void capi_context_free(struct capi_context_t *ctx);
+int capi_context_iomap(struct capi_context_t *ctx, struct vm_area_struct *vma);
 
 /* This matches the layout of the H_COLLECT_CA_INT_INFO retbuf */
 struct capi_irq_info {
