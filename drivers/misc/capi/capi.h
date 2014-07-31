@@ -361,6 +361,7 @@ struct capi_context_t {
 	bool master;
 
 	int ph; /* process handle/process element index */
+	bool pe_inserted;
 
 	/* Problem state MMIO */
 	phys_addr_t psn_phys;

@@ -76,6 +76,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 		return i;
 	ctx->ph = i;
 	ctx->elem = &ctx->afu->spa[i];
+	ctx->pe_inserted = false;
 
 	return 0;
 }
