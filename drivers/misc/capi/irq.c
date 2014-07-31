@@ -61,6 +61,8 @@ irqreturn_t capi_slice_irq_err(int irq, void *data)
 	capi_p1n_write(afu, CAPI_PSL_SERR_An, serr);
 	afu_reset(afu);
 
+	BUG_ON(1); // we never recover, so let's just die
+
 	return IRQ_HANDLED;
 }
 
@@ -87,6 +89,8 @@ irqreturn_t capi_irq_err(int irq, void *data)
 		pr_warn("SLICE %i\n", slice);
 		capi_slice_irq_err(0, (void *)(&adapter->slice[slice]));
 	}
+
+	BUG_ON(1); // we never recover, so let's just die
 
 	return IRQ_HANDLED;
 }

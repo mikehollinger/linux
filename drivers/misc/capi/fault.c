@@ -77,6 +77,16 @@ void capi_handle_page_fault(struct work_struct *work)
 	spin_unlock(&mm->page_table_lock);
 	up_read(&mm->mmap_sem);
 
+	if (ctx->last_dar == dar) {
+		if (ctx->last_dar_count++ > 5) {
+			pr_err("Continuous page faults on same page.  Something horribly wrong!\n");
+			BUG();
+		}
+	} else {
+		ctx->last_dar_count = 0;
+		ctx->last_dar = dar;
+	}
+
 	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
 	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
 
