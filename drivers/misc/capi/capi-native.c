@@ -318,7 +318,7 @@ slb_invalid(struct capi_context_t *ctx)
 	u64 slbia;
 
 	capi_p1_write(adapter, CAPI_PSL_LBISEL,
-		      ((u64)be32_to_cpu(ctx->elem->common.pid) << 32) | be32_to_cpu(ctx->elem->lpid));
+		      ((u64)ctx->elem->common.pid << 32) | ctx->elem->lpid);
 	capi_p1_write(adapter, CAPI_PSL_SLBIA, CAPI_SLBIA_IQ_LPIDPID);
 
 	while (1) {
