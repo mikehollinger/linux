@@ -385,7 +385,7 @@ struct capi_context_t {
 	u64 fault_addr;
 	u64 afu_err;
 	bool pending_afu_err;
-	unsigned long fatal_error;
+	unsigned long attached;
 
 	u32 irq_count;
 
@@ -536,8 +536,9 @@ int add_capi_dev(struct capi_t *capi, int adapter_num);
 void del_capi_dev(struct capi_t *capi, int adapter_num);
 int add_capi_afu_dev(struct capi_afu_t *afu, int slice);
 void del_capi_afu_dev(struct capi_afu_t *afu);
-void detach_all_contexts(struct capi_afu_t *afu);
-void detach_context(struct capi_context_t *ctx);
+void capi_context_detach_all(struct capi_afu_t *afu);
+void capi_context_free(struct capi_context_t *ctx);
+void capi_context_detach(struct capi_context_t *ctx);
 
 int capi_sysfs_adapter_add(struct capi_t *adapter);
 void capi_sysfs_adapter_remove(struct capi_t *adapter);

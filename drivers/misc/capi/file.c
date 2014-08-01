@@ -77,18 +77,13 @@ afu_release(struct inode *inode, struct file *file)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 
-	/* FIXME: There is very racey ... how do we know an interrupt isn't still running? What about an unbind? Might need some ref counting... */
-
 	pr_devel("afu_release\n");
-	detach_context(ctx);
+	capi_context_detach(ctx);
+
+	module_put(ctx->afu->adapter->driver->module);
 
 	/* It should be safe to remove the context now */
-	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
-	free_page((u64)ctx->sstp);
-	ctx->sstp = NULL;
-	put_pid(ctx->pid);
-	module_put(ctx->afu->adapter->driver->module);
-	kfree(ctx);
+	capi_context_free(ctx);
 
 	return 0;
 }
@@ -141,6 +136,10 @@ afu_ioctl_start_work(struct capi_context_t *ctx,
 static long
 afu_ioctl_check_error(struct capi_context_t *ctx)
 {
+	if (!ctx->attached)
+		/* FIXME: What should we do here? */
+		return -EIO;
+
 	if (capi_ops->check_error && capi_ops->check_error(ctx->afu)) {
 		/* FIXME: This reset isn't sufficient to recover from the
 		 * condition I tested - this will basically need a hotplug or
@@ -156,7 +155,7 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 
-	if (test_bit(0, &ctx->fatal_error))
+	if (!ctx->attached)
 		return -EIO;
 
 #if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
@@ -203,7 +202,7 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 
-	if (ctx->fatal_error)
+	if (!ctx->attached)
 		return -EIO;
 
 	return capi_context_iomap(ctx, vm);
@@ -216,7 +215,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 	int mask = 0;
 	unsigned long flags;
 
-	if (ctx->fatal_error)
+	if (!ctx->attached)
 		return -EIO;
 
 	pr_warn("afu_poll\n");
@@ -227,7 +226,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	if (ctx->pending_irq || ctx->pending_fault ||
-	    ctx->pending_afu_err || ctx->fatal_error)
+	    ctx->pending_afu_err || !ctx->attached)
 		mask |= POLLIN | POLLRDNORM;
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
@@ -247,7 +246,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 
 	pr_warn("afu_read\n");
 
-	if (ctx->fatal_error)
+	if (!ctx->attached)
 		return -EIO;
 
 	if (count < sizeof(struct capi_event_header))
@@ -308,7 +307,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		/* Only clear the fault if we can send the whole event: */
 		if (count >= event.header.size)
 			ctx->pending_afu_err = false;
-	} else if (ctx->fatal_error) {
+	} else if (!ctx->attached) {
 		pr_warn("afu_read fatal error\n");
 		event.header.size = sizeof(struct capi_event_afu_error);
 		event.header.type = CAPI_EVENT_AFU_ERROR;
@@ -678,7 +677,6 @@ void del_capi_dev(struct capi_t *adapter, int adapter_num)
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
 	capi_sysfs_adapter_remove(adapter);
-	sysfs_remove_bin_file(&adapter->device.kobj, &adapter->capi_attr);
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;
 	cdev_del(&adapter->cdev);
@@ -694,5 +692,5 @@ void del_capi_afu_dev(struct capi_afu_t *afu)
 	device_unregister(&afu->device_master);
 	cdev_del(&afu->adapter->afu_cdev);
 	device_unregister(&afu->device);
-	detach_all_contexts(afu);
+	capi_context_detach_all(afu);
 }
