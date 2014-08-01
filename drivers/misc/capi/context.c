@@ -54,6 +54,7 @@ int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool m
 
 	ctx->ph = i;
 	ctx->elem = &ctx->afu->spa[i];
+	ctx->pe_inserted = false;
 	return 0;
 }
 

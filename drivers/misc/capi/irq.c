@@ -61,6 +61,8 @@ irqreturn_t capi_slice_irq_err(int irq, void *data)
 	capi_p1n_write(afu, CAPI_PSL_SERR_An, serr);
 	afu_reset(afu);
 
+	BUG_ON(1); // we never recover, so let's just die
+
 	return IRQ_HANDLED;
 }
 
@@ -88,6 +90,8 @@ irqreturn_t capi_irq_err(int irq, void *data)
 		capi_slice_irq_err(0, (void *)(&adapter->slice[slice]));
 	}
 
+	BUG_ON(1); // we never recover, so let's just die
+
 	return IRQ_HANDLED;
 }
 
@@ -106,15 +110,15 @@ static irqreturn_t capi_irq(int irq, void *data)
 	dsisr = irq_info.dsisr;
 	dar = irq_info.dar;
 
-	pr_devel("CAPI interrupt %i for afu context %p. DSISR: %#llx DAR: %#llx\n", irq, ctx, dsisr, dar);
+	pr_devel("CAPI interrupt %i for afu pe: %i DSISR: %#llx DAR: %#llx\n", irq, ctx->ph, dsisr, dar);
 
 	if (dsisr & CAPI_PSL_DSISR_An_DS)
 		return capi_handle_segment_miss(ctx, dar);
 	if (dsisr & CAPI_PSL_DSISR_An_DM) {
 		/* XXX: If we aren't in_atomic() we might be able to handle the
 		 * fault immediately, can we at least try to hash_preload? */
-		pr_devel("Scheduling page fault handling for later (in_atomic() = %i)...\n",
-				in_atomic());
+		pr_devel("Scheduling page fault handling for later pe: %i (in_atomic() = %i)...\n",
+			 ctx->ph, in_atomic());
 
 		INIT_WORK(&ctx->work, capi_handle_page_fault);
 		ctx->dsisr = dsisr;

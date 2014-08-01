@@ -335,6 +335,8 @@ static int do_process_element_cmd(struct capi_context_t *ctx,
 {
 	u64 state;
 
+	BUG_ON(!ctx->afu->enabled);
+
 	ctx->elem->software_state = cpu_to_be32(pe_state);
 	smp_wmb();
 	*(ctx->afu->sw_command_status) = cpu_to_be64(cmd | 0 | ctx->ph);
@@ -363,7 +365,8 @@ add_process_element(struct capi_context_t *ctx)
 
 	pr_devel("%s Adding pe=%i\n", __FUNCTION__, ctx->ph);
 	spin_lock(&ctx->afu->spa_lock);
-	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_ADD, CAPI_PE_SOFTWARE_STATE_V);
+	if (!(rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_ADD, CAPI_PE_SOFTWARE_STATE_V)))
+		ctx->pe_inserted = true;
 	spin_unlock(&ctx->afu->spa_lock);
 	return rc;
 }
@@ -397,7 +400,8 @@ remove_process_element(struct capi_context_t *ctx)
 	pr_devel("%s Remove pe=%i\n", __FUNCTION__, ctx->ph);
 
 	spin_lock(&ctx->afu->spa_lock);
-	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_REMOVE, 0);
+	if (!(rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_REMOVE, 0)))
+		ctx->pe_inserted = false;
 	slb_invalid(ctx);
 	spin_unlock(&ctx->afu->spa_lock);
 
@@ -587,6 +591,8 @@ static int detach_process_native(struct capi_context_t *ctx)
 		return 0;
 	}
 
+	if (!ctx->pe_inserted)
+		return 0;
 	if (terminate_process_element(ctx))
 		return -1;
 	if (remove_process_element(ctx))

@@ -364,6 +364,7 @@ struct capi_context_t {
 	bool master;
 
 	int ph; /* process handle/process element index */
+	bool pe_inserted;
 
 	/* Problem state MMIO */
 	phys_addr_t psn_phys;
@@ -398,6 +399,9 @@ struct capi_context_t {
 	u64 dar;
 
 	struct capi_process_element *elem;
+
+	u64 last_dar;
+	int last_dar_count;
 };
 
 struct capi_driver_ops;

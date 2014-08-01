@@ -32,8 +32,8 @@ void capi_handle_page_fault(struct work_struct *work)
 	struct task_struct *task;
 	struct mm_struct *mm;
 
-	pr_devel("CAPI BOTTOM HALF handling page fault for afu context %p. "
-		"DSISR: %#llx DAR: %#llx\n", ctx, dsisr, dar);
+	pr_devel("CAPI BOTTOM HALF handling page fault for afu pe: %i. "
+		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
 
 	task = get_pid_task(ctx->pid, PIDTYPE_PID);
 	if (!task) {
@@ -77,7 +77,17 @@ void capi_handle_page_fault(struct work_struct *work)
 	spin_unlock(&mm->page_table_lock);
 	up_read(&mm->mmap_sem);
 
-	pr_devel("Page fault successfully handled!\n");
+	if (ctx->last_dar == dar) {
+		if (ctx->last_dar_count++ > 5) {
+			pr_err("Continuous page faults on same page.  Something horribly wrong!\n");
+			BUG();
+		}
+	} else {
+		ctx->last_dar_count = 0;
+		ctx->last_dar = dar;
+	}
+
+	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
 	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
 
 	/* TODO: Accounting */
@@ -335,7 +345,7 @@ int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea)
 
 	rc = slbfee_mm(mm, ea, &esid_data, &vsid_data);
 
-	pr_devel("CAPI interrupt: Segment not found, ea %#llx\n", ea);
+	pr_devel("CAPI interrupt: Segment fault pe: %i ea: %#llx\n", ctx->ph, ea);
 
 	if (rc) {
 		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
