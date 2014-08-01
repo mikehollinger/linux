@@ -191,10 +191,9 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_PSL_SCNTL_An_Sc          (0x1ull << (63-63))
 
 /* AFU Slice Enable Status (ro) */
-#define CAPI_AFU_Cntl_An_ES_MASK     (0x3ull << (63-1))
-#define CAPI_AFU_Cntl_An_ES_Disabled (0x0ull << (63-1))
-#define CAPI_AFU_Cntl_An_ES_Pending  (0x1ull << (63-1))
-#define CAPI_AFU_Cntl_An_ES_Enabled  (0x2ull << (63-1))
+#define CAPI_AFU_Cntl_An_ES_MASK     (0x7ull << (63-2))
+#define CAPI_AFU_Cntl_An_ES_Disabled (0x0ull << (63-2))
+#define CAPI_AFU_Cntl_An_ES_Enabled  (0x4ull << (63-2))
 /* AFU Slice Enable */
 #define CAPI_AFU_Cntl_An_E           (0x1ull << (63-3))
 /* AFU Slice Reset status (ro) */
@@ -348,6 +347,7 @@ struct capi_afu_t {
 
 	struct ida pe_index_ida;
 	spinlock_t spa_lock;
+	spinlock_t afu_cntl_lock;
 };
 
 struct capi_irq_ranges {
@@ -418,12 +418,14 @@ struct capi_t {
 	struct cdev afu_cdev;
 	struct cdev afu_master_cdev;
 	struct device device;
+	int adapter_num;
 	int slices;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
 	struct list_head list;
 	struct bin_attribute capi_attr;
 	struct kobject *afu_kobj;
+	bool reset_image_factory;
 };
 
 struct capi_driver_ops {
@@ -435,6 +437,7 @@ struct capi_driver_ops {
 	int (*setup_irq) (struct capi_t *adapter, unsigned int hwirq, unsigned int virq);
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);
+	int (*reset) (struct capi_t *adapter);
 };
 
 /* common == phyp + powernv */
@@ -536,6 +539,12 @@ void del_capi_afu_dev(struct capi_afu_t *afu);
 void detach_all_contexts(struct capi_afu_t *afu);
 void detach_context(struct capi_context_t *ctx);
 
+int capi_sysfs_adapter_add(struct capi_t *adapter);
+void capi_sysfs_adapter_remove(struct capi_t *adapter);
+int capi_sysfs_afu_add(struct capi_afu_t *afu);
+void capi_sysfs_afu_remove(struct capi_afu_t *afu);
+
+
 unsigned int
 capi_map_irq(struct capi_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void capi_unmap_irq(unsigned int virq, void *cookie);
@@ -597,6 +606,7 @@ struct capi_backend_ops {
 	void (*release_adapter) (struct capi_t *adapter);
 	void (*release_afu) (struct capi_afu_t *afu);
 	int (*load_afu_image) (struct capi_afu_t *afu, u64 vaddress, u64 length);
+	int (*check_error) (struct capi_afu_t *afu);
 	int (*afu_reset) (struct capi_afu_t *afu);
 };
 extern const struct capi_backend_ops *capi_ops;

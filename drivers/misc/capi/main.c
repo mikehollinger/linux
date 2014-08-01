@@ -22,7 +22,9 @@ static LIST_HEAD(adapter_list);
 const struct capi_backend_ops *capi_ops;
 EXPORT_SYMBOL(capi_ops);
 
+/* FIXME: Move this to file.c */
 struct class *capi_class;
+EXPORT_SYMBOL(capi_class);
 
 int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
@@ -135,7 +137,6 @@ int capi_init_adapter(struct capi_t *adapter,
 		      struct device *parent,
 		      int slices, void *backend_data)
 {
-	int adapter_num;
 	int rc = 0;
 
 	pr_devel("capi_alloc_adapter");
@@ -145,7 +146,7 @@ int capi_init_adapter(struct capi_t *adapter,
 		return -EINVAL;
 
 	spin_lock(&adapter_list_lock);
-	adapter_num = capi_get_num_adapters();
+	adapter->adapter_num = capi_get_num_adapters();
 
 	adapter->driver = driver;
 	adapter->device.class = capi_class;
@@ -158,13 +159,13 @@ int capi_init_adapter(struct capi_t *adapter,
 		goto out;
 
 	/* Register the adapter device */
-	dev_set_name(&adapter->device, "capi%c", 'a' + adapter_num);
-	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter_num * CAPI_DEV_MINORS);
+	dev_set_name(&adapter->device, "card%i", adapter->adapter_num);
+	adapter->device.devt = MKDEV(MAJOR(capi_dev), adapter->adapter_num * CAPI_DEV_MINORS);
 	if ((rc = device_register(&adapter->device)))
 		goto out1;
 
 	/* Add adapter character device and sysfs entries */
-	if (add_capi_dev(adapter, adapter_num)) {
+	if (add_capi_dev(adapter, adapter->adapter_num)) {
 		rc = -1;
 		goto out2;
 	}
@@ -212,17 +213,25 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 }
 EXPORT_SYMBOL(capi_init_afu);
 
+static char *capi_devnode(struct device *dev, umode_t *mode)
+{
+	if (MINOR(dev->devt) % CAPI_DEV_MINORS == 0)
+		return NULL;
+	return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(dev));
+}
+
 static int __init init_capi(void)
 {
 	int ret = 0;
 
 	pr_devel("---------- init_capi called ---------\n");
 
-	capi_class = class_create(THIS_MODULE, "capi");
+	capi_class = class_create(THIS_MODULE, "cxl");
 	if (IS_ERR(capi_class)) {
 		pr_warn("Unable to create capi class\n");
 		return PTR_ERR(capi_class);
 	}
+	capi_class->devnode = capi_devnode;
 
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		init_capi_native();

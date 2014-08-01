@@ -14,84 +14,67 @@
 #include "capi.h"
 #include "capi_hcalls.h"
 
-int afu_reset(struct capi_afu_t *afu)
-{
-	u64 AFU_Cntl;
-	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
-
-	pr_devel("AFU reset request\n");
-	capi_p2n_write(afu, CAPI_AFU_Cntl_An, CAPI_AFU_Cntl_An_RA);
-	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
-			!= CAPI_AFU_Cntl_An_RS_Complete) {
-		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: AFU reset timed out!\n");
-			return -EBUSY;
-		}
-		pr_devel_ratelimited("AFU resetting... (0x%.16llx)\n", AFU_Cntl);
-		cpu_relax();
-		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	};
-	WARN((capi_p2n_read(afu, CAPI_AFU_Cntl_An)
-	     & CAPI_AFU_Cntl_An_ES_MASK)
-	     != CAPI_AFU_Cntl_An_ES_Disabled,
-	     "AFU not disabled after reset!\n");
-	pr_devel("AFU reset\n");
-	return 0;
-}
-EXPORT_SYMBOL(afu_reset);
-
-static int afu_enable(struct capi_afu_t *afu)
+static int afu_control(struct capi_afu_t *afu, u64 command,
+		       u64 result, u64 mask, bool enabled)
 {
 	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
 
-	pr_devel("AFU enable request\n");
-	WARN((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
-	     != CAPI_AFU_Cntl_An_ES_Disabled,
-	     "Enabling AFU not in disabled state\n");
+	spin_lock(&afu->afu_cntl_lock);
+	pr_devel("AFU command starting: %llx\n", command);
 
-	capi_p2n_write(afu, CAPI_AFU_Cntl_An, AFU_Cntl | CAPI_AFU_Cntl_An_E);
+	capi_p2n_write(afu, CAPI_AFU_Cntl_An, AFU_Cntl | command);
+
 	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	while ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK)
-			!= CAPI_AFU_Cntl_An_ES_Enabled) {
+	while ((AFU_Cntl & mask) != result) {
 		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: AFU enable timed out!\n");
+			pr_warn("WARNING: AFU control timed out!\n");
 			return -EBUSY;
 		}
-		pr_devel_ratelimited("AFU enabling... (0x%.16llx)\n", AFU_Cntl);
+		pr_devel_ratelimited("AFU control... (0x%.16llx)\n",
+				     AFU_Cntl | command);
 		cpu_relax();
 		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
 	};
-	pr_devel("AFU enabled\n");
+	pr_devel("AFU command complete: %llx\n", command);
+	afu->enabled = enabled;
+	spin_unlock(&afu->afu_cntl_lock);
+
 	return 0;
+}
+
+static int afu_enable(struct capi_afu_t *afu)
+{
+	pr_devel("AFU enable request\n");
+
+	return afu_control(afu, CAPI_AFU_Cntl_An_E,
+			   CAPI_AFU_Cntl_An_ES_Enabled,
+			   CAPI_AFU_Cntl_An_ES_MASK, true);
 }
 
 static int afu_disable(struct capi_afu_t *afu)
 {
-	u64 AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	unsigned long timeout = jiffies + (HZ * CAPI_TIMEOUT);
-
 	pr_devel("AFU disable request\n");
-	if ((AFU_Cntl & CAPI_AFU_Cntl_An_ES_MASK) != CAPI_AFU_Cntl_An_ES_Enabled) {
-		pr_devel("Attempted to disable already disabled AFU\n");
-		return 0;
-	}
 
-	capi_p2n_write(afu, CAPI_AFU_Cntl_An, AFU_Cntl | CAPI_AFU_Cntl_An_RA);
-	AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	while ((AFU_Cntl & CAPI_AFU_Cntl_An_RS_MASK)
-			!= CAPI_AFU_Cntl_An_RS_Complete) {
-		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: PSL disable timed out!\n");
-			return -EBUSY;
-		}
-		pr_devel_ratelimited("AFU disabling... (0x%.16llx)\n", AFU_Cntl);
-		cpu_relax();
-		AFU_Cntl = capi_p2n_read(afu, CAPI_AFU_Cntl_An);
-	};
-	pr_devel("AFU disabled\n");
-	return 0;
+	return afu_control(afu, 0, CAPI_AFU_Cntl_An_ES_Disabled,
+			   CAPI_AFU_Cntl_An_ES_MASK, false);
+}
+
+int afu_reset(struct capi_afu_t *afu)
+{
+	pr_devel("AFU reset request\n");
+
+	return afu_control(afu, CAPI_AFU_Cntl_An_RA,
+			   CAPI_AFU_Cntl_An_RS_Complete,
+			   CAPI_AFU_Cntl_An_RS_MASK, false);
+}
+EXPORT_SYMBOL(afu_reset);
+
+static int afu_check_and_enable(struct capi_afu_t *afu)
+{
+	if (afu->enabled)
+		return 0;
+	return afu_enable(afu);
 }
 
 static int psl_purge(struct capi_afu_t *afu)
@@ -294,9 +277,6 @@ init_afu_native(struct capi_afu_t *afu, u64 handle)
 
 	if ((rc = afu_reset(afu)))
 		return rc;
-	if ((rc = afu_enable(afu)))
-		return rc;
-	afu->enabled = true;
 
 	return rc;
 }
@@ -427,7 +407,7 @@ remove_process_element(struct capi_context_t *ctx)
 
 static void assign_psn_space(struct capi_context_t *ctx)
 {
-	if (ctx->master) {
+	if (!ctx->afu->pp_size || ctx->master) {
 		ctx->psn_phys = ctx->afu->psn_phys;
 		ctx->psn_size = ctx->afu->psn_size;
 	} else {
@@ -498,6 +478,10 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 
 	ctx->elem->common.amr = cpu_to_be64(amr);
 	ctx->elem->common.wed = cpu_to_be64(wed);
+
+	/* first guy needs to enable */
+	if ((result = afu_check_and_enable(ctx->afu)))
+		return result;
 
 	add_process_element(ctx);
 
@@ -769,6 +753,11 @@ void capi_unmap_slice_regs(struct capi_afu_t *afu)
 }
 EXPORT_SYMBOL(capi_unmap_slice_regs);
 
+static int check_error(struct capi_afu_t *afu)
+{
+	return (capi_p1n_read(afu, CAPI_PSL_SCNTL_An) == ~0ULL);
+}
+
 static const struct capi_backend_ops capi_native_ops = {
 	.init_adapter = init_adapter_native,
 	.init_afu = init_afu_native,
@@ -779,6 +768,7 @@ static const struct capi_backend_ops capi_native_ops = {
 	.release_adapter = release_adapter_native,
 	.release_afu = release_afu_native,
 	.load_afu_image = load_afu_image_native,
+	.check_error = check_error,
 	.afu_reset = afu_reset,
 };
 
