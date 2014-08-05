@@ -82,6 +82,11 @@ int capi_context_iomap(struct capi_context_t *ctx, struct vm_area_struct *vma)
 	u64 len = vma->vm_end - vma->vm_start;
 	len = min(len, ctx->psn_size);
 
+	if (ctx->afu->afu_dedicated_mode) {
+		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+		return vm_iomap_memory(vma, ctx->afu->psn_phys, ctx->afu->psn_size);
+	}
+
 	/* make sure there is a valid per process space for this AFU */
 	if ((ctx->master && !ctx->afu->mmio) || (!ctx->afu->pp_mmio)) {
 		pr_devel("AFU doesn't support mmio space\n");
