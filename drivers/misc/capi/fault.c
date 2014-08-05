@@ -21,6 +21,23 @@
 
 #include "../../../arch/powerpc/mm/mmu_decl.h" /* FIXME (for hash_preload) */
 
+bool capi_fault_debug = false;
+
+static void capi_page_fault_error(struct capi_context_t *ctx)
+{
+	unsigned long flags;
+
+	/* Any situation where we should write C to retry later? */
+	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
+
+	spin_lock_irqsave(&ctx->lock, flags);
+	ctx->pending_fault = true;
+	ctx->fault_addr = ctx->dar;
+	spin_unlock_irqrestore(&ctx->lock, flags);
+
+	wake_up_all(&ctx->wq);
+}
+
 void capi_handle_page_fault(struct work_struct *work)
 {
 	struct capi_context_t *ctx = container_of(work, struct capi_context_t, work);
@@ -28,7 +45,6 @@ void capi_handle_page_fault(struct work_struct *work)
 	u64 dar = ctx->dar;
 	unsigned flt = 0;
 	int result;
-	unsigned long flags;
 	struct task_struct *task;
 	struct mm_struct *mm;
 
@@ -43,6 +59,7 @@ void capi_handle_page_fault(struct work_struct *work)
 	mm = get_task_mm(task);
 	if (!mm) {
 		pr_devel("capi_handle_page_fault unable to get mm %i\n", pid_nr(ctx->pid));
+		capi_page_fault_error(ctx);
 		goto out1;
 	}
 
@@ -50,17 +67,8 @@ void capi_handle_page_fault(struct work_struct *work)
 	 * is terminated (do I need to inc mm->mm_count?) */
 	result = copro_handle_mm_fault(mm, dar, dsisr, &flt);
 	if (result) {
-		pr_devel("Page fault failed: %#x\n", result);
-		/* Any situation where we should write C to retry later? */
-		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
-
-		spin_lock_irqsave(&ctx->lock, flags);
-		ctx->pending_fault = true;
-		ctx->fault_addr = dar;
-		spin_unlock_irqrestore(&ctx->lock, flags);
-
-		wake_up_all(&ctx->wq);
-
+		pr_devel("copro_handle_mm_fault failed: %#x\n", result);
+		capi_page_fault_error(ctx);
 		goto out;
 	}
 
