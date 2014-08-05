@@ -187,6 +187,8 @@ static inline void native_unlock_hpte(struct hash_pte *hptep)
 	clear_bit_unlock(HPTE_LOCK_BIT, word);
 }
 
+extern bool capi_fault_debug;
+
 static long native_hpte_insert(unsigned long hpte_group, unsigned long vpn,
 			unsigned long pa, unsigned long rflags,
 			unsigned long vflags, int psize, int apsize, int ssize)
@@ -194,6 +196,12 @@ static long native_hpte_insert(unsigned long hpte_group, unsigned long vpn,
 	struct hash_pte *hptep = htab_address + hpte_group;
 	unsigned long hpte_v, hpte_r;
 	int i;
+
+	if (capi_fault_debug) {
+		printk("CAPI_FAULT %s: hptep: %p %lx %lx %lx %lx %x %x %x\n",
+		       __FUNCTION__, hptep,
+		       vpn, pa, rflags, vflags, psize, apsize, ssize);
+	}
 
 	if (!(vflags & HPTE_V_BOLTED)) {
 		DBG_LOW("    insert(group=%lx, vpn=%016lx, pa=%016lx,"
