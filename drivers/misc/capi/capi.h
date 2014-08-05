@@ -346,7 +346,7 @@ struct capi_afu_t {
 	/* FIXME: Below items should be in a separate context struct for virtualisation */
 
 	struct ida pe_index_ida;
-	spinlock_t spa_lock;
+	struct mutex spa_mutex;
 	spinlock_t afu_cntl_lock;
 };
 

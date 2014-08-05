@@ -16,6 +16,7 @@
 #include <linux/pid.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/mutex.h>
 #include <asm/cputable.h>
 #include <asm/current.h>
 #include <asm/copro.h>
@@ -619,7 +620,7 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
 	afu->device.class = capi_class;
 	afu->device.release = capi_release;
-	spin_lock_init(&afu->spa_lock);
+	mutex_init(&afu->spa_mutex);
 	spin_lock_init(&afu->afu_cntl_lock);
 
 	if ((rc = device_register(&afu->device)))

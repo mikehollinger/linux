@@ -7,6 +7,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
+#include <linux/mutex.h>
 #include <asm/synch.h>
 #include <linux/mm.h>
 #include <asm/uaccess.h>
@@ -309,7 +310,7 @@ static void capi_write_sstp(struct capi_afu_t *afu, u64 sstp0, u64 sstp1)
 	capi_p2n_write(afu, CAPI_SSTP1_An, sstp1);
 }
 
-/* must hold ctx->afu->spa_lock */
+/* must hold ctx->afu->spa_mutex */
 static void
 slb_invalid(struct capi_context_t *ctx)
 {
@@ -351,7 +352,10 @@ static int do_process_element_cmd(struct capi_context_t *ctx,
 		if ((state & (CAPI_SPA_SW_CMD_MASK | CAPI_SPA_SW_STATE_MASK  | CAPI_SPA_SW_LINK_MASK)) ==
 		    (cmd | (cmd >> 16) | ctx->ph))
 			break;
-		cpu_relax();
+		/* FIXME: maybe look for a while before schedule if this
+		 * becomes a performace bottleneck
+		 */
+		schedule();
 	}
 	return 0;
 }
@@ -364,10 +368,10 @@ add_process_element(struct capi_context_t *ctx)
 	int rc = 0;
 
 	pr_devel("%s Adding pe=%i\n", __FUNCTION__, ctx->ph);
-	spin_lock(&ctx->afu->spa_lock);
+	mutex_lock(&ctx->afu->spa_mutex);
 	if (!(rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_ADD, CAPI_PE_SOFTWARE_STATE_V)))
 		ctx->pe_inserted = true;
-	spin_unlock(&ctx->afu->spa_lock);
+	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
 
@@ -382,11 +386,11 @@ terminate_process_element(struct capi_context_t *ctx)
 		return rc;
 
 	pr_devel("%s Terminate pe=%i\n", __FUNCTION__, ctx->ph);
-	spin_lock(&ctx->afu->spa_lock);
+	mutex_lock(&ctx->afu->spa_mutex);
 	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_TERMINATE,
 				    CAPI_PE_SOFTWARE_STATE_V | CAPI_PE_SOFTWARE_STATE_T);
 	ctx->elem->software_state = cpu_to_be32(0); 	/* Remove Valid bit */
-	spin_unlock(&ctx->afu->spa_lock);
+	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
 
@@ -399,11 +403,11 @@ remove_process_element(struct capi_context_t *ctx)
 
 	pr_devel("%s Remove pe=%i\n", __FUNCTION__, ctx->ph);
 
-	spin_lock(&ctx->afu->spa_lock);
+	mutex_lock(&ctx->afu->spa_mutex);
 	if (!(rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_REMOVE, 0)))
 		ctx->pe_inserted = false;
 	slb_invalid(ctx);
-	spin_unlock(&ctx->afu->spa_lock);
+	mutex_unlock(&ctx->afu->spa_mutex);
 
 	return rc;
 }
