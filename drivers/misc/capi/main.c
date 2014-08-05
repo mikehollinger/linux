@@ -26,6 +26,77 @@ EXPORT_SYMBOL(capi_ops);
 struct class *capi_class;
 EXPORT_SYMBOL(capi_class);
 
+static void capi_adapter_wide_slbie(struct capi_t *adapter, unsigned long addr, int ssize)
+{
+	u64 val = (addr & ESID_MASK) | (ssize << CAPI_SLBIE_SS_SHIFT);
+
+	/* FIXME: If we start using Class and Tags Active, we need to set the
+	 * corresponding bits here to match the segment we are invalidating */
+
+	/* TODO: Use Locking to ensure we can never have > Max_SLBIEs
+	 * outstanding. For the moment we are only ever called with
+	 * adapter_list_lock held, so there can only be one at a time */
+	capi_p1_write(adapter, CAPI_PSL_SLBIE, val);
+	while (capi_p1_read(adapter, CAPI_PSL_SLBIE) & CAPI_SLBIE_PENDING)
+		cpu_relax();
+}
+
+/* FIXME: This is called from the PPC mm code, which will break when CAPI is
+ * compiled as a module */
+void capi_slbie(unsigned long addr)
+{
+	struct capi_t *adapter;
+	int ssize;
+
+	/* Potential optimisation - may be able to use slbfee instruction to
+	 * get SLB from current CPU and grab B, C and TA fields from it */
+	switch(REGION_ID(addr)) {
+		case USER_REGION_ID:
+			ssize = user_segment_size(addr);
+			break;
+		case VMALLOC_REGION_ID:
+		case KERNEL_REGION_ID:
+			ssize = mmu_kernel_ssize;
+			break;
+		default:
+			WARN(1, "capi_slbie: Unsupported region\n");
+			return;
+	}
+
+	spin_lock(&adapter_list_lock);
+	list_for_each_entry(adapter, &adapter_list, list) {
+		/* FIXME: Will need to use the per slice version of PSL_SLBIE
+		 * when under a HV (if we have access to the p2 regs), or ask
+		 * the HV to do this for us */
+		capi_adapter_wide_slbie(adapter, addr, ssize);
+	}
+	spin_unlock(&adapter_list_lock);
+}
+EXPORT_SYMBOL(capi_slbie);
+
+static void capi_adapter_wide_slbia_all(struct capi_t *adapter)
+{
+	capi_p1_write(adapter, CAPI_PSL_SLBIA, CAPI_SLBI_IQ_ALL);
+	while (capi_p1_read(adapter, CAPI_PSL_SLBIA) & CAPI_SLBIA_P)
+		cpu_relax();
+}
+
+/* FIXME: This is called from the PPC mm code, which will break when CAPI is
+ * compiled as a module */
+void capi_slbia(void)
+{
+	struct capi_t *adapter;
+
+	spin_lock(&adapter_list_lock);
+	list_for_each_entry(adapter, &adapter_list, list) {
+		/* FIXME: Will need to use the per slice version of PSL_SLBIE
+		 * when under a HV (if we have access to the p2 regs), or ask
+		 * the HV to do this for us */
+		capi_adapter_wide_slbia_all(adapter);
+	}
+	spin_unlock(&adapter_list_lock);
+}
+
 int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
 	u64 rt = 0;

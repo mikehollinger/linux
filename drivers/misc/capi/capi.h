@@ -15,10 +15,6 @@
 
 #include <uapi/misc/capi.h>
 
-/* Valid setting for this are 7 and 11 */
-/* FIXME do this dynamically, or just only support 11 and above */
-#define CAIA_VERSION 12
-
 #define CAPI_TIMEOUT 5
 
 /* Opaque types to avoid accidentally passing registers for the wrong MMIO
@@ -221,11 +217,23 @@ static const capi_p2n_reg_t CAPI_PSL_WED_An     = {0x0A0};
 #define CAPI_SSTP1_An_STVA_L_MASK (~((1ull << (63-55))-1))
 #define CAPI_SSTP1_An_V              (1ull << (63-63))
 
-/****** CAPI_SLBIA ******************************************************/
-#define CAPI_SLBIA_IQ_ALL		(0ull) /* Inv qualifier (write) */
-#define CAPI_SLBIA_IQ_LPID		(1ull) /* Inv qualifier (write) */
-#define CAPI_SLBIA_IQ_LPIDPID		(3ull) /* Inv qualifier (write) */
-#define CAPI_SLBIA_P			(1ull) /* Pending (read) */
+/****** CAPI_PSL_SLBIE_[An] **************************************************/
+/* write: */
+#define CAPI_SLBIE_C        PPC_BIT(36)         /* Class */
+#define CAPI_SLBIE_SS       PPC_BITMASK(37, 38) /* Segment Size */
+#define CAPI_SLBIE_SS_SHIFT PPC_BITLSHIFT(38)
+#define CAPI_SLBIE_TA       PPC_BIT(38)         /* Tags Active */
+/* read: */
+#define CAPI_SLBIE_MAX      PPC_BITMASK(24, 31)
+#define CAPI_SLBIE_PENDING  PPC_BITMASK(56, 63)
+
+/****** CAPI_SLBIA_[An] ******************************************************/
+#define CAPI_SLBIA_P         (1ull) /* Pending (read) */
+
+/****** Common to all PSL_SLBIE/A_[An] registers *****************************/
+#define CAPI_SLBI_IQ_ALL     (0ull)              /* Inv qualifier */
+#define CAPI_SLBI_IQ_LPID    (1ull)              /* Inv qualifier */
+#define CAPI_SLBI_IQ_LPIDPID (3ull)              /* Inv qualifier */
 
 /****** CAPI_PSL_DSISR_An ****************************************************/
 #define CAPI_PSL_DSISR_An_DS (1ull << (63-0))  /* Segment not found */
@@ -288,17 +296,10 @@ extern struct bus_type capi_bus_type;
 #define CAPI_NUM_MINORS 256 /* Total to reserve */
 #define CAPI_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/slave) */
 
-#if CAIA_VERSION < 11
-struct capi_sste {
-	__be64 vsid_data;
-	__be64 esid_data;
-};
-#else
 struct capi_sste {
 	__be64 esid_data;
 	__be64 vsid_data;
 };
-#endif
 
 /* TODO: Pack structure */
 struct capi_afu_t {

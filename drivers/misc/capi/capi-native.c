@@ -320,7 +320,7 @@ slb_invalid(struct capi_context_t *ctx)
 
 	capi_p1_write(adapter, CAPI_PSL_LBISEL,
 		      ((u64)ctx->elem->common.pid << 32) | ctx->elem->lpid);
-	capi_p1_write(adapter, CAPI_PSL_SLBIA, CAPI_SLBIA_IQ_LPIDPID);
+	capi_p1_write(adapter, CAPI_PSL_SLBIA, CAPI_SLBI_IQ_LPIDPID);
 
 	while (1) {
 		slbia = capi_p1_read(adapter, CAPI_PSL_SLBIA);

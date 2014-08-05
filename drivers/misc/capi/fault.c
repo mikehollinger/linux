@@ -209,10 +209,6 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 	 *	What? You got a problem with my coding style?
 	 * } */
 
-	/*
-	 * XXX: Mambo doesn't care about the hash (it just searches the entire table),
-	 * so verify this is accurate before we run on hardware.
-	 */
 	if (vsid_data & SLB_VSID_B_1T)
 		hash = (esid_data >> SID_SHIFT_1T) & mask;
 	else /* 256M */
