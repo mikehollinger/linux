@@ -591,6 +591,8 @@ init_process_native(struct capi_context_t *ctx, bool kernel, u64 wed,
 static int detach_process_native(struct capi_context_t *ctx)
 {
 	if (!ctx->afu->afu_directed_mode) {
+		afu_reset(ctx->afu);
+		afu_disable(ctx->afu);
 		psl_purge(ctx->afu);
 		return 0;
 	}
