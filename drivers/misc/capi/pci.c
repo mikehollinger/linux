@@ -564,7 +564,11 @@ static int init_slice(struct capi_t *adapter,
 	afu->num_procs = AFUD_NUM_PROCS(val);
 	afu->afu_directed_mode = AFUD_AFU_DIRECTED(val);
 	afu->afu_dedicated_mode = AFUD_DEDICATED_PROCESS(val);
-	if (!afu->afu_directed_mode && !afu->afu_dedicated_mode) {
+	if (afu->afu_dedicated_mode)
+		pr_devel("AFU in dedicated mode\n");
+	else if (afu->afu_directed_mode)
+		pr_devel("AFU in directed mode\n");
+	else {
 		pr_err("No supported AFU programing models available\n");
 		rc = -ENODEV;
 		goto out;
