@@ -454,7 +454,8 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 		sr |= CAPI_PSL_SR_An_TC;
 	if (!kernel) {
 		/* GA1: HV=0, PR=1, R=1 */
-		sr |= CAPI_PSL_SR_An_PR | CAPI_PSL_SR_An_R;
+		/* FIXME: Set HV properly */
+		sr |= CAPI_PSL_SR_An_HV | CAPI_PSL_SR_An_PR | CAPI_PSL_SR_An_R;
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
 			sr |= CAPI_PSL_SR_An_SF;
 		ctx->elem->common.pid = cpu_to_be32(current->pid);

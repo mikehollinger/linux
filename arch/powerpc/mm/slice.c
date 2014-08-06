@@ -42,7 +42,7 @@
 #ifdef CONFIG_CAPI
 /* FIXME: Clean this up and make it not break when CONFIG_CAPI=m! */
 extern void capi_slbie(unsigned long addr);
-extern void capi_slbia(void);
+extern void capi_slbia(struct mm_struct *mm);
 #endif
 
 static DEFINE_SPINLOCK(slice_convert_lock);
@@ -242,7 +242,7 @@ static void slice_convert(struct mm_struct *mm, struct slice_mask mask, int psiz
 	spu_flush_all_slbs(mm);
 #endif
 #ifdef CONFIG_CAPI /* FIXME: Work when CAPI is a module */
-	capi_slbia(); /* XXX: Can we use capi_slbie instead (assuming it's faster) */
+	capi_slbia(mm); /* XXX: Can we use capi_slbie instead (assuming it's faster) */
 #endif
 }
 
@@ -684,7 +684,8 @@ void slice_set_psize(struct mm_struct *mm, unsigned long address,
 	spu_flush_all_slbs(mm);
 #endif
 #ifdef CONFIG_CAPI /* FIXME: Work when CAPI is a module */
-	capi_slbie(address);
+	//capi_slbie(address);
+	capi_slbia(mm);
 #endif
 }
 

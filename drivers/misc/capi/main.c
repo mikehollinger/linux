@@ -74,25 +74,70 @@ void capi_slbie(unsigned long addr)
 }
 EXPORT_SYMBOL(capi_slbie);
 
-static void capi_adapter_wide_slbia_all(struct capi_t *adapter)
+static void capi_afu_slbia(struct capi_afu_t *afu)
 {
-	capi_p1_write(adapter, CAPI_PSL_SLBIA, CAPI_SLBI_IQ_ALL);
-	while (capi_p1_read(adapter, CAPI_PSL_SLBIA) & CAPI_SLBIA_P)
+	pr_devel("capi_afu_slbia issuing SLBIA command\n");
+	capi_p2n_write(afu, CAPI_SLBIA_An, CAPI_SLBI_IQ_ALL);
+	while (capi_p2n_read(afu, CAPI_SLBIA_An) & CAPI_SLBIA_P)
 		cpu_relax();
 }
 
 /* FIXME: This is called from the PPC mm code, which will break when CAPI is
  * compiled as a module */
-void capi_slbia(void)
+void capi_slbia(struct mm_struct *mm)
 {
 	struct capi_t *adapter;
+	struct capi_afu_t *afu;
+	struct capi_context_t *ctx;
+	struct task_struct *task;
+	struct mm_struct *ctx_mm;
+	unsigned long flags;
+	int card = 0, slice;
+
+	pr_devel("capi_slbia called\n");
 
 	spin_lock(&adapter_list_lock);
 	list_for_each_entry(adapter, &adapter_list, list) {
-		/* FIXME: Will need to use the per slice version of PSL_SLBIE
-		 * when under a HV (if we have access to the p2 regs), or ask
-		 * the HV to do this for us */
-		capi_adapter_wide_slbia_all(adapter);
+		/* TODO: Link mm_struct straight to the context to skip having
+		 * to search for it (but one process/single mm can have
+		 * multiple capi contexts) */
+		for (slice = 0; slice < CAPI_MAX_SLICES; slice++) {
+			afu = &adapter->slice[slice];
+			if (!afu->enabled)
+				continue;
+			spin_lock(&afu->contexts_lock);
+			list_for_each_entry(ctx, &afu->contexts, list) {
+				if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
+					pr_devel("capi_slbia unable to get task %i\n", pid_nr(ctx->pid));
+					continue;
+				}
+				if (!(ctx_mm = get_task_mm(task))) {
+					pr_devel("capi_slbia unable to get mm %i\n", pid_nr(ctx->pid));
+					goto next1;
+				}
+
+				if (ctx_mm != mm)
+					goto next;
+
+				pr_devel("capi_slbia matched mm - card %i afu %i pe %i\n", card, slice, ctx->ph);
+
+				spin_lock_irqsave(&ctx->sst_lock, flags);
+				if (!ctx->sstp)
+					goto next_unlock;
+				memset(ctx->sstp, 0, ctx->sst_size);
+				mb();
+				capi_afu_slbia(afu);
+
+next_unlock:
+				spin_unlock_irqrestore(&ctx->sst_lock, flags);
+next:
+				mmput(ctx_mm);
+next1:
+				put_task_struct(task);
+			}
+			spin_unlock(&afu->contexts_lock);
+		}
+		card++;
 	}
 	spin_unlock(&adapter_list_lock);
 }
@@ -100,7 +145,7 @@ void capi_slbia(void)
 int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
 	u64 rt = 0;
-	unsigned long vsid;
+	unsigned long vsid, flags;
 	u64 ssize;
 	u64 ea_mask;
 	u64 size;
@@ -108,6 +153,7 @@ int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	*sstp0 = 0;
 	*sstp1 = 0;
 
+	spin_lock_irqsave(&ctx->sst_lock, flags);
 	ctx->sst_size = PAGE_SIZE;
 	ctx->sst_lru = 0;
 	if (!ctx->sstp) {
@@ -116,11 +162,13 @@ int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	} else {
 		pr_devel("Zeroing and reusing SSTP already allocated at 0x%p\n", ctx->sstp);
 		memset(ctx->sstp, 0, PAGE_SIZE);
+		capi_afu_slbia(ctx->afu);
 	}
 	if (!ctx->sstp) {
 		pr_err("capi_alloc_sst: Unable to allocate segment table\n");
 		return -ENOMEM;
 	}
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	/*
 	 * Some of the bits in the SSTP are from the segment that CONTAINS the

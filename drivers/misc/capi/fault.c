@@ -38,6 +38,8 @@ static void capi_page_fault_error(struct capi_context_t *ctx)
 	wake_up_all(&ctx->wq);
 }
 
+extern void capi_slbia(struct mm_struct *mm); /* FIXME */
+
 void capi_handle_page_fault(struct work_struct *work)
 {
 	struct capi_context_t *ctx = container_of(work, struct capi_context_t, work);
@@ -86,7 +88,10 @@ void capi_handle_page_fault(struct work_struct *work)
 	up_read(&mm->mmap_sem);
 
 	if (ctx->last_dar == dar) {
-		if (ctx->last_dar_count++ > 5) {
+		if (ctx->last_dar_count++ == 5) {
+			pr_err("Continuous page faults on same page.  Something horribly wrong, trying an SLBIA for shits and giggles!\n");
+			capi_slbia(mm);
+		} else if (ctx->last_dar_count > 10) {
 			pr_err("Continuous page faults on same page.  Something horribly wrong!\n");
 			BUG();
 		}
@@ -155,6 +160,7 @@ static int slbfee_mm(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 	return 0;
 }
 
+/* Should be called with sst_lock held */
 static struct capi_sste*
 find_free_sste(struct capi_sste *primary_group, bool sec_hash,
 	       struct capi_sste *secondary_group, unsigned int *lru)
@@ -198,6 +204,7 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 	bool sec_hash = 1;
 	struct capi_sste *sste;
 	unsigned int hash;
+	unsigned long flags;
 
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		sec_hash = !!(capi_p1n_read(ctx->afu, CAPI_PSL_SR_An) & CAPI_PSL_SR_An_SC);
@@ -214,6 +221,7 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 	else /* 256M */
 		hash = (esid_data >> SID_SHIFT) & mask;
 
+	spin_lock_irqsave(&ctx->sst_lock, flags);
 	sste = find_free_sste(ctx->sstp + (  hash         << 3), sec_hash,
 			      ctx->sstp + ((~hash & mask) << 3), &ctx->sst_lru);
 
@@ -222,6 +230,7 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 
 	sste->vsid_data = cpu_to_be64(vsid_data);
 	sste->esid_data = cpu_to_be64(esid_data);
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	return 0;
 }

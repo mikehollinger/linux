@@ -89,7 +89,7 @@
 #ifdef CONFIG_CAPI
 /* FIXME: Clean this up and make it not break when CONFIG_CAPI=m! */
 extern void capi_slbie(unsigned long addr);
-extern void capi_slbia(void);
+extern void capi_slbia(struct mm_struct *mm);
 #endif
 
 #ifdef CONFIG_U3_DART
@@ -928,7 +928,8 @@ void demote_segment_4k(struct mm_struct *mm, unsigned long addr)
 	spu_flush_all_slbs(mm);
 #endif
 #ifdef CONFIG_CAPI /* FIXME: Work when CAPI is a module */
-	capi_slbie(addr);
+	//capi_slbie(addr);
+	capi_slbia(mm);
 #endif
 	if (get_paca_psize(addr) != MMU_PAGE_4K) {
 		get_paca()->context = mm->context;
@@ -1171,7 +1172,8 @@ int hash_page(unsigned long ea, unsigned long access, unsigned long trap)
 			spu_flush_all_slbs(mm);
 #endif
 #ifdef CONFIG_CAPI /* FIXME: Work when CAPI is a module */
-			capi_slbie(ea);
+			//capi_slbie(ea);
+			capi_slbia(mm);
 #endif
 		}
 	}

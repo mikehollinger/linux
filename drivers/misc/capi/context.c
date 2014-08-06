@@ -37,6 +37,7 @@ int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool m
 {
 	int i;
 
+	spin_lock_init(&ctx->sst_lock);
 	ctx->sstp = NULL;
 	ctx->afu = afu;
 	ctx->master = master;
@@ -151,9 +152,13 @@ void capi_context_detach_all(struct capi_afu_t *afu)
 
 void capi_context_free(struct capi_context_t *ctx)
 {
+	unsigned long flags;
+
 	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
+	spin_lock_irqsave(&ctx->sst_lock, flags);
 	free_page((u64)ctx->sstp);
 	ctx->sstp = NULL;
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 	put_pid(ctx->pid);
 	kfree(ctx);
 }

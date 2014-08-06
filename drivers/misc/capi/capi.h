@@ -371,6 +371,7 @@ struct capi_context_t {
 	phys_addr_t psn_phys;
 	u64 psn_size;
 
+	spinlock_t sst_lock; /* Protects segment table */
 	struct capi_sste *sstp;
 	unsigned int sst_size, sst_lru;
 
