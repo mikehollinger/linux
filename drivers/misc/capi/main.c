@@ -4,9 +4,11 @@
 #undef DEBUG
 #endif
 
+#include <linux/spinlock.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/mutex.h>
 #include <linux/init.h>
 #include <linux/list.h>
 #include <linux/mm.h>
@@ -317,8 +319,11 @@ int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
 	afu->adapter = adapter;
 	afu->slice = slice;
 	afu->err_hwirq = err_irq;
+/* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     FIXME : This static init needs to be done earlier - we are using afu_cntl_lock before initing it!  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
 	INIT_LIST_HEAD(&afu->contexts);
 	spin_lock_init(&afu->contexts_lock);
+	spin_lock_init(&afu->afu_cntl_lock);
+	mutex_init(&afu->spa_mutex);
 
 	/* Initialise the hardware? */
 	if ((rc = capi_ops->init_afu(afu, handle)))

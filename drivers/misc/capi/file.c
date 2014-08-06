@@ -7,6 +7,7 @@
 /* TODO: Split this out into a separate module now that we have some CAPI
  * devices that won't want to use this generic userspace interface */
 
+#include <linux/spinlock.h>
 #include <linux/module.h>
 #include <linux/export.h>
 #include <linux/kernel.h>
@@ -16,7 +17,6 @@
 #include <linux/pid.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
-#include <linux/mutex.h>
 #include <asm/cputable.h>
 #include <asm/current.h>
 #include <asm/copro.h>
@@ -621,8 +621,6 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
 	afu->device.class = capi_class;
 	afu->device.release = capi_release;
-	mutex_init(&afu->spa_mutex);
-	spin_lock_init(&afu->afu_cntl_lock);
 
 	if ((rc = device_register(&afu->device)))
 		return rc;
