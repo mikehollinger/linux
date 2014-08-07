@@ -118,7 +118,7 @@ afu_ioctl_start_work(struct capi_context_t *ctx,
 	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
 		return rc;
 
-	printk("capi amr: %llx uamor: %llx\n", work.amr, mfspr(SPRN_UAMOR));
+	printk("capi amr: %llx uamor: %lx\n", work.amr, mfspr(SPRN_UAMOR));
 	amr = work.amr & mfspr(SPRN_UAMOR);
 
 	work.process_element = ctx->ph;

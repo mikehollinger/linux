@@ -49,6 +49,7 @@ void capi_handle_page_fault(struct work_struct *work)
 	int result;
 	struct task_struct *task;
 	struct mm_struct *mm;
+	unsigned long access, flags;
 
 	pr_devel("CAPI BOTTOM HALF handling page fault for afu pe: %i. "
 		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
@@ -78,14 +79,16 @@ void capi_handle_page_fault(struct work_struct *work)
 
 	/*
 	 * update_mmu_cache() will not have loaded the hash since current->trap
-	 * is not a 0x400 or 0x300, so just call hash_preload() here. Don't use
-	 * hash_page() as it assumes we are talking about current.
-	 *
-	 * FIXME: I'm not clear on the locking requirements of hash_preload
+	 * is not a 0x400 or 0x300, so just call hash_page_mm() here.
 	 */
-	down_read(&mm->mmap_sem);
-	hash_page_mm(mm, dar, 0, 0x300);
-	up_read(&mm->mmap_sem);
+	access = _PAGE_PRESENT;
+	if (dsisr & CAPI_PSL_DSISR_An_S)
+		access |= _PAGE_RW;
+	if ((!ctx->kernel) || ~(dar & (1ULL << 63)))
+		access |= _PAGE_USER;
+	local_irq_save(flags);
+	hash_page_mm(mm, dar, access, 0x300);
+	local_irq_restore(flags);
 
 	if (ctx->last_dar == dar) {
 		if (ctx->last_dar_count++ > 5) {

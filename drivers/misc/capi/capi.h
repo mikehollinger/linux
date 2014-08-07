@@ -363,6 +363,7 @@ struct capi_context_t {
 	struct capi_afu_t *afu;
 
 	bool master;
+	bool kernel;
 
 	int ph; /* process handle/process element index */
 	bool pe_inserted;

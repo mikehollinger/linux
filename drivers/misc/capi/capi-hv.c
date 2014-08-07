@@ -139,6 +139,7 @@ init_dedicated_process_hv(struct capi_context_t *ctx, bool kernel,
 #if 1 /* FIXME: These are bitfields, replace this section to ensure
 	 compatibility with compiler changes + little endian */
 	elem->csrpValid = 0;
+	ctx->kernel = kernel;
 	if (!kernel) {
 		elem->problemState = 1;
 		elem->translationEnabled = 1;

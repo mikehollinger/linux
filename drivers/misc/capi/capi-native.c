@@ -428,8 +428,7 @@ static void assign_psn_space(struct capi_context_t *ctx)
 
 
 static int
-init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
-			  u64 amr)
+init_afu_directed_process(struct capi_context_t *ctx, u64 wed, u64 amr)
 {
 
 	u64 sr, sstp0, sstp1;
@@ -453,7 +452,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 		sr |= CAPI_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
 		sr |= CAPI_PSL_SR_An_TC;
-	if (!kernel) {
+	if (!ctx->kernel) {
 		/* GA1: HV=0, PR=1, R=1 */
 		/* FIXME: Set HV properly */
 		sr |= CAPI_PSL_SR_An_HV | CAPI_PSL_SR_An_PR | CAPI_PSL_SR_An_R;
@@ -499,8 +498,7 @@ init_afu_directed_process(struct capi_context_t *ctx, bool kernel, u64 wed,
 }
 
 static int
-init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
-			      u64 wed, u64 amr)
+init_dedicated_process_native(struct capi_context_t *ctx, u64 wed, u64 amr)
 {
 	struct capi_afu_t * afu = ctx->afu;
 	u64 sr, sstp0, sstp1;
@@ -528,7 +526,7 @@ init_dedicated_process_native(struct capi_context_t *ctx, bool kernel,
 		sr |= CAPI_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
 		sr |= CAPI_PSL_SR_An_TC;
-	if (!kernel) {
+	if (!ctx->kernel) {
 		/* GA1: HV=0, PR=1, R=1 */
 		sr |= CAPI_PSL_SR_An_PR | CAPI_PSL_SR_An_R;
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
@@ -585,9 +583,10 @@ static int
 init_process_native(struct capi_context_t *ctx, bool kernel, u64 wed,
 		  u64 amr)
 {
+	ctx->kernel = kernel;
 	if (ctx->afu->afu_directed_mode)
-		return init_afu_directed_process(ctx, kernel, wed, amr);
-	return init_dedicated_process_native(ctx, kernel, wed, amr);
+		return init_afu_directed_process(ctx, wed, amr);
+	return init_dedicated_process_native(ctx, wed, amr);
 }
 
 static int detach_process_native(struct capi_context_t *ctx)
