@@ -250,6 +250,16 @@ int capi_get_num_adapters(void)
 	return i;
 }
 
+static void afu_t_init(struct capi_t *adapter, int slice)
+{
+	struct capi_afu_t *afu = &adapter->slice[slice];
+	afu->adapter = adapter;
+	afu->slice = slice;
+	INIT_LIST_HEAD(&afu->contexts);
+	spin_lock_init(&afu->contexts_lock);
+	spin_lock_init(&afu->afu_cntl_lock);
+	mutex_init(&afu->spa_mutex);
+}
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the caller fill in the struct and call us? */
@@ -258,7 +268,7 @@ int capi_init_adapter(struct capi_t *adapter,
 		      struct device *parent,
 		      int slices, void *backend_data)
 {
-	int rc = 0;
+	int slice, rc = 0;
 
 	pr_devel("capi_alloc_adapter");
 
@@ -291,6 +301,9 @@ int capi_init_adapter(struct capi_t *adapter,
 		goto out2;
 	}
 
+	for (slice = 0; slice < slices; slice++)
+		afu_t_init(adapter, slice);
+
 	list_add_tail(&(adapter)->list, &adapter_list);
 	spin_unlock(&adapter_list_lock);
 
@@ -307,30 +320,21 @@ out:
 }
 EXPORT_SYMBOL(capi_init_adapter);
 
-int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
-		  int slice, u64 handle,
-		  irq_hw_number_t err_irq)
+int capi_init_afu(struct capi_afu_t *afu, u64 handle, irq_hw_number_t err_irq)
 {
 	int rc;
 
 	pr_devel("capi_init_afu: slice: %i, handle: %#llx, err_irq: %#lx\n",
-			slice, handle, err_irq);
+			afu->slice, handle, err_irq);
 
-	afu->adapter = adapter;
-	afu->slice = slice;
 	afu->err_hwirq = err_irq;
-/* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     FIXME : This static init needs to be done earlier - we are using afu_cntl_lock before initing it!  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
-	INIT_LIST_HEAD(&afu->contexts);
-	spin_lock_init(&afu->contexts_lock);
-	spin_lock_init(&afu->afu_cntl_lock);
-	mutex_init(&afu->spa_mutex);
 
 	/* Initialise the hardware? */
 	if ((rc = capi_ops->init_afu(afu, handle)))
 	    return rc;
 
 	/* Add afu character devices */
-	if ((rc = add_capi_afu_dev(afu, slice)))
+	if ((rc = add_capi_afu_dev(afu, afu->slice)))
 		return rc;
 
 	return 0;

@@ -74,7 +74,7 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 		return rc;
 	}
 
-	return capi_init_afu(adapter, afu, slice, handle, 0);
+	return capi_init_afu(afu, handle, 0);
 }
 
 static struct capi_driver_ops capi_of_driver_ops = {

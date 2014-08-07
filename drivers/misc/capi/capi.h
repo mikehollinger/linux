@@ -531,9 +531,7 @@ int capi_map_slice_regs(struct capi_afu_t *afu,
 		  u64 psn_base, u64 psn_size,
 		  u64 afu_desc, u64 afu_desc_size);
 void capi_unmap_slice_regs(struct capi_afu_t *afu);
-int capi_init_afu(struct capi_t *adapter, struct capi_afu_t *afu,
-		  int slice, u64 handle,
-		  irq_hw_number_t err_irq);
+int capi_init_afu(struct capi_afu_t *afu, u64 handle, irq_hw_number_t err_irq);
 void capi_unregister_adapter(struct capi_t *adapter);
 void capi_unregister_afu(struct capi_afu_t *afu);
 

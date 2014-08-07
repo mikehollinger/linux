@@ -593,7 +593,7 @@ static int init_slice(struct capi_t *adapter,
 		goto out;
 	}
 
-	if ((rc = capi_init_afu(adapter, afu, slice, 0, err_hwirq))) {
+	if ((rc = capi_init_afu(afu, 0, err_hwirq))) {
 		dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
 		goto out1;
 	}
