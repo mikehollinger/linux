@@ -155,7 +155,6 @@ int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	*sstp0 = 0;
 	*sstp1 = 0;
 
-	spin_lock_irqsave(&ctx->sst_lock, flags);
 	ctx->sst_size = PAGE_SIZE;
 	ctx->sst_lru = 0;
 	if (!ctx->sstp) {
@@ -163,14 +162,15 @@ int capi_alloc_sst(struct capi_context_t *ctx, u64 *sstp0, u64 *sstp1)
 		pr_devel("SSTP allocated at 0x%p\n", ctx->sstp);
 	} else {
 		pr_devel("Zeroing and reusing SSTP already allocated at 0x%p\n", ctx->sstp);
+		spin_lock_irqsave(&ctx->sst_lock, flags);
 		memset(ctx->sstp, 0, PAGE_SIZE);
 		capi_afu_slbia(ctx->afu);
+		spin_unlock_irqrestore(&ctx->sst_lock, flags);
 	}
 	if (!ctx->sstp) {
 		pr_err("capi_alloc_sst: Unable to allocate segment table\n");
 		return -ENOMEM;
 	}
-	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	/*
 	 * Some of the bits in the SSTP are from the segment that CONTAINS the
