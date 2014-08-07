@@ -92,7 +92,6 @@ void capi_slbia(struct mm_struct *mm)
 	struct capi_afu_t *afu;
 	struct capi_context_t *ctx;
 	struct task_struct *task;
-	struct mm_struct *ctx_mm;
 	unsigned long flags;
 	int card = 0, slice;
 
@@ -113,12 +112,8 @@ void capi_slbia(struct mm_struct *mm)
 					pr_devel("capi_slbia unable to get task %i\n", pid_nr(ctx->pid));
 					continue;
 				}
-				if (!(ctx_mm = get_task_mm(task))) {
-					pr_devel("capi_slbia unable to get mm %i\n", pid_nr(ctx->pid));
-					goto next1;
-				}
 
-				if (ctx_mm != mm)
+				if (task->mm != mm)
 					goto next;
 
 				pr_devel("capi_slbia matched mm - card %i afu %i pe %i\n", card, slice, ctx->ph);
@@ -133,8 +128,6 @@ void capi_slbia(struct mm_struct *mm)
 next_unlock:
 				spin_unlock_irqrestore(&ctx->sst_lock, flags);
 next:
-				mmput(ctx_mm);
-next1:
 				put_task_struct(task);
 			}
 			spin_unlock(&afu->contexts_lock);
