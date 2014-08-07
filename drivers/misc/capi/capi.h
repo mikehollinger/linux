@@ -397,7 +397,7 @@ struct capi_context_t {
 	struct list_head list;
 
 	/* XXX: Is it possible to need multiple work items at once? */
-	struct work_struct work;
+	struct work_struct fault_work;
 	u64 dsisr;
 	u64 dar;
 

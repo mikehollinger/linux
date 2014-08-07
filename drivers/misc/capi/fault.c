@@ -40,9 +40,9 @@ static void capi_page_fault_error(struct capi_context_t *ctx)
 
 extern void capi_slbia(struct mm_struct *mm); /* FIXME */
 
-void capi_handle_page_fault(struct work_struct *work)
+void capi_handle_page_fault(struct work_struct *fault_work)
 {
-	struct capi_context_t *ctx = container_of(work, struct capi_context_t, work);
+	struct capi_context_t *ctx = container_of(fault_work, struct capi_context_t, fault_work);
 	u64 dsisr = ctx->dsisr;
 	u64 dar = ctx->dar;
 	unsigned flt = 0;

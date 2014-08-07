@@ -43,6 +43,8 @@ int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool m
 	ctx->master = master;
 	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
+	INIT_WORK(&ctx->fault_work, capi_handle_page_fault);
+
 	init_waitqueue_head(&ctx->wq);
 	spin_lock_init(&ctx->lock);
 
@@ -120,7 +122,7 @@ static void __detach_context(struct capi_context_t *ctx)
 	list_del(&ctx->list);
 	WARN_ON(capi_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
-	flush_work(&ctx->work);
+	flush_work(&ctx->fault_work);
 	wake_up_all(&ctx->wq);
 }
 

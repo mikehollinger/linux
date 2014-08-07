@@ -120,10 +120,9 @@ static irqreturn_t capi_irq(int irq, void *data)
 		pr_devel("Scheduling page fault handling for later pe: %i (in_atomic() = %i)...\n",
 			 ctx->ph, in_atomic());
 
-		INIT_WORK(&ctx->work, capi_handle_page_fault);
 		ctx->dsisr = dsisr;
 		ctx->dar = dar;
-		schedule_work(&ctx->work);
+		schedule_work(&ctx->fault_work);
 		return IRQ_HANDLED;
 	}
 
