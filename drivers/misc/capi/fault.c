@@ -348,7 +348,7 @@ int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea)
 		pr_devel("capi_handle_segment_miss unable to get task %i\n", pid_nr(ctx->pid));
 		return IRQ_HANDLED;
 	}
-	mm = get_task_mm(task);
+	mm = get_task_mm(task); /* !!!!!!! FIXME: Lockdep tells me I can't do this here, but it would be unsafe not to get a ref on the mm - I might need to schedule this for later !!!!!!!! */
 	if (!mm) {
 		pr_devel("capi_handle_segment_miss unable to get mm %i\n", pid_nr(ctx->pid));
 		goto out1;
