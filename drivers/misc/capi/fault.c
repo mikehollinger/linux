@@ -68,9 +68,7 @@ void capi_handle_page_fault(struct work_struct *work)
 
 	/* FIXME: This may sleep, make sure it's handled OK if the application
 	 * is terminated (do I need to inc mm->mm_count?) */
-	capi_fault_debug = true;
 	result = copro_handle_mm_fault(mm, dar, dsisr, &flt);
-	capi_fault_debug = false;
 	if (result) {
 		pr_devel("copro_handle_mm_fault failed: %#x\n", result);
 		capi_page_fault_error(ctx);
