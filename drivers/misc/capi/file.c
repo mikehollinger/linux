@@ -78,7 +78,7 @@ afu_release(struct inode *inode, struct file *file)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 
-	pr_devel("afu_release\n");
+	pr_devel("%s: closing capi file descriptor\n", __FUNCTION__);
 	capi_context_detach(ctx);
 
 	module_put(ctx->afu->adapter->driver->module);
