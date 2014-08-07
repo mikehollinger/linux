@@ -84,16 +84,11 @@ void capi_handle_page_fault(struct work_struct *work)
 	 * FIXME: I'm not clear on the locking requirements of hash_preload
 	 */
 	down_read(&mm->mmap_sem);
-	spin_lock(&mm->page_table_lock);
-	hash_preload(mm, dar, 0, 0x300);
-	spin_unlock(&mm->page_table_lock);
+	hash_page_mm(mm, dar, 0, 0x300);
 	up_read(&mm->mmap_sem);
 
 	if (ctx->last_dar == dar) {
-		if (ctx->last_dar_count++ == 5) {
-			pr_err("Continuous page faults on same page.  Something horribly wrong, trying an SLBIA for shits and giggles!\n");
-			capi_slbia(mm);
-		} else if (ctx->last_dar_count > 10) {
+		if (ctx->last_dar_count++ > 5) {
 			pr_err("Continuous page faults on same page.  Something horribly wrong!\n");
 			BUG();
 		}

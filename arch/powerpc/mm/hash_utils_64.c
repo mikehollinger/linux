@@ -1016,26 +1016,24 @@ static void check_paca_psize(unsigned long ea, struct mm_struct *mm,
  * -1 - critical hash insertion error
  * -2 - access not permitted by subpage protection mechanism
  */
-int hash_page(unsigned long ea, unsigned long access, unsigned long trap)
+int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, unsigned long trap)
 {
 	enum ctx_state prev_state = exception_enter();
 	pgd_t *pgdir;
 	unsigned long vsid;
-	struct mm_struct *mm;
 	pte_t *ptep;
 	unsigned hugeshift;
 	const struct cpumask *tmp;
 	int rc, user_region = 0, local = 0;
 	int psize, ssize;
 
-	DBG_LOW("hash_page(ea=%016lx, access=%lx, trap=%lx\n",
+	DBG_LOW("hash_page_mm(ea=%016lx, access=%lx, trap=%lx\n",
 		ea, access, trap);
 
 	/* Get region & vsid */
  	switch (REGION_ID(ea)) {
 	case USER_REGION_ID:
 		user_region = 1;
-		mm = current->mm;
 		if (! mm) {
 			DBG_LOW(" user region with no mm !\n");
 			rc = 1;
@@ -1212,6 +1210,12 @@ int hash_page(unsigned long ea, unsigned long access, unsigned long trap)
 bail:
 	exception_exit(prev_state);
 	return rc;
+}
+EXPORT_SYMBOL_GPL(hash_page_mm);
+
+int hash_page(unsigned long ea, unsigned long access, unsigned long trap)
+{
+	return hash_page_mm(current->mm, ea, access, trap);
 }
 EXPORT_SYMBOL_GPL(hash_page);
 

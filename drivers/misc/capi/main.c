@@ -103,7 +103,7 @@ void capi_slbia(struct mm_struct *mm)
 		/* TODO: Link mm_struct straight to the context to skip having
 		 * to search for it (but one process/single mm can have
 		 * multiple capi contexts) */
-		for (slice = 0; slice < CAPI_MAX_SLICES; slice++) {
+		for (slice = 0; slice < adapter->slices; slice++) {
 			afu = &adapter->slice[slice];
 			if (!afu->enabled)
 				continue;
