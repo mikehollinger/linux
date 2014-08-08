@@ -71,7 +71,6 @@ static int slbfee_mm(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 	return 0;
 }
 
-/* Should be called with sst_lock held */
 static struct capi_sste*
 find_free_sste(struct capi_sste *primary_group, bool sec_hash,
 	       struct capi_sste *secondary_group, unsigned int *lru)
@@ -109,13 +108,14 @@ find_free_sste(struct capi_sste *primary_group, bool sec_hash,
  *
  * XXX: check for existing segment? in a wrapper? for prefault?
  */
-static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid_data)
+/* Should be called with sst_lock still held since finding the segment to avoid
+ * races with slb invalidations */
+static void capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid_data)
 {
 	unsigned int mask = (ctx->sst_size >> 7)-1; /* SSTP0[SegTableSize] */
 	bool sec_hash = 1;
 	struct capi_sste *sste;
 	unsigned int hash;
-	unsigned long flags;
 
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		sec_hash = !!(capi_p1n_read(ctx->afu, CAPI_PSL_SR_An) & CAPI_PSL_SR_An_SC);
@@ -132,7 +132,6 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 	else /* 256M */
 		hash = (esid_data >> SID_SHIFT) & mask;
 
-	spin_lock_irqsave(&ctx->sst_lock, flags);
 	sste = find_free_sste(ctx->sstp + (  hash         << 3), sec_hash,
 			      ctx->sstp + ((~hash & mask) << 3), &ctx->sst_lru);
 
@@ -141,9 +140,22 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 
 	sste->vsid_data = cpu_to_be64(vsid_data);
 	sste->esid_data = cpu_to_be64(esid_data);
+}
+
+static int capi_fault_segment(struct capi_context_t *ctx, struct mm_struct *mm, u64 ea)
+{
+	u64 vsid_data = 0, esid_data = 0;
+	unsigned long flags;
+	int rc;
+
+	spin_lock_irqsave(&ctx->sst_lock, flags);
+	if (!(rc = slbfee_mm(mm, ea, &esid_data, &vsid_data))) {
+		/* TODO: Don't load if already present */
+		capi_load_segment(ctx, esid_data, vsid_data);
+	}
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
-	return 0;
+	return rc;
 }
 
 static void capi_ack_ae(struct capi_context_t *ctx)
@@ -163,20 +175,15 @@ static void capi_ack_ae(struct capi_context_t *ctx)
 static int capi_handle_segment_miss(struct capi_context_t *ctx, struct mm_struct *mm, u64 ea)
 {
 	int rc;
-	u64 vsid_data = 0, esid_data = 0;
-
-	rc = slbfee_mm(mm, ea, &esid_data, &vsid_data);
 
 	pr_devel("CAPI interrupt: Segment fault pe: %i ea: %#llx\n", ctx->ph, ea);
 
-	if (rc)
+	if ((rc = capi_fault_segment(ctx, mm, ea)))
 		capi_ack_ae(ctx);
 	else {
-		capi_load_segment(ctx, esid_data, vsid_data);
 
 		mb(); /* Not sure if I need this */
 		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
-
 		/* TODO: possibly hash_preload ea */
 	}
 
@@ -249,30 +256,24 @@ out:
 
 static void capi_prefault_one(struct capi_context_t *ctx, u64 ea)
 {
-	u64 vsid_data, esid_data;
 	int rc;
 	struct task_struct *task;
 	struct mm_struct *mm;
 
-	task = get_pid_task(ctx->pid, PIDTYPE_PID);
-	if (!task) {
+	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 		pr_devel("capi_prefault_one unable to get task %i\n", pid_nr(ctx->pid));
 		return;
 	}
-	mm = get_task_mm(task);
-	if (!mm) {
+	if (!(mm = get_task_mm(task))) {
 		pr_devel("capi_prefault_one unable to get mm %i\n", pid_nr(ctx->pid));
 		put_task_struct(task);
 		return;
 	}
 
-	rc = slbfee_mm(mm, ea, &esid_data, &vsid_data);
+	rc = capi_fault_segment(ctx, mm, ea);
+
 	mmput(mm);
 	put_task_struct(task);
-	if (rc)
-		return;
-
-	capi_load_segment(ctx, esid_data, vsid_data);
 }
 
 static u64 next_segment(u64 ea, u64 vsid_data)
@@ -292,19 +293,18 @@ static void capi_prefault_vma(struct capi_context_t *ctx)
 	int rc;
 	struct task_struct *task;
 	struct mm_struct *mm;
-	task = get_pid_task(ctx->pid, PIDTYPE_PID);
-	if (!task) {
+	unsigned long flags;
+	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 		pr_devel("capi_prefault_vma unable to get task %i\n", pid_nr(ctx->pid));
 		return;
 	}
-	mm = get_task_mm(task);
-	if (!mm) {
+	if (!(mm = get_task_mm(task))) {
 		pr_devel("capi_prefault_vm unable to get mm %i\n", pid_nr(ctx->pid));
 		goto out1;
 	}
 
-	down_read(&mm->mmap_sem);	/* TODO: interruptable? */
-
+	spin_lock_irqsave(&ctx->sst_lock, flags);
+	down_read(&mm->mmap_sem);
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		for (ea = vma->vm_start; ea < vma->vm_end;
 				ea = next_segment(ea, vsid_data)) {
@@ -319,8 +319,8 @@ static void capi_prefault_vma(struct capi_context_t *ctx)
 			last_esid_data = esid_data;
 		}
 	}
-
 	up_read(&mm->mmap_sem);
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	mmput(mm);
 out1:
