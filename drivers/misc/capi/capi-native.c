@@ -368,10 +368,11 @@ add_process_element(struct capi_context_t *ctx)
 {
 	int rc = 0;
 
-	pr_devel("%s Adding pe=%i\n", __FUNCTION__, ctx->ph);
 	mutex_lock(&ctx->afu->spa_mutex);
+	pr_devel("%s Adding pe=%i started\n", __FUNCTION__, ctx->ph);
 	if (!(rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_ADD, CAPI_PE_SOFTWARE_STATE_V)))
 		ctx->pe_inserted = true;
+	pr_devel("%s Adding pe=%i finished\n", __FUNCTION__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
@@ -386,11 +387,12 @@ terminate_process_element(struct capi_context_t *ctx)
 	if (!(ctx->elem->software_state & cpu_to_be32(CAPI_PE_SOFTWARE_STATE_V)))
 		return rc;
 
-	pr_devel("%s Terminate pe=%i\n", __FUNCTION__, ctx->ph);
 	mutex_lock(&ctx->afu->spa_mutex);
+	pr_devel("%s Terminate pe=%i started\n", __FUNCTION__, ctx->ph);
 	rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_TERMINATE,
 				    CAPI_PE_SOFTWARE_STATE_V | CAPI_PE_SOFTWARE_STATE_T);
 	ctx->elem->software_state = cpu_to_be32(0); 	/* Remove Valid bit */
+	pr_devel("%s Terminate pe=%i finished\n", __FUNCTION__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
@@ -402,12 +404,12 @@ remove_process_element(struct capi_context_t *ctx)
 {
 	int rc = 0;
 
-	pr_devel("%s Remove pe=%i\n", __FUNCTION__, ctx->ph);
-
 	mutex_lock(&ctx->afu->spa_mutex);
+	pr_devel("%s Remove pe=%i started\n", __FUNCTION__, ctx->ph);
 	if (!(rc = do_process_element_cmd(ctx, CAPI_SPA_SW_CMD_REMOVE, 0)))
 		ctx->pe_inserted = false;
 	slb_invalid(ctx);
+	pr_devel("%s Remove pe=%i finished\n", __FUNCTION__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 
 	return rc;
