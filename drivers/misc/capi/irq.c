@@ -95,6 +95,14 @@ irqreturn_t capi_irq_err(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t schedule_capi_fault(struct capi_context_t *ctx, u64 dsisr, u64 dar)
+{
+	ctx->dsisr = dsisr;
+	ctx->dar = dar;
+	schedule_work(&ctx->fault_work);
+	return IRQ_HANDLED;
+}
+
 static irqreturn_t capi_irq(int irq, void *data)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)data;
@@ -112,23 +120,39 @@ static irqreturn_t capi_irq(int irq, void *data)
 
 	pr_devel("CAPI interrupt %i for afu pe: %i DSISR: %#llx DAR: %#llx\n", irq, ctx->ph, dsisr, dar);
 
-	if (dsisr & CAPI_PSL_DSISR_An_DS)
-		return capi_handle_segment_miss(ctx, dar);
+	if (dsisr & CAPI_PSL_DSISR_An_DS) {
+		/* We don't inherently need to sleep to handle this, but we do
+		 * need to get a ref to the task's mm, which we can't do from
+		 * irq context without the potential for a deadlock since it
+		 * takes the task_lock. An alternate option would be to keep a
+		 * reference to the task's mm the entire time it has capi open,
+		 * but to do that we need to solve the issue where we hold a
+		 * ref to the mm, but the mm can hold a ref to the fd after an
+		 * mmap preventing anything from being cleaned up. */
+		pr_devel("Scheduling segment miss handling for later pe: %i\n", ctx->ph);
+		return schedule_capi_fault(ctx, dsisr, dar);
+	}
+
+	if (dsisr & CAPI_PSL_DSISR_An_M )
+		pr_devel("CAPI interrupt: PTE not found\n");
+	if (dsisr & CAPI_PSL_DSISR_An_P )
+		pr_devel("CAPI interrupt: Storage protection violation\n");
+	if (dsisr & CAPI_PSL_DSISR_An_A )
+		pr_devel("CAPI interrupt: AFU lock access to write through or cache inhibited storage\n");
+	if (dsisr & CAPI_PSL_DSISR_An_S )
+		pr_devel("CAPI interrupt: Access was afu_wr or afu_zero\n");
+	if (dsisr & CAPI_PSL_DSISR_An_K )
+		pr_devel("CAPI interrupt: Access not permitted by virtual page class key protection\n");
+
 	if (dsisr & CAPI_PSL_DSISR_An_DM) {
-		/* XXX: If we aren't in_atomic() we might be able to handle the
-		 * fault immediately, can we at least try to hash_preload? */
-		pr_devel("Scheduling page fault handling for later pe: %i (in_atomic() = %i)...\n",
-			 ctx->ph, in_atomic());
-
-		ctx->dsisr = dsisr;
-		ctx->dar = dar;
-		schedule_work(&ctx->fault_work);
-		return IRQ_HANDLED;
+		/* In some cases we might be able to handle the fault
+		 * immediately if hash_page would succeed, but we still need
+		 * the task's mm, which as above we can't get without a lock */
+		pr_devel("Scheduling page fault handling for later pe: %i\n", ctx->ph);
+		return schedule_capi_fault(ctx, dsisr, dar);
 	}
-
-	if (dsisr & CAPI_PSL_DSISR_An_ST) {
+	if (dsisr & CAPI_PSL_DSISR_An_ST)
 		WARN(1, "CAPI interrupt: Segment Table PTE not found\n");
-	}
 	if (dsisr & CAPI_PSL_DSISR_An_UR)
 		pr_devel("CAPI interrupt: AURP PTE not found\n");
 	if (dsisr & CAPI_PSL_DSISR_An_PE)
@@ -148,19 +172,6 @@ static irqreturn_t capi_irq(int irq, void *data)
 	}
 	if (dsisr & CAPI_PSL_DSISR_An_OC)
 		pr_devel("CAPI interrupt: OS Context Warning\n");
-
-	if ((dsisr & CAPI_PSL_DSISR_An_DS) == 0) {
-		if (dsisr & CAPI_PSL_DSISR_An_M )
-			pr_devel("CAPI interrupt: PTE not found\n");
-		if (dsisr & CAPI_PSL_DSISR_An_P )
-			pr_devel("CAPI interrupt: Storage protection violation\n");
-		if (dsisr & CAPI_PSL_DSISR_An_A )
-			pr_devel("CAPI interrupt: AFU lock access to write through or cache inhibited storage\n");
-		if (dsisr & CAPI_PSL_DSISR_An_S )
-			pr_devel("CAPI interrupt: Access was afu_wr or afu_zero\n");
-		if (dsisr & CAPI_PSL_DSISR_An_K )
-			pr_devel("CAPI interrupt: Access not permitted by virtual page class key protection\n");
-	}
 
 	WARN(1, "Unhandled CAPI IRQ\n");
 

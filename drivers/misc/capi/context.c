@@ -43,7 +43,7 @@ int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool m
 	ctx->master = master;
 	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
-	INIT_WORK(&ctx->fault_work, capi_handle_page_fault);
+	INIT_WORK(&ctx->fault_work, capi_handle_fault);
 
 	init_waitqueue_head(&ctx->wq);
 	spin_lock_init(&ctx->lock);

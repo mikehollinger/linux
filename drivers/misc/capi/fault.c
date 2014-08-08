@@ -19,94 +19,7 @@
 
 #include "capi.h"
 
-#include "../../../arch/powerpc/mm/mmu_decl.h" /* FIXME (for hash_preload) */
-
 bool capi_fault_debug = false;
-
-static void capi_page_fault_error(struct capi_context_t *ctx)
-{
-	unsigned long flags;
-
-	/* Any situation where we should write C to retry later? */
-	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
-
-	spin_lock_irqsave(&ctx->lock, flags);
-	ctx->pending_fault = true;
-	ctx->fault_addr = ctx->dar;
-	spin_unlock_irqrestore(&ctx->lock, flags);
-
-	wake_up_all(&ctx->wq);
-}
-
-extern void capi_slbia(struct mm_struct *mm); /* FIXME */
-
-void capi_handle_page_fault(struct work_struct *fault_work)
-{
-	struct capi_context_t *ctx = container_of(fault_work, struct capi_context_t, fault_work);
-	u64 dsisr = ctx->dsisr;
-	u64 dar = ctx->dar;
-	unsigned flt = 0;
-	int result;
-	struct task_struct *task;
-	struct mm_struct *mm;
-	unsigned long access, flags;
-
-	pr_devel("CAPI BOTTOM HALF handling page fault for afu pe: %i. "
-		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
-
-	task = get_pid_task(ctx->pid, PIDTYPE_PID);
-	if (!task) {
-		pr_devel("capi_handle_page_fault unable to get task %i\n", pid_nr(ctx->pid));
-		return;
-	}
-	mm = get_task_mm(task);
-	if (!mm) {
-		pr_devel("capi_handle_page_fault unable to get mm %i\n", pid_nr(ctx->pid));
-		capi_page_fault_error(ctx);
-		goto out1;
-	}
-
-	/* FIXME: This may sleep, make sure it's handled OK if the application
-	 * is terminated (do I need to inc mm->mm_count?) */
-	result = copro_handle_mm_fault(mm, dar, dsisr, &flt);
-	if (result) {
-		pr_devel("copro_handle_mm_fault failed: %#x\n", result);
-		capi_page_fault_error(ctx);
-		goto out;
-	}
-
-	/*
-	 * update_mmu_cache() will not have loaded the hash since current->trap
-	 * is not a 0x400 or 0x300, so just call hash_page_mm() here.
-	 */
-	access = _PAGE_PRESENT;
-	if (dsisr & CAPI_PSL_DSISR_An_S)
-		access |= _PAGE_RW;
-	if ((!ctx->kernel) || ~(dar & (1ULL << 63)))
-		access |= _PAGE_USER;
-	local_irq_save(flags);
-	hash_page_mm(mm, dar, access, 0x300);
-	local_irq_restore(flags);
-
-	if (ctx->last_dar == dar) {
-		if (ctx->last_dar_count++ > 5) {
-			pr_err("Continuous page faults on same page.  Something horribly wrong!\n");
-			BUG();
-		}
-	} else {
-		ctx->last_dar_count = 0;
-		ctx->last_dar = dar;
-	}
-
-	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
-	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
-
-	/* TODO: Accounting */
-out:
-	mmput(mm);
-out1:
-	put_task_struct(task);
-}
 
 /* FIXME: This shares a lot of code in common with Cell's __spu_trap_data_seg,
  * split it out into a shared copro file. Also, remove the various symbol
@@ -233,6 +146,107 @@ static int capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid
 	return 0;
 }
 
+static void capi_ack_ae(struct capi_context_t *ctx)
+{
+	unsigned long flags;
+
+	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
+
+	spin_lock_irqsave(&ctx->lock, flags);
+	ctx->pending_fault = true;
+	ctx->fault_addr = ctx->dar;
+	spin_unlock_irqrestore(&ctx->lock, flags);
+
+	wake_up_all(&ctx->wq);
+}
+
+static int capi_handle_segment_miss(struct capi_context_t *ctx, struct mm_struct *mm, u64 ea)
+{
+	int rc;
+	u64 vsid_data = 0, esid_data = 0;
+
+	rc = slbfee_mm(mm, ea, &esid_data, &vsid_data);
+
+	pr_devel("CAPI interrupt: Segment fault pe: %i ea: %#llx\n", ctx->ph, ea);
+
+	if (rc)
+		capi_ack_ae(ctx);
+	else {
+		capi_load_segment(ctx, esid_data, vsid_data);
+
+		mb(); /* Not sure if I need this */
+		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
+
+		/* TODO: possibly hash_preload ea */
+	}
+
+	return IRQ_HANDLED;
+}
+
+static void capi_handle_page_fault(struct capi_context_t *ctx, struct mm_struct *mm, u64 dsisr, u64 dar)
+{
+	unsigned flt = 0;
+	int result;
+	unsigned long access, flags;
+
+	/* FIXME: This may sleep, make sure it's handled OK if the application
+	 * is terminated (do I need to inc mm->mm_count?) */
+	if ((result = copro_handle_mm_fault(mm, dar, dsisr, &flt))) {
+		pr_devel("copro_handle_mm_fault failed: %#x\n", result);
+		return capi_ack_ae(ctx);
+	}
+
+	/*
+	 * update_mmu_cache() will not have loaded the hash since current->trap
+	 * is not a 0x400 or 0x300, so just call hash_page_mm() here.
+	 */
+	access = _PAGE_PRESENT;
+	if (dsisr & CAPI_PSL_DSISR_An_S)
+		access |= _PAGE_RW;
+	if ((!ctx->kernel) || ~(dar & (1ULL << 63)))
+		access |= _PAGE_USER;
+	local_irq_save(flags);
+	hash_page_mm(mm, dar, access, 0x300);
+	local_irq_restore(flags);
+
+	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
+	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
+
+	/* TODO: Accounting */
+}
+
+void capi_handle_fault(struct work_struct *fault_work)
+{
+	struct capi_context_t *ctx = container_of(fault_work, struct capi_context_t, fault_work);
+	u64 dsisr = ctx->dsisr;
+	u64 dar = ctx->dar;
+	struct task_struct *task;
+	struct mm_struct *mm;
+
+	pr_devel("CAPI BOTTOM HALF handling fault for afu pe: %i. "
+		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
+
+	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
+		pr_devel("capi_handle_page_fault unable to get task %i\n", pid_nr(ctx->pid));
+		capi_ack_ae(ctx);
+		return;
+	}
+	if (!(mm = get_task_mm(task))) {
+		pr_devel("capi_handle_page_fault unable to get mm %i\n", pid_nr(ctx->pid));
+		capi_ack_ae(ctx);
+		goto out;
+	}
+
+	if (dsisr & CAPI_PSL_DSISR_An_DS)
+		capi_handle_segment_miss(ctx, mm, dar);
+	else if (dsisr & CAPI_PSL_DSISR_An_DM)
+		capi_handle_page_fault(ctx, mm, dsisr, dar);
+
+	mmput(mm);
+out:
+	put_task_struct(task);
+}
+
 static void capi_prefault_one(struct capi_context_t *ctx, u64 ea)
 {
 	u64 vsid_data, esid_data;
@@ -334,51 +348,4 @@ void capi_prefault(struct capi_context_t *ctx, u64 wed)
 		capi_prefault_vma(ctx);
 		break;
 	}
-}
-
-int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea)
-{
-	int rc;
-	unsigned long flags;
-	u64 vsid_data = 0, esid_data = 0;
-	struct task_struct *task;
-	struct mm_struct *mm;
-	task = get_pid_task(ctx->pid, PIDTYPE_PID);
-	if (!task) {
-		pr_devel("capi_handle_segment_miss unable to get task %i\n", pid_nr(ctx->pid));
-		return IRQ_HANDLED;
-	}
-	mm = get_task_mm(task); /* !!!!!!! FIXME: Lockdep tells me I can't do this here, but it would be unsafe not to get a ref on the mm - I might need to schedule this for later !!!!!!!! */
-	if (!mm) {
-		pr_devel("capi_handle_segment_miss unable to get mm %i\n", pid_nr(ctx->pid));
-		goto out1;
-	}
-
-	rc = slbfee_mm(mm, ea, &esid_data, &vsid_data);
-
-	pr_devel("CAPI interrupt: Segment fault pe: %i ea: %#llx\n", ctx->ph, ea);
-
-	if (rc) {
-		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
-
-		spin_lock_irqsave(&ctx->lock, flags);
-		ctx->pending_fault = true;
-		ctx->fault_addr = ea;
-		spin_unlock_irqrestore(&ctx->lock, flags);
-
-		wake_up_all(&ctx->wq);
-	} else {
-		capi_load_segment(ctx, esid_data, vsid_data);
-
-		mb(); /* Not sure if I need this */
-		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
-
-		/* TODO: possibly hash_preload ea */
-	}
-
-	mmput(mm);
-out1:
-	put_task_struct(task);
-
-	return IRQ_HANDLED;
 }

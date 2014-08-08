@@ -402,9 +402,6 @@ struct capi_context_t {
 	u64 dar;
 
 	struct capi_process_element *elem;
-
-	u64 last_dar;
-	int last_dar_count;
 };
 
 struct capi_driver_ops;
@@ -561,8 +558,7 @@ void afu_release_irqs(struct capi_context_t *ctx);
 irqreturn_t capi_irq_err(int irq, void *data);
 irqreturn_t capi_slice_irq_err(int irq, void *data);
 
-int capi_handle_segment_miss(struct capi_context_t *ctx, u64 ea);
-void capi_handle_page_fault(struct work_struct *work);
+void capi_handle_fault(struct work_struct *work);
 void capi_prefault(struct capi_context_t *ctx, u64 wed);
 
 struct capi_t * get_capi_adapter(int num);
