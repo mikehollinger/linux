@@ -78,7 +78,7 @@ afu_release(struct inode *inode, struct file *file)
 {
 	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
 
-	pr_devel("afu_release\n");
+	pr_devel("%s: closing capi file descriptor\n", __FUNCTION__);
 	capi_context_detach(ctx);
 
 	module_put(ctx->afu->adapter->driver->module);
@@ -619,7 +619,6 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device.class = capi_class;
 	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, slice);
 	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
-	afu->device.class = capi_class;
 	afu->device.release = capi_release;
 
 	if ((rc = device_register(&afu->device)))
@@ -636,7 +635,6 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 	afu->device_master.parent = &afu->device;
 	afu->device_master.class = capi_class;
 	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, slice);
-	afu->device_master.class = capi_class;
 	afu->device_master.devt = MKDEV(capi_major, capi_minor + 1 + slice);
 	afu->device_master.release = capi_release;
 
