@@ -42,8 +42,6 @@ static irqreturn_t handle_psl_slice_error(struct capi_context_t *ctx, u64 dsisr,
 	return IRQ_HANDLED;
 }
 
-extern int afu_reset(struct capi_afu_t *afu);
-
 irqreturn_t capi_slice_irq_err(int irq, void *data)
 {
 	struct capi_afu_t *afu = (struct capi_afu_t *)data;
@@ -59,9 +57,8 @@ irqreturn_t capi_slice_irq_err(int irq, void *data)
 	pr_warn("PSL_FIR_RECOV_SLICE_An: 0x%.16llx\n", fir_recov_slice);
 
 	capi_p1n_write(afu, CAPI_PSL_SERR_An, serr);
-	afu_reset(afu);
 
-	BUG_ON(1); // we never recover, so let's just die
+	BUG(); // we never recover, so let's just die
 
 	return IRQ_HANDLED;
 }
@@ -90,7 +87,7 @@ irqreturn_t capi_irq_err(int irq, void *data)
 		capi_slice_irq_err(0, (void *)(&adapter->slice[slice]));
 	}
 
-	BUG_ON(1); // we never recover, so let's just die
+	BUG(); // we never recover, so let's just die
 
 	return IRQ_HANDLED;
 }
