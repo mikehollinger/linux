@@ -189,7 +189,7 @@ static int netvsc_destroy_buf(struct netvsc_device *net_device)
 				   "unable to teardown send buffer's gpadl\n");
 			return ret;
 		}
-		net_device->recv_buf_gpadl_handle = 0;
+		net_device->send_buf_gpadl_handle = 0;
 	}
 	if (net_device->send_buf) {
 		/* Free up the receive buffer */
@@ -378,8 +378,10 @@ static int netvsc_init_buf(struct hv_device *device)
 
 	net_device->send_section_map =
 		kzalloc(net_device->map_words * sizeof(ulong), GFP_KERNEL);
-	if (net_device->send_section_map == NULL)
+	if (net_device->send_section_map == NULL) {
+		ret = -ENOMEM;
 		goto cleanup;
+	}
 
 	goto exit;
 
