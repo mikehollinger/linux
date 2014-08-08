@@ -284,7 +284,7 @@ static int init_implementation_afu_regs(struct capi_afu_t *afu)
 	/* changes recommended per JT and Yoanna 11/15/2013 */
 	capi_p1n_write(afu, CAPI_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
 
-	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0xF000000000000000ULL);
+	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0x8000000000000000ULL);
 
 	return 0;
 }
