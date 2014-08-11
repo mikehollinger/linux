@@ -230,6 +230,10 @@ void capi_handle_fault(struct work_struct *fault_work)
 	struct task_struct *task;
 	struct mm_struct *mm;
 
+	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_DSISR_An) != dsisr);
+	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_DAR_An) != dar);
+	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_PEHandle_An) != ctx->ph);
+
 	pr_devel("CAPI BOTTOM HALF handling fault for afu pe: %i. "
 		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
 
