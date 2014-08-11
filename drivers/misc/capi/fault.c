@@ -234,12 +234,12 @@ void capi_handle_fault(struct work_struct *fault_work)
 		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("capi_handle_page_fault unable to get task %i\n", pid_nr(ctx->pid));
+		pr_devel("capi_handle_fault unable to get task %i\n", pid_nr(ctx->pid));
 		capi_ack_ae(ctx);
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("capi_handle_page_fault unable to get mm %i\n", pid_nr(ctx->pid));
+		pr_devel("capi_handle_fault unable to get mm %i\n", pid_nr(ctx->pid));
 		capi_ack_ae(ctx);
 		goto out;
 	}
@@ -248,6 +248,8 @@ void capi_handle_fault(struct work_struct *fault_work)
 		capi_handle_segment_miss(ctx, mm, dar);
 	else if (dsisr & CAPI_PSL_DSISR_An_DM)
 		capi_handle_page_fault(ctx, mm, dsisr, dar);
+	else
+		BUG();
 
 	mmput(mm);
 out:
