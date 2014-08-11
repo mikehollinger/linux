@@ -122,7 +122,7 @@ static void __detach_context(struct capi_context_t *ctx)
 	list_del(&ctx->list);
 	WARN_ON(capi_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
-	flush_work(&ctx->fault_work);
+	WARN_ON(work_busy(&ctx->fault_work));
 	wake_up_all(&ctx->wq);
 }
 
