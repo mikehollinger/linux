@@ -221,8 +221,6 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 	if (!ctx->attached)
 		return -EIO;
 
-	pr_warn("afu_poll\n");
-
 	poll_wait(file, &ctx->wq, poll);
 
 	pr_devel("afu_poll wait done\n");
@@ -246,8 +244,6 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	unsigned long flags;
 	ssize_t size;
 	DEFINE_WAIT(wait);
-
-	pr_warn("afu_read\n");
 
 	if (!ctx->attached)
 		return -EIO;
