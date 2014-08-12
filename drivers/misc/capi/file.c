@@ -221,8 +221,6 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 	if (!ctx->attached)
 		return -EIO;
 
-	pr_warn("afu_poll\n");
-
 	poll_wait(file, &ctx->wq, poll);
 
 	pr_devel("afu_poll wait done\n");
@@ -247,18 +245,13 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	ssize_t size;
 	DEFINE_WAIT(wait);
 
-	pr_warn("afu_read\n");
-
-	if (!ctx->attached)
-		return -EIO;
-
 	if (count < sizeof(struct capi_event_header))
 		return -EINVAL;
 
 	while (1) {
 		spin_lock_irqsave(&ctx->lock, flags);
 		if (ctx->pending_irq || ctx->pending_fault ||
-		    ctx->pending_afu_err)
+		    ctx->pending_afu_err || !ctx->attached)
 			break;
 		spin_unlock_irqrestore(&ctx->lock, flags);
 
@@ -267,7 +260,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 
 		prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
 		if (!(ctx->pending_irq || ctx->pending_fault ||
-		      ctx->pending_afu_err)) {
+		      ctx->pending_afu_err || !ctx->attached)) {
 			pr_devel("afu_read going to sleep...\n");
 			schedule();
 			pr_devel("afu_read woken up\n");
@@ -312,9 +305,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 			ctx->pending_afu_err = false;
 	} else if (!ctx->attached) {
 		pr_warn("afu_read fatal error\n");
-		event.header.size = sizeof(struct capi_event_afu_error);
-		event.header.type = CAPI_EVENT_AFU_ERROR;
-		event.afu_err.err = ctx->afu_err;
+		return -EIO;
 	} else BUG();
 
 	spin_unlock_irqrestore(&ctx->lock, flags);

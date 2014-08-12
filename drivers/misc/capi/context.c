@@ -119,7 +119,9 @@ static void __detach_context(struct capi_context_t *ctx)
 	if (!test_and_clear_bit(0, &ctx->attached))
 		return;
 
+	spin_lock(&ctx->afu->contexts_lock);
 	list_del(&ctx->list);
+	spin_unlock(&ctx->afu->contexts_lock);
 	WARN_ON(capi_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
 	WARN_ON(work_busy(&ctx->fault_work));
@@ -134,9 +136,7 @@ static void __detach_context(struct capi_context_t *ctx)
  */
 void capi_context_detach(struct capi_context_t *ctx)
 {
-	spin_lock(&ctx->afu->contexts_lock);
 	__detach_context(ctx);
-	spin_unlock(&ctx->afu->contexts_lock);
 }
 
 /*
@@ -146,10 +146,8 @@ void capi_context_detach_all(struct capi_afu_t *afu)
 {
 	struct capi_context_t *ctx, *tmp;
 
-	spin_lock(&afu->contexts_lock);
 	list_for_each_entry_safe(ctx, tmp, &afu->contexts, list)
 		__detach_context(ctx);
-	spin_unlock(&afu->contexts_lock);
 }
 
 void capi_context_free(struct capi_context_t *ctx)

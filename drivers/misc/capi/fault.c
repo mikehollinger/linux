@@ -230,16 +230,20 @@ void capi_handle_fault(struct work_struct *fault_work)
 	struct task_struct *task;
 	struct mm_struct *mm;
 
+	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_DSISR_An) != dsisr);
+	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_DAR_An) != dar);
+	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_PEHandle_An) != ctx->ph);
+
 	pr_devel("CAPI BOTTOM HALF handling fault for afu pe: %i. "
 		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("capi_handle_page_fault unable to get task %i\n", pid_nr(ctx->pid));
+		pr_devel("capi_handle_fault unable to get task %i\n", pid_nr(ctx->pid));
 		capi_ack_ae(ctx);
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("capi_handle_page_fault unable to get mm %i\n", pid_nr(ctx->pid));
+		pr_devel("capi_handle_fault unable to get mm %i\n", pid_nr(ctx->pid));
 		capi_ack_ae(ctx);
 		goto out;
 	}
@@ -248,6 +252,8 @@ void capi_handle_fault(struct work_struct *fault_work)
 		capi_handle_segment_miss(ctx, mm, dar);
 	else if (dsisr & CAPI_PSL_DSISR_An_DM)
 		capi_handle_page_fault(ctx, mm, dsisr, dar);
+	else
+		BUG();
 
 	mmput(mm);
 out:
