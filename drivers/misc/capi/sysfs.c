@@ -8,6 +8,8 @@
 #define to_adapter(d) container_of(d, struct capi_t, device)
 #define master_to_afu(d) container_of(d, struct capi_afu_t, device_master)
 
+/*********  Adapter attributes  **********************************************/
+
 static ssize_t reset_store(struct device *device, struct device_attribute *attr,
 		   const char *buf, size_t count)
 {
@@ -56,14 +58,42 @@ static struct device_attribute adapter_attrs[] = {
 	__ATTR_RW(reset_image_select),
 };
 
+
+/*********  AFU master specific attributes  **********************************/
+
 static ssize_t mmio_size_show_master(struct device *device,
 				     struct device_attribute *attr,
 				     char *buf)
 {
 	struct capi_afu_t *afu = master_to_afu(device);
-
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->psn_size);
 }
+
+static ssize_t pp_mmio_off_show(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct capi_afu_t *afu = master_to_afu(device);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_offset);
+}
+
+static ssize_t pp_mmio_len_show(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct capi_afu_t *afu = master_to_afu(device);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_size);
+}
+
+static struct device_attribute afu_master_attrs[] = {
+	__ATTR(mmio_size, S_IRUGO, mmio_size_show_master, NULL),
+	__ATTR_RO(pp_mmio_off),
+	__ATTR_RO(pp_mmio_len),
+};
+
+
+/*********  AFU attributes  **************************************************/
+
 static ssize_t mmio_size_show(struct device *device,
 			      struct device_attribute *attr,
 			      char *buf)
@@ -87,19 +117,61 @@ static ssize_t reset_store_afu(struct device *device,
 	return count;
 }
 
-static struct device_attribute afu_master_attrs[] = {
-	__ATTR(mmio_size, S_IRUGO, mmio_size_show_master, NULL),
-	//__ATTR_RO(pp_mmio_off),
-	//__ATTR_RO(pp_mmio_len),
-};
+static ssize_t irqs_min_show(struct device *device,
+			     struct device_attribute *attr,
+			     char *buf)
+{
+	struct capi_afu_t *afu = to_afu(device);
+	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->pp_irqs);
+}
+
+static ssize_t supported_modes_show(struct device *device,
+				    struct device_attribute *attr,
+				    char *buf)
+{
+	struct capi_afu_t *afu = to_afu(device);
+	char *p = buf, *end = buf + PAGE_SIZE;
+
+	if (afu->afu_dedicated_mode)
+		p += scnprintf(p, end - p, "dedicated_process\n");
+	if (afu->afu_directed_mode)
+		p += scnprintf(p, end - p, "afu_directed\n");
+	return (p - buf);
+}
+
+static ssize_t mode_show(struct device *device,
+			 struct device_attribute *attr,
+			 char *buf)
+{
+	struct capi_afu_t *afu = to_afu(device);
+
+	if (afu->afu_dedicated_mode)
+		return scnprintf(buf, PAGE_SIZE, "dedicated_process\n");
+	if (afu->afu_directed_mode)
+		return scnprintf(buf, PAGE_SIZE, "afu_directed\n");
+	return -EINVAL;
+}
+
+static ssize_t mode_store(struct device *device,
+		          struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	if (!strncmp(buf, "dedicated_process", 17))
+		pr_warn("capi: switching to dedicated mode live not implemented yet\n");
+	if (!strncmp(buf, "afu_directed", 12))
+		pr_warn("capi: switching to directed mode live not implemented yet\n");
+	return -EINVAL;
+}
 
 static struct device_attribute afu_attrs[] = {
 	__ATTR_RO(mmio_size),
-	//__ATTR_RO(min_irqs),
-	//__ATTR_RO(supported_modes),
-	//__ATTR_RW(mode),
-	__ATTR(reset, S_IWUGO, NULL, reset_store_afu),
+	__ATTR_RO(irqs_min),
+	__ATTR_RO(supported_modes),
+	__ATTR_RW(mode),
+	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),
 };
+
+
 
 int capi_sysfs_adapter_add(struct capi_t *adapter)
 {
@@ -126,6 +198,9 @@ void capi_sysfs_adapter_remove(struct capi_t *adapter)
 int capi_sysfs_afu_add(struct capi_afu_t *afu)
 {
 	int afu_attr, mstr_attr, rc = 0;
+
+	/* FIXME: If the AFU descriptor is missing, don't create attributes
+	 * that come from it */
 
 	for (afu_attr = 0; afu_attr < ARRAY_SIZE(afu_attrs); afu_attr++) {
 		if ((rc = device_create_file(&afu->device, &afu_attrs[afu_attr])))
