@@ -52,9 +52,9 @@ irqreturn_t capi_slice_irq_err(int irq, void *data)
 	serr = capi_p1n_read(afu, CAPI_PSL_SERR_An);
 	fir_slice = capi_p1n_read(afu, CAPI_PSL_FIR_SLICE_An);
 	fir_recov_slice = capi_p1n_read(afu, CAPI_PSL_R_FIR_SLICE_An);
-	pr_warn("PSL_SERR_An: 0x%.16llx\n", serr);
-	pr_warn("PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
-	pr_warn("PSL_FIR_RECOV_SLICE_An: 0x%.16llx\n", fir_recov_slice);
+	pr_crit("PSL_SERR_An: 0x%.16llx\n", serr);
+	pr_crit("PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
+	pr_crit("PSL_FIR_RECOV_SLICE_An: 0x%.16llx\n", fir_recov_slice);
 
 	capi_p1n_write(afu, CAPI_PSL_SERR_An, serr);
 
@@ -72,7 +72,7 @@ irqreturn_t capi_irq_err(int irq, void *data)
 	WARN(1, "CAPI ERROR interrupt %i\n", irq);
 
 	err_ivte = capi_p1_read(adapter, CAPI_PSL_ErrIVTE);
-	pr_warn("PSL_ErrIVTE: 0x%.16llx\n", err_ivte);
+	pr_crit("PSL_ErrIVTE: 0x%.16llx\n", err_ivte);
 
 	pr_crit("STOPPING CAPI TRACE\n");
 	capi_stop_trace(adapter);
@@ -80,7 +80,7 @@ irqreturn_t capi_irq_err(int irq, void *data)
 	fir1 = capi_p1_read(adapter, CAPI_PSL_FIR1);
 	fir2 = capi_p1_read(adapter, CAPI_PSL_FIR2);
 
-	pr_warn("PSL_FIR1: 0x%.16llx\nPSL_FIR2: 0x%.16llx\n", fir1, fir2);
+	pr_crit("PSL_FIR1: 0x%.16llx\nPSL_FIR2: 0x%.16llx\n", fir1, fir2);
 
 	for (slice = 0; slice < adapter->slices; slice++) {
 		pr_warn("SLICE %i\n", slice);
