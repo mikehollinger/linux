@@ -5,7 +5,7 @@
 #include <linux/slab.h>
 #include <linux/of_address.h>
 
-#include "capi.h"
+#include "cxl.h"
 
 static int read_handle(struct device_node *np, u64 *handle)
 {
@@ -35,9 +35,9 @@ static u64 read_addr(struct device_node *np, int index, u64 *size)
 }
 
 static int __init
-init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
+init_afu_of(struct cxl_t *adapter, int slice, struct device_node *afu_np)
 {
-	struct capi_afu_t *afu;
+	struct cxl_afu_t *afu;
 	const __be32 *prop;
 	u64 handle = 0;
 	u64 p1n_base = 0, p1n_size = 0; /* XXX: BML specific - drop for upstream */
@@ -66,7 +66,7 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 	irq_start = be32_to_cpu(prop[0]);
 	irq_count = be32_to_cpu(prop[1]);
 
-	if ((rc = capi_map_slice_regs(afu,
+	if ((rc = cxl_map_slice_regs(afu,
 			p1n_base, p1n_size,
 			p2n_base, p2n_size,
 			psn_base, psn_size,
@@ -74,31 +74,31 @@ init_afu_of(struct capi_t *adapter, int slice, struct device_node *afu_np)
 		return rc;
 	}
 
-	return capi_init_afu(afu, handle, 0);
+	return cxl_init_afu(afu, handle, 0);
 }
 
-static struct capi_driver_ops capi_of_driver_ops = {
+static struct cxl_driver_ops cxl_of_driver_ops = {
 	.module = THIS_MODULE,
 };
 
-static int __init init_capi_of(void)
+static int __init init_cxl_of(void)
 {
 	struct device_node *np = NULL;
 	struct device_node *afu_np = NULL;
-	struct capi_t *adapter;
+	struct cxl_t *adapter;
 	const __be32 *prop;
 	int slice;
 	irq_hw_number_t err_hwirq = 0; /* XXX: Drop for upstream */
 	u64 p1_base = 0, p1_size = 0; /* XXX: BML specific - drop for upstream */
 	int ret = -ENODEV;
-	struct capi_hv_data hv_data;
-	struct capi_native_data native_data;
+	struct cxl_hv_data hv_data;
+	struct cxl_native_data native_data;
 
-	pr_devel("init_capi_of\n");
+	pr_devel("init_cxl_of\n");
 
-	if (!(adapter = kmalloc(sizeof(struct capi_t), GFP_KERNEL)))
+	if (!(adapter = kmalloc(sizeof(struct cxl_t), GFP_KERNEL)))
 		return -ENOMEM;
-	memset(adapter, 0, sizeof(struct capi_t));
+	memset(adapter, 0, sizeof(struct cxl_t));
 
 	while ((np = of_find_compatible_node(np, NULL, "ibm,coherent-platform-facility"))) {
 		/* FIXME: Restructure to avoid needing to iterate over AFUs twice */
@@ -116,13 +116,13 @@ static int __init init_capi_of(void)
 			native_data.p2_base = 0;
 			native_data.p2_size = 0;
 			native_data.err_hwirq = err_hwirq;
-			if ((ret = capi_init_adapter(adapter, &capi_of_driver_ops, NULL, slice, &native_data)))
+			if ((ret = cxl_init_adapter(adapter, &cxl_of_driver_ops, NULL, slice, &native_data)))
 				goto bail;
 		} else {
 			if (!(ret = read_handle(np, &hv_data.handle)))
 				goto bail;
 
-			if ((ret = capi_init_adapter(adapter, &capi_of_driver_ops, NULL, slice, &hv_data)))
+			if ((ret = cxl_init_adapter(adapter, &cxl_of_driver_ops, NULL, slice, &hv_data)))
 				goto bail;
 		}
 
@@ -138,14 +138,14 @@ bail:
 	return ret;
 }
 
-static void exit_capi_of(void)
+static void exit_cxl_of(void)
 {
-	pr_warn("exit_capi_of\n");
+	pr_warn("exit_cxl_of\n");
 	/* FIXME: Free allocated adapters */
 }
 
-module_init(init_capi_of);
-module_exit(exit_capi_of);
+module_init(init_cxl_of);
+module_exit(exit_cxl_of);
 
 MODULE_DESCRIPTION("IBM Coherent Accelerator");
 MODULE_AUTHOR("Ian Munsie <imunsie@au1.ibm.com>");

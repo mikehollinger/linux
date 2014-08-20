@@ -12,14 +12,14 @@
 #include <linux/moduleparam.h>
 
 #undef MODULE_PARAM_PREFIX
-#define MODULE_PARAM_PREFIX "capi" "."
+#define MODULE_PARAM_PREFIX "cxl" "."
 #include <asm/current.h>
 #include <asm/copro.h>
 #include <asm/mmu.h>
 
-#include "capi.h"
+#include "cxl.h"
 
-bool capi_fault_debug = false;
+bool cxl_fault_debug = false;
 
 /* FIXME: This shares a lot of code in common with Cell's __spu_trap_data_seg,
  * split it out into a shared copro file. Also, remove the various symbol
@@ -71,12 +71,12 @@ static int slbfee_mm(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 	return 0;
 }
 
-static struct capi_sste*
-find_free_sste(struct capi_sste *primary_group, bool sec_hash,
-	       struct capi_sste *secondary_group, unsigned int *lru)
+static struct cxl_sste*
+find_free_sste(struct cxl_sste *primary_group, bool sec_hash,
+	       struct cxl_sste *secondary_group, unsigned int *lru)
 {
 	unsigned int i, entry;
-	struct capi_sste *sste, *group = primary_group;
+	struct cxl_sste *sste, *group = primary_group;
 
 	for (i = 0; i < 2; i++) {
 		for (entry = 0; entry < 8; entry++) {
@@ -100,7 +100,7 @@ find_free_sste(struct capi_sste *primary_group, bool sec_hash,
 
 /*
  * XXX: stab.c contains similar code, however after some investigation it is
- * apparent that there are quite a few differences between CAPI's Segment
+ * apparent that there are quite a few differences between CXL's Segment
  * Storage Table and power3's stab, so it is non-trivial to refactor that code
  * to be useful here - I leave that as an excercise for another day.
  *
@@ -110,15 +110,15 @@ find_free_sste(struct capi_sste *primary_group, bool sec_hash,
  */
 /* Should be called with sst_lock still held since finding the segment to avoid
  * races with slb invalidations */
-static void capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsid_data)
+static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data, u64 vsid_data)
 {
 	unsigned int mask = (ctx->sst_size >> 7)-1; /* SSTP0[SegTableSize] */
 	bool sec_hash = 1;
-	struct capi_sste *sste;
+	struct cxl_sste *sste;
 	unsigned int hash;
 
 	if (cpu_has_feature(CPU_FTR_HVMODE))
-		sec_hash = !!(capi_p1n_read(ctx->afu, CAPI_PSL_SR_An) & CAPI_PSL_SR_An_SC);
+		sec_hash = !!(cxl_p1n_read(ctx->afu, CXL_PSL_SR_An) & CXL_PSL_SR_An_SC);
 	/* else {
 	 *	It's the inverse of the high bit of the second non-length byte
 	 *	in the sixth optional vector passed in ibm_architecture_vec to
@@ -135,14 +135,14 @@ static void capi_load_segment(struct capi_context_t *ctx, u64 esid_data, u64 vsi
 	sste = find_free_sste(ctx->sstp + (  hash         << 3), sec_hash,
 			      ctx->sstp + ((~hash & mask) << 3), &ctx->sst_lru);
 
-	pr_devel("CAPI Populating SST[%li]: %#llx %#llx\n",
+	pr_devel("CXL Populating SST[%li]: %#llx %#llx\n",
 			sste - ctx->sstp, vsid_data, esid_data);
 
 	sste->vsid_data = cpu_to_be64(vsid_data);
 	sste->esid_data = cpu_to_be64(esid_data);
 }
 
-static int capi_fault_segment(struct capi_context_t *ctx, struct mm_struct *mm, u64 ea)
+static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm, u64 ea)
 {
 	u64 vsid_data = 0, esid_data = 0;
 	unsigned long flags;
@@ -151,18 +151,18 @@ static int capi_fault_segment(struct capi_context_t *ctx, struct mm_struct *mm, 
 	spin_lock_irqsave(&ctx->sst_lock, flags);
 	if (!(rc = slbfee_mm(mm, ea, &esid_data, &vsid_data))) {
 		/* TODO: Don't load if already present */
-		capi_load_segment(ctx, esid_data, vsid_data);
+		cxl_load_segment(ctx, esid_data, vsid_data);
 	}
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	return rc;
 }
 
-static void capi_ack_ae(struct capi_context_t *ctx)
+static void cxl_ack_ae(struct cxl_context_t *ctx)
 {
 	unsigned long flags;
 
-	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_AE, 0);
+	cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_AE, 0);
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	ctx->pending_fault = true;
@@ -172,25 +172,25 @@ static void capi_ack_ae(struct capi_context_t *ctx)
 	wake_up_all(&ctx->wq);
 }
 
-static int capi_handle_segment_miss(struct capi_context_t *ctx, struct mm_struct *mm, u64 ea)
+static int cxl_handle_segment_miss(struct cxl_context_t *ctx, struct mm_struct *mm, u64 ea)
 {
 	int rc;
 
-	pr_devel("CAPI interrupt: Segment fault pe: %i ea: %#llx\n", ctx->ph, ea);
+	pr_devel("CXL interrupt: Segment fault pe: %i ea: %#llx\n", ctx->ph, ea);
 
-	if ((rc = capi_fault_segment(ctx, mm, ea)))
-		capi_ack_ae(ctx);
+	if ((rc = cxl_fault_segment(ctx, mm, ea)))
+		cxl_ack_ae(ctx);
 	else {
 
 		mb(); /* Not sure if I need this */
-		capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
+		cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
 		/* TODO: possibly hash_preload ea */
 	}
 
 	return IRQ_HANDLED;
 }
 
-static void capi_handle_page_fault(struct capi_context_t *ctx, struct mm_struct *mm, u64 dsisr, u64 dar)
+static void cxl_handle_page_fault(struct cxl_context_t *ctx, struct mm_struct *mm, u64 dsisr, u64 dar)
 {
 	unsigned flt = 0;
 	int result;
@@ -200,7 +200,7 @@ static void capi_handle_page_fault(struct capi_context_t *ctx, struct mm_struct 
 	 * is terminated (do I need to inc mm->mm_count?) */
 	if ((result = copro_handle_mm_fault(mm, dar, dsisr, &flt))) {
 		pr_devel("copro_handle_mm_fault failed: %#x\n", result);
-		return capi_ack_ae(ctx);
+		return cxl_ack_ae(ctx);
 	}
 
 	/*
@@ -208,7 +208,7 @@ static void capi_handle_page_fault(struct capi_context_t *ctx, struct mm_struct 
 	 * is not a 0x400 or 0x300, so just call hash_page_mm() here.
 	 */
 	access = _PAGE_PRESENT;
-	if (dsisr & CAPI_PSL_DSISR_An_S)
+	if (dsisr & CXL_PSL_DSISR_An_S)
 		access |= _PAGE_RW;
 	if ((!ctx->kernel) || ~(dar & (1ULL << 63)))
 		access |= _PAGE_USER;
@@ -217,41 +217,41 @@ static void capi_handle_page_fault(struct capi_context_t *ctx, struct mm_struct 
 	local_irq_restore(flags);
 
 	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
-	capi_ops->ack_irq(ctx, CAPI_PSL_TFC_An_R, 0);
+	cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
 
 	/* TODO: Accounting */
 }
 
-void capi_handle_fault(struct work_struct *fault_work)
+void cxl_handle_fault(struct work_struct *fault_work)
 {
-	struct capi_context_t *ctx = container_of(fault_work, struct capi_context_t, fault_work);
+	struct cxl_context_t *ctx = container_of(fault_work, struct cxl_context_t, fault_work);
 	u64 dsisr = ctx->dsisr;
 	u64 dar = ctx->dar;
 	struct task_struct *task;
 	struct mm_struct *mm;
 
-	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_DSISR_An) != dsisr);
-	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_DAR_An) != dar);
-	BUG_ON(capi_p2n_read(ctx->afu, CAPI_PSL_PEHandle_An) != ctx->ph);
+	BUG_ON(cxl_p2n_read(ctx->afu, CXL_PSL_DSISR_An) != dsisr);
+	BUG_ON(cxl_p2n_read(ctx->afu, CXL_PSL_DAR_An) != dar);
+	BUG_ON(cxl_p2n_read(ctx->afu, CXL_PSL_PEHandle_An) != ctx->ph);
 
-	pr_devel("CAPI BOTTOM HALF handling fault for afu pe: %i. "
+	pr_devel("CXL BOTTOM HALF handling fault for afu pe: %i. "
 		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("capi_handle_fault unable to get task %i\n", pid_nr(ctx->pid));
-		capi_ack_ae(ctx);
+		pr_devel("cxl_handle_fault unable to get task %i\n", pid_nr(ctx->pid));
+		cxl_ack_ae(ctx);
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("capi_handle_fault unable to get mm %i\n", pid_nr(ctx->pid));
-		capi_ack_ae(ctx);
+		pr_devel("cxl_handle_fault unable to get mm %i\n", pid_nr(ctx->pid));
+		cxl_ack_ae(ctx);
 		goto out;
 	}
 
-	if (dsisr & CAPI_PSL_DSISR_An_DS)
-		capi_handle_segment_miss(ctx, mm, dar);
-	else if (dsisr & CAPI_PSL_DSISR_An_DM)
-		capi_handle_page_fault(ctx, mm, dsisr, dar);
+	if (dsisr & CXL_PSL_DSISR_An_DS)
+		cxl_handle_segment_miss(ctx, mm, dar);
+	else if (dsisr & CXL_PSL_DSISR_An_DM)
+		cxl_handle_page_fault(ctx, mm, dsisr, dar);
 	else
 		BUG();
 
@@ -260,23 +260,23 @@ out:
 	put_task_struct(task);
 }
 
-static void capi_prefault_one(struct capi_context_t *ctx, u64 ea)
+static void cxl_prefault_one(struct cxl_context_t *ctx, u64 ea)
 {
 	int rc;
 	struct task_struct *task;
 	struct mm_struct *mm;
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("capi_prefault_one unable to get task %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_one unable to get task %i\n", pid_nr(ctx->pid));
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("capi_prefault_one unable to get mm %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_one unable to get mm %i\n", pid_nr(ctx->pid));
 		put_task_struct(task);
 		return;
 	}
 
-	rc = capi_fault_segment(ctx, mm, ea);
+	rc = cxl_fault_segment(ctx, mm, ea);
 
 	mmput(mm);
 	put_task_struct(task);
@@ -292,7 +292,7 @@ static u64 next_segment(u64 ea, u64 vsid_data)
 	return ea++;
 }
 
-static void capi_prefault_vma(struct capi_context_t *ctx)
+static void cxl_prefault_vma(struct cxl_context_t *ctx)
 {
 	u64 ea, vsid_data, esid_data, last_esid_data = 0;
 	struct vm_area_struct *vma;
@@ -301,11 +301,11 @@ static void capi_prefault_vma(struct capi_context_t *ctx)
 	struct mm_struct *mm;
 	unsigned long flags;
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("capi_prefault_vma unable to get task %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_vma unable to get task %i\n", pid_nr(ctx->pid));
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("capi_prefault_vm unable to get mm %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_vm unable to get mm %i\n", pid_nr(ctx->pid));
 		goto out1;
 	}
 
@@ -321,7 +321,7 @@ static void capi_prefault_vma(struct capi_context_t *ctx)
 			if (last_esid_data == esid_data)
 				continue;
 
-			capi_load_segment(ctx, esid_data, vsid_data);
+			cxl_load_segment(ctx, esid_data, vsid_data);
 			last_esid_data = esid_data;
 		}
 	}
@@ -334,24 +334,24 @@ out1:
 }
 
 enum pref{
-	CAPI_PREFAULT_NONE,
-	CAPI_PREFAULT_WED,
-	CAPI_PREFAULT_MAPPED,
+	CXL_PREFAULT_NONE,
+	CXL_PREFAULT_WED,
+	CXL_PREFAULT_MAPPED,
 };
-static int prefault_how = CAPI_PREFAULT_NONE;
+static int prefault_how = CXL_PREFAULT_NONE;
 module_param(prefault_how, int, 0644);
 MODULE_PARM_DESC(prefault_how, "How much to prefault on afu start: "
     "0 = none 1 = wed 2 = all currently mapped"
     /* "all wed segments cached (grub afu), all possible ea current slice" */);
 
-void capi_prefault(struct capi_context_t *ctx, u64 wed)
+void cxl_prefault(struct cxl_context_t *ctx, u64 wed)
 {
 	switch(prefault_how) {
-	case CAPI_PREFAULT_WED:
-		capi_prefault_one(ctx, wed);
+	case CXL_PREFAULT_WED:
+		cxl_prefault_one(ctx, wed);
 		break;
-	case CAPI_PREFAULT_MAPPED:
-		capi_prefault_vma(ctx);
+	case CXL_PREFAULT_MAPPED:
+		cxl_prefault_vma(ctx);
 		break;
 	}
 }

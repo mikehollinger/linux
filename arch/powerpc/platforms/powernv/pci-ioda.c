@@ -1,7 +1,7 @@
 /*
- * -- CAPI TODO --
+ * -- CXL TODO --
  * On switchover:
- * - OPAL call to switch PBH to capi mode
+ * - OPAL call to switch PBH to cxl mode
  * - Disable EEH
  * - Set PE (partition endpoint) for all MSIs to 0
  * - Run the marked code block to set the IRQ chip
@@ -157,7 +157,7 @@ struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev)
 }
 EXPORT_SYMBOL(pnv_pci_to_phb_node);
 
-int pnv_phb_to_capi(struct pci_dev *dev)
+int pnv_phb_to_cxl(struct pci_dev *dev)
 {
 	struct device_node *np;
 	struct pnv_ioda_pe *pe;
@@ -165,7 +165,7 @@ int pnv_phb_to_capi(struct pci_dev *dev)
 	u64 phb_id;
 	int rc;
 
-	dev_info(&dev->dev, "switch phb to capi\n");
+	dev_info(&dev->dev, "switch phb to cxl\n");
 
 	if (!(np = pnv_pci_to_phb_node(dev)))
 		return -ENODEV;
@@ -182,14 +182,14 @@ int pnv_phb_to_capi(struct pci_dev *dev)
 	}
 	dev_info(&dev->dev, "     pe : %i\n", pe->pe_number);
 
-	rc = opal_pci_set_phb_capi_mode(phb_id, 1, pe->pe_number);
-	dev_info(&dev->dev, "opal_pci_set_phb_capi_mode: %i", rc);
+	rc = opal_pci_set_phb_cxl_mode(phb_id, 1, pe->pe_number);
+	dev_info(&dev->dev, "opal_pci_set_phb_cxl_mode: %i", rc);
 
 out:
 	of_node_put(np);
 	return rc;
 }
-EXPORT_SYMBOL(pnv_phb_to_capi);
+EXPORT_SYMBOL(pnv_phb_to_cxl);
 #endif /* CONFIG_PCI_MSI */
 
 static int pnv_ioda_configure_pe(struct pnv_phb *phb, struct pnv_ioda_pe *pe)
@@ -987,7 +987,7 @@ static void set_msi_irq_chip(struct pnv_phb *phb, unsigned int virq)
 	}
 }
 
-int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
+int pnv_cxl_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 		unsigned int hwirq, unsigned int virq)
 {
 	unsigned int xive_num = hwirq - phb->msi_base;
@@ -1008,7 +1008,7 @@ int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 
 	return 0;
 }
-EXPORT_SYMBOL(pnv_capi_ioda_msi_setup);
+EXPORT_SYMBOL(pnv_cxl_ioda_msi_setup);
 
 static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 				  unsigned int hwirq, unsigned int virq,
@@ -1032,7 +1032,7 @@ static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 	if (pdn && pdn->force_32bit_msi)
 		is_64 = 0;
 
-/* CAPI TODO: Set all PEs to 0 on switch */
+/* CXL TODO: Set all PEs to 0 on switch */
 	/* Assign XIVE to PE */
 	rc = opal_pci_set_xive_pe(phb->opal_id, pe->pe_number, xive_num);
 	if (rc) {

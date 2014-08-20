@@ -1,16 +1,16 @@
-#ifndef _UAPI_ASM_CAPI_H
-#define _UAPI_ASM_CAPI_H
+#ifndef _UAPI_ASM_CXL_H
+#define _UAPI_ASM_CXL_H
 
 #include <linux/types.h>
 
 /* ioctls */
 
-/* Argument is a pointer to a struct capi_ioctl_start_work */
-#define CAPI_IOCTL_START_WORK      0
-#define CAPI_IOCTL_LOAD_AFU_IMAGE  1
-#define CAPI_IOCTL_CHECK_ERROR     2
+/* Argument is a pointer to a struct cxl_ioctl_start_work */
+#define CXL_IOCTL_START_WORK      0
+#define CXL_IOCTL_LOAD_AFU_IMAGE  1
+#define CXL_IOCTL_CHECK_ERROR     2
 
-struct capi_ioctl_start_work {
+struct cxl_ioctl_start_work {
 	__u64 wed;
 	__u64 amr;
 	__u64 ctx_save_ptr; /* Ignored in dedicated process model */
@@ -23,22 +23,22 @@ struct capi_ioctl_start_work {
 	__u64 reserved4;
 };
 
-struct capi_ioctl_load_afu_image {
+struct cxl_ioctl_load_afu_image {
 	__u64 vaddress;
 	__u64 length;
 };
 
 /* events from read() */
 
-enum capi_event_type {
-	CAPI_EVENT_READ_FAIL     = -1,
-	CAPI_EVENT_RESERVED      = 0,
-	CAPI_EVENT_AFU_INTERRUPT = 1,
-	CAPI_EVENT_DATA_STORAGE  = 2,
-	CAPI_EVENT_AFU_ERROR     = 3,
+enum cxl_event_type {
+	CXL_EVENT_READ_FAIL     = -1,
+	CXL_EVENT_RESERVED      = 0,
+	CXL_EVENT_AFU_INTERRUPT = 1,
+	CXL_EVENT_DATA_STORAGE  = 2,
+	CXL_EVENT_AFU_ERROR     = 3,
 };
 
-struct capi_event_header {
+struct cxl_event_header {
 	__u32 type;
 	__u16 size;
 	__u16 process_element;
@@ -54,11 +54,11 @@ struct capi_event_header {
  * an event and then cast it into the specific event structure from
  * header->type.
  *
- * This has been deprecated in favour of using struct capi_event with each
+ * This has been deprecated in favour of using struct cxl_event with each
  * possible event type in a union.
  */
-struct capi_event_uncast {
-	struct capi_event_header header;
+struct cxl_event_uncast {
+	struct cxl_event_header header;
 	__u64 reserved1;
 	__u64 reserved2;
 	__u64 reserved3;
@@ -66,8 +66,8 @@ struct capi_event_uncast {
 };
 #endif
 
-struct capi_event_afu_interrupt {
-	struct capi_event_header header;
+struct cxl_event_afu_interrupt {
+	struct cxl_event_header header;
 	__u16 irq; /* Raised AFU interrupt number */
 	__u16 reserved1;
 	__u32 reserved2;
@@ -76,28 +76,28 @@ struct capi_event_afu_interrupt {
 	__u64 reserved5;
 };
 
-struct capi_event_data_storage {
-	struct capi_event_header header;
+struct cxl_event_data_storage {
+	struct cxl_event_header header;
 	__u64 addr;
 	__u64 reserved1;
 	__u64 reserved2;
 	__u64 reserved3;
 };
 
-struct capi_event_afu_error {
-	struct capi_event_header header;
+struct cxl_event_afu_error {
+	struct cxl_event_header header;
 	__u64 err;
 	__u64 reserved1;
 	__u64 reserved2;
 	__u64 reserved3;
 };
 
-struct capi_event {
+struct cxl_event {
 	union {
-		struct capi_event_header header;
-		struct capi_event_afu_interrupt irq;
-		struct capi_event_data_storage fault;
-		struct capi_event_afu_error afu_err;
+		struct cxl_event_header header;
+		struct cxl_event_afu_interrupt irq;
+		struct cxl_event_data_storage fault;
+		struct cxl_event_afu_error afu_err;
 	};
 };
 

@@ -721,7 +721,7 @@ unsigned char ibm_architecture_vec[] = {
 	/* option vector 6: IBM PAPR hints */
 	4 - 2,				/* length */
 	0,
-	0,				/* NOTE: CAPI assumes this is 0 */
+	0,				/* NOTE: CXL assumes this is 0 */
 	OV6_LINUX,
 
 };

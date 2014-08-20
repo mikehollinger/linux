@@ -1,5 +1,5 @@
-#ifndef _CAPI_HCALLS_
-#define _CAPI_HCALLS_
+#ifndef _CXL_HCALLS_
+#define _CXL_HCALLS_
 
 #include <linux/compiler.h>
 #include <linux/types.h>
@@ -9,7 +9,7 @@
 /* Select RIT version when different to PAPR */
 #define RIT
 
-#define CAPI_HCALL_TIMEOUT 5000
+#define CXL_HCALL_TIMEOUT 5000
 
 #define H_ATTACH_CA_PROCESS    0x344
 #define H_CONTROL_CA_FUNCTION  0x348
@@ -47,8 +47,8 @@
  * I've disabled most with preprocessor where their order matched another
  * variable, but I'll need to handle the last one specially.
  */
-#define CAPI_PROCESS_ELEMENT_VERSION 1
-struct capi_process_element_hcall {
+#define CXL_PROCESS_ELEMENT_VERSION 1
+struct cxl_process_element_hcall {
 	__be64 version;
 #if 1 /* FIXME: Replace this bitfield! */
 	__be64 csrpValid:1,
@@ -65,11 +65,11 @@ struct capi_process_element_hcall {
 	__be32 pslVirtualIsn;
 	u8     applicationVirtualIsnBitmap[256];
 	u8     reserved1[144];
-	struct capi_process_element_common common;
+	struct cxl_process_element_common common;
 	u8     reserved4[12];
 } __packed;
 
-#define CAPI_H_WAIT_UNTIL_DONE(rc, ret, fn, ...)                             \
+#define CXL_H_WAIT_UNTIL_DONE(rc, ret, fn, ...)                             \
 {                                                                            \
         unsigned long retbuf[PLPAR_HCALL_BUFSIZE];                           \
 	unsigned int delay, total_delay = 0;                                 \
@@ -85,8 +85,8 @@ struct capi_process_element_hcall {
 		else                                                         \
 			delay = get_longbusy_msecs(rc);                      \
 		total_delay += delay;                                        \
-		if (total_delay > CAPI_HCALL_TIMEOUT) {                      \
-			WARN(1, "Warning: Giving up waiting for CAPI hcall " \
+		if (total_delay > CXL_HCALL_TIMEOUT) {                      \
+			WARN(1, "Warning: Giving up waiting for CXL hcall " \
 				"%#x after %u msec\n", fn, total_delay);     \
 			return -EBUSY;                                       \
 		}                                                            \
@@ -97,12 +97,12 @@ struct capi_process_element_hcall {
 
 
 static inline long
-_capi_h_attach_process(u64 unit_address, struct capi_process_element_hcall *element,
+_cxl_h_attach_process(u64 unit_address, struct cxl_process_element_hcall *element,
 		       u64 *process_token)
 {
 	long rc;
 #if 0
-	CAPI_H_WAIT_UNTIL_DONE(rc, process_token,  H_ATTACH_CA_PROCESS,
+	CXL_H_WAIT_UNTIL_DONE(rc, process_token,  H_ATTACH_CA_PROCESS,
 			       unit_address, virt_to_phys(element));
 	/* XXX This is just an assertion - I noticed PAPR states this is 4 bytes: */
 	WARN_ON_ONCE(*process_token & 0xffffffff00000000);
@@ -126,7 +126,7 @@ _capi_h_attach_process(u64 unit_address, struct capi_process_element_hcall *elem
 		else
 			delay = get_longbusy_msecs(rc);
 		total_delay += delay;
-		if (total_delay > CAPI_HCALL_TIMEOUT) {
+		if (total_delay > CXL_HCALL_TIMEOUT) {
 			WARN(1, "Warning: Giving up waiting for "
 				"H_ATTACH_CA_PROCESS after %u msec\n",
 				total_delay);
@@ -142,29 +142,29 @@ _capi_h_attach_process(u64 unit_address, struct capi_process_element_hcall *elem
 
 /* NOTE: element must be a logical real address, and must be pinned */
 static inline long
-capi_h_attach_process(u64 unit_address, struct capi_process_element_hcall *element,
+cxl_h_attach_process(u64 unit_address, struct cxl_process_element_hcall *element,
 		      u64 *process_token)
 {
 	long rc;
 	int i;
 	u32 *buf;
 
-	pr_devel("---\ncapi_h_attach_process(%#.16llx, %#.16lx) Process Element Structure:\n",
+	pr_devel("---\ncxl_h_attach_process(%#.16llx, %#.16lx) Process Element Structure:\n",
 			unit_address, virt_to_phys(element));
 
 	buf = (u32*)element;
-	for (i = 0; i*4 < sizeof(struct capi_process_element_hcall); i += 4) {
-		if ((i+3)*4 < sizeof(struct capi_process_element_hcall))
+	for (i = 0; i*4 < sizeof(struct cxl_process_element_hcall); i += 4) {
+		if ((i+3)*4 < sizeof(struct cxl_process_element_hcall))
 			pr_devel("%.8x %.8x %.8x %.8x\n", buf[i], buf[i + 1], buf[i + 2], buf[i + 3]);
-		else if ((i+2)*4 < sizeof(struct capi_process_element_hcall))
+		else if ((i+2)*4 < sizeof(struct cxl_process_element_hcall))
 			pr_devel("%.8x %.8x %.8x\n", buf[i], buf[i + 1], buf[i + 2]);
-		else if ((i+1)*4 < sizeof(struct capi_process_element_hcall))
+		else if ((i+1)*4 < sizeof(struct cxl_process_element_hcall))
 			pr_devel("%.8x %.8x\n", buf[i], buf[i + 1]);
 		else
 			pr_devel("%.8x\n", buf[i]);
 	}
 
-	rc = _capi_h_attach_process(unit_address, element, process_token);
+	rc = _cxl_h_attach_process(unit_address, element, process_token);
 
 	pr_devel("rc: %li token: 0x%.8llx\n", rc, *process_token);
 	pr_devel("---\n");
@@ -186,12 +186,12 @@ capi_h_attach_process(u64 unit_address, struct capi_process_element_hcall *eleme
 }
 
 static inline long
-capi_h_detach_process(u64 unit_address, u64 process_token)
+cxl_h_detach_process(u64 unit_address, u64 process_token)
 {
 	long rc;
 #if 0
 	unsigned long dummy;
-	CAPI_H_WAIT_UNTIL_DONE(rc, &dummy,  H_DETACH_CA_PROCESS, unit_address,
+	CXL_H_WAIT_UNTIL_DONE(rc, &dummy,  H_DETACH_CA_PROCESS, unit_address,
 			       process_token);
 #else
 	u64 token = 0;
@@ -213,7 +213,7 @@ capi_h_detach_process(u64 unit_address, u64 process_token)
 		else
 			delay = get_longbusy_msecs(rc);
 		total_delay += delay;
-		if (total_delay > CAPI_HCALL_TIMEOUT) {
+		if (total_delay > CXL_HCALL_TIMEOUT) {
 			WARN(1, "Warning: Giving up waiting for "
 				"H_DETACH_CA_PROCESS after %u msec\n",
 				total_delay);
@@ -223,7 +223,7 @@ capi_h_detach_process(u64 unit_address, u64 process_token)
 	}
 #endif
 
-	pr_devel("capi_h_detach_process(%#.16llx, 0x%.8llx): %li\n",
+	pr_devel("cxl_h_detach_process(%#.16llx, 0x%.8llx): %li\n",
 			unit_address, process_token, rc);
 
 	switch(rc) {
@@ -241,12 +241,12 @@ capi_h_detach_process(u64 unit_address, u64 process_token)
 }
 
 static inline long
-capi_h_control_function(u64 unit_address, u64 op, u64 p1, u64 p2, u64 p3)
+cxl_h_control_function(u64 unit_address, u64 op, u64 p1, u64 p2, u64 p3)
 {
 	long rc;
 #if 0
 	unsigned long dummy;
-	CAPI_H_WAIT_UNTIL_DONE(rc, &dummy, H_CONTROL_CA_FUNCTION, unit_address,
+	CXL_H_WAIT_UNTIL_DONE(rc, &dummy, H_CONTROL_CA_FUNCTION, unit_address,
 			       op, p1, p2, p3);
 #else
 	u64 token = 0;
@@ -266,7 +266,7 @@ capi_h_control_function(u64 unit_address, u64 op, u64 p1, u64 p2, u64 p3)
 		else
 			delay = get_longbusy_msecs(rc);
 		total_delay += delay;
-		if (total_delay > CAPI_HCALL_TIMEOUT) {
+		if (total_delay > CXL_HCALL_TIMEOUT) {
 			WARN(1, "Warning: Giving up waiting for "
 				"H_CONTROL_CA_FUNCTION after %u msec\n",
 				total_delay);
@@ -276,7 +276,7 @@ capi_h_control_function(u64 unit_address, u64 op, u64 p1, u64 p2, u64 p3)
         }
 #endif
 
-	pr_devel("capi_h_control_function(%#.16llx, %#llx(%#llx, %#llx, %#llx)): %li\n",
+	pr_devel("cxl_h_control_function(%#.16llx, %#llx(%#llx, %#llx, %#llx)): %li\n",
 			unit_address, op, p1, p2, p3, rc);
 
 	switch(rc) {
@@ -297,100 +297,100 @@ capi_h_control_function(u64 unit_address, u64 op, u64 p1, u64 p2, u64 p3)
 }
 
 static inline long
-capi_h_full_reset(u64 unit_address)
+cxl_h_full_reset(u64 unit_address)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_FULL_RESET,
 				       0, 0, 0);
 }
 
 #ifndef RIT
 static inline long
-capi_h_normal_reset(u64 unit_address, u64 process_token)
+cxl_h_normal_reset(u64 unit_address, u64 process_token)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_NORMAL_RESET,
 				       process_token, 0, 0);
 }
 
 static inline long
-capi_h_disable_process(u64 unit_address, u64 process_token)
+cxl_h_disable_process(u64 unit_address, u64 process_token)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_DISABLE,
 				       process_token, 0, 0);
 }
 
 static inline long
-capi_h_enable_process(u64 unit_address, u64 process_token)
+cxl_h_enable_process(u64 unit_address, u64 process_token)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_ENABLE,
 				       process_token, 0, 0);
 }
 
 static inline long
-capi_h_read_error_state(u64 unit_address)
+cxl_h_read_error_state(u64 unit_address)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_READ_ERR,
 				       0, 0, 0);
 }
 
 static inline long
-capi_h_get_error_info(u64 unit_address, unsigned long *buf, u64 len)
+cxl_h_get_error_info(u64 unit_address, unsigned long *buf, u64 len)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_GET_ERR,
 				       buf, len, 0);
 }
 
 static inline long
-capi_h_get_error_info(u64 unit_address, unsigned long *buf, u64 len)
+cxl_h_get_error_info(u64 unit_address, unsigned long *buf, u64 len)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_GET_CONFIG,
 				       buf, len, 0);
 }
 
 static inline long
-capi_h_get_fn_download_status(u64 unit_address)
+cxl_h_get_fn_download_status(u64 unit_address)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 				       H_CONTROL_CA_FUNCTION_GET_DOWNLOAD_STATE,
 				       0, 0, 0);
 }
 
 #if 0 /* Operation value missing in PAPR */
 static inline long
-capi_h_reset_fn_download_status(u64 unit_address)
+cxl_h_reset_fn_download_status(u64 unit_address)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 			H_CONTROL_CA_FUNCTION_RESET_DOWNLOAD_STATE,
 			0, 0, 0);
 }
 #endif
 
 static inline long
-capi_h_set_fn_config_correlator(u64 unit_address, unsigned long *buf, u64 len)
+cxl_h_set_fn_config_correlator(u64 unit_address, unsigned long *buf, u64 len)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 			H_CONTROL_CA_FUNCTION_SET_FUNCTION_CONFIG_CORRELATOR,
 			buf, len, 0);
 }
 
 static inline long
-capi_h_get_fn_config_correlator(u64 unit_address, unsigned long *buf, u64 len)
+cxl_h_get_fn_config_correlator(u64 unit_address, unsigned long *buf, u64 len)
 {
-	return capi_h_control_function(unit_address,
+	return cxl_h_control_function(unit_address,
 			H_CONTROL_CA_FUNCTION_GET_FUNCTION_CONFIG_CORRELATOR,
 			buf, len, 0);
 }
 #endif
 
 static inline long
-capi_h_collect_int_info(u64 unit_address, u64 process_token,
-			struct capi_irq_info *info)
+cxl_h_collect_int_info(u64 unit_address, u64 process_token,
+			struct cxl_irq_info *info)
 {
 	long rc;
 
@@ -399,7 +399,7 @@ capi_h_collect_int_info(u64 unit_address, u64 process_token,
 	rc = plpar_hcall9(H_COLLECT_CA_INT_INFO, (unsigned long *)info,
 			unit_address, process_token);
 
-	pr_devel("capi_h_collect_int_info(%#.16llx, 0x%llx): %li\n",
+	pr_devel("cxl_h_collect_int_info(%#.16llx, 0x%llx): %li\n",
 			unit_address, process_token, rc);
 
 	switch(rc) {
@@ -421,14 +421,14 @@ capi_h_collect_int_info(u64 unit_address, u64 process_token,
  * Set reset_mask = 1 to reset PSL errors
  */
 static inline long
-capi_h_control_faults(u64 unit_address, u64 process_token, u64 control_mask,
+cxl_h_control_faults(u64 unit_address, u64 process_token, u64 control_mask,
 		      u64 reset_mask, u64 *ret)
 {
 	long rc;
-	CAPI_H_WAIT_UNTIL_DONE(rc, ret,  H_CONTROL_CA_FAULTS, unit_address,
+	CXL_H_WAIT_UNTIL_DONE(rc, ret,  H_CONTROL_CA_FAULTS, unit_address,
 			       process_token, control_mask, reset_mask);
 
-	pr_devel("capi_h_control_faults(%#.16llx, 0x%llx, %#llx, %#llx): %li %#llx\n",
+	pr_devel("cxl_h_control_faults(%#.16llx, 0x%llx, %#llx, %#llx): %li %#llx\n",
 			unit_address, process_token, control_mask, reset_mask, rc, *ret);
 
 	switch(rc) {
@@ -447,11 +447,11 @@ capi_h_control_faults(u64 unit_address, u64 process_token, u64 control_mask,
 
 #if 0 /* Details still TBD */
 static inline long
-capi_h_download_function(u64 unit_address, u64 block_list_address,
+cxl_h_download_function(u64 unit_address, u64 block_list_address,
 			 u64 num_block_list_entries, u64 total_image_size)
 {
 	long rc;
-	CAPI_H_WAIT_UNTIL_DONE(rc, ret,  H_DOWNLOAD_CA_FUNCTION, unit_address,
+	CXL_H_WAIT_UNTIL_DONE(rc, ret,  H_DOWNLOAD_CA_FUNCTION, unit_address,
 			       block_list_address, num_block_list_entries,
 			       total_image_size);
 

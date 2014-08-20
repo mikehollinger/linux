@@ -20,20 +20,20 @@
 #include <linux/slab.h>
 #include <linux/idr.h>
 
-#include "capi.h"
+#include "cxl.h"
 
 /*
- * Allocates space for a CAPI context.
+ * Allocates space for a CXL context.
  */
-struct capi_context_t *capi_context_alloc(void)
+struct cxl_context_t *cxl_context_alloc(void)
 {
-	return kzalloc(sizeof(struct capi_context_t), GFP_KERNEL);
+	return kzalloc(sizeof(struct cxl_context_t), GFP_KERNEL);
 }
 
 /*
- * Initialises a CAPI context.
+ * Initialises a CXL context.
  */
-int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool master)
+int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool master)
 {
 	int i;
 
@@ -43,7 +43,7 @@ int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool m
 	ctx->master = master;
 	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
-	INIT_WORK(&ctx->fault_work, capi_handle_fault);
+	INIT_WORK(&ctx->fault_work, cxl_handle_fault);
 
 	init_waitqueue_head(&ctx->wq);
 	spin_lock_init(&ctx->lock);
@@ -70,7 +70,7 @@ int capi_context_init(struct capi_context_t *ctx, struct capi_afu_t *afu, bool m
 /*
  * Activate a context on its AFU.
  */
-void capi_context_start(struct capi_context_t *ctx)
+void cxl_context_start(struct cxl_context_t *ctx)
 {
 	spin_lock(&ctx->afu->contexts_lock);
 	list_add(&ctx->list, &ctx->afu->contexts);
@@ -80,7 +80,7 @@ void capi_context_start(struct capi_context_t *ctx)
 /*
  * Map a per-context mmio space into the given vma.
  */
-int capi_context_iomap(struct capi_context_t *ctx, struct vm_area_struct *vma)
+int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
 {
 	u64 len = vma->vm_end - vma->vm_start;
 	len = min(len, ctx->psn_size);
@@ -109,7 +109,7 @@ int capi_context_iomap(struct capi_context_t *ctx, struct vm_area_struct *vma)
  * all outstanding interrupts for this context have completed. The hardware should no longer
  * access *ctx after this has returned.
  */
-static void __detach_context(struct capi_context_t *ctx)
+static void __detach_context(struct cxl_context_t *ctx)
 {
 	/* FIXME: Shut down AFU, ensure that any running interrupts are
 	 * finished and no more interrupts are possible */
@@ -122,7 +122,7 @@ static void __detach_context(struct capi_context_t *ctx)
 	spin_lock(&ctx->afu->contexts_lock);
 	list_del(&ctx->list);
 	spin_unlock(&ctx->afu->contexts_lock);
-	WARN_ON(capi_ops->detach_process(ctx));
+	WARN_ON(cxl_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
 	WARN_ON(work_busy(&ctx->fault_work));
 	wake_up_all(&ctx->wq);
@@ -134,7 +134,7 @@ static void __detach_context(struct capi_context_t *ctx)
  * (ie. prevent this context from generating any further interrupts
  * so that it can be freed).
  */
-void capi_context_detach(struct capi_context_t *ctx)
+void cxl_context_detach(struct cxl_context_t *ctx)
 {
 	__detach_context(ctx);
 }
@@ -142,15 +142,15 @@ void capi_context_detach(struct capi_context_t *ctx)
 /*
  * Detach all contexts on the given AFU.
  */
-void capi_context_detach_all(struct capi_afu_t *afu)
+void cxl_context_detach_all(struct cxl_afu_t *afu)
 {
-	struct capi_context_t *ctx, *tmp;
+	struct cxl_context_t *ctx, *tmp;
 
 	list_for_each_entry_safe(ctx, tmp, &afu->contexts, list)
 		__detach_context(ctx);
 }
 
-void capi_context_free(struct capi_context_t *ctx)
+void cxl_context_free(struct cxl_context_t *ctx)
 {
 	unsigned long flags;
 

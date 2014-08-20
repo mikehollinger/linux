@@ -86,10 +86,10 @@
  *
  */
 
-#ifdef CONFIG_CAPI
-/* FIXME: Clean this up and make it not break when CONFIG_CAPI=m! */
-extern void capi_slbie(unsigned long addr);
-extern void capi_slbia(struct mm_struct *mm);
+#ifdef CONFIG_CXL
+/* FIXME: Clean this up and make it not break when CONFIG_CXL=m! */
+extern void cxl_slbie(unsigned long addr);
+extern void cxl_slbia(struct mm_struct *mm);
 #endif
 
 #ifdef CONFIG_U3_DART
@@ -104,19 +104,19 @@ unsigned long htab_size_bytes;
 unsigned long htab_hash_mask;
 EXPORT_SYMBOL_GPL(htab_hash_mask);
 int mmu_linear_psize = MMU_PAGE_4K;
-EXPORT_SYMBOL_GPL(mmu_linear_psize); /* FIXME: For CAPI/CELL slbfee_mm - restructure! */
+EXPORT_SYMBOL_GPL(mmu_linear_psize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 int mmu_virtual_psize = MMU_PAGE_4K;
 int mmu_vmalloc_psize = MMU_PAGE_4K;
-EXPORT_SYMBOL_GPL(mmu_vmalloc_psize); /* FIXME: For CAPI/CELL slbfee_mm - restructure! */
+EXPORT_SYMBOL_GPL(mmu_vmalloc_psize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 #ifdef CONFIG_SPARSEMEM_VMEMMAP
 int mmu_vmemmap_psize = MMU_PAGE_4K;
 #endif
 int mmu_io_psize = MMU_PAGE_4K;
-EXPORT_SYMBOL_GPL(mmu_io_psize); /* FIXME: For CAPI/CELL slbfee_mm - restructure! */
+EXPORT_SYMBOL_GPL(mmu_io_psize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 int mmu_kernel_ssize = MMU_SEGSIZE_256M;
-EXPORT_SYMBOL_GPL(mmu_kernel_ssize); /* FIXME: For CAPI/CELL slbfee_mm - restructure! */
+EXPORT_SYMBOL_GPL(mmu_kernel_ssize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 int mmu_highuser_ssize = MMU_SEGSIZE_256M;
-EXPORT_SYMBOL_GPL(mmu_highuser_ssize); /* FIXME: For CAPI/CELL slbfee_mm - restructure! */
+EXPORT_SYMBOL_GPL(mmu_highuser_ssize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 u16 mmu_slb_size = 64;
 EXPORT_SYMBOL_GPL(mmu_slb_size);
 #ifdef CONFIG_PPC_64K_PAGES
@@ -927,9 +927,9 @@ void demote_segment_4k(struct mm_struct *mm, unsigned long addr)
 #ifdef CONFIG_SPU_BASE
 	spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CAPI /* FIXME: Work when CAPI is a module */
-	//capi_slbie(addr);
-	capi_slbia(mm);
+#ifdef CONFIG_CXL /* FIXME: Work when CXL is a module */
+	//cxl_slbie(addr);
+	cxl_slbia(mm);
 #endif
 	if (get_paca_psize(addr) != MMU_PAGE_4K) {
 		get_paca()->context = mm->context;
@@ -1169,9 +1169,9 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 #ifdef CONFIG_SPU_BASE
 			spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CAPI /* FIXME: Work when CAPI is a module */
-			//capi_slbie(ea);
-			capi_slbia(mm);
+#ifdef CONFIG_CXL /* FIXME: Work when CXL is a module */
+			//cxl_slbie(ea);
+			cxl_slbia(mm);
 #endif
 		}
 	}
@@ -1300,7 +1300,7 @@ void hash_preload(struct mm_struct *mm, unsigned long ea,
 out_exit:
 	local_irq_restore(flags);
 }
-EXPORT_SYMBOL_GPL(hash_preload); /* XXX: For CAPI */
+EXPORT_SYMBOL_GPL(hash_preload); /* XXX: For CXL */
 
 /* WARNING: This is called from hash_low_64.S, if you change this prototype,
  *          do not forget to update the assembly call site !

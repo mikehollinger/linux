@@ -4,7 +4,7 @@
 #undef DEBUG
 #endif
 
-/* TODO: Split this out into a separate module now that we have some CAPI
+/* TODO: Split this out into a separate module now that we have some CXL
  * devices that won't want to use this generic userspace interface */
 
 #include <linux/spinlock.h>
@@ -24,24 +24,24 @@
 #include <linux/slab.h>
 #include <linux/idr.h>
 
-#include "capi.h"
+#include "cxl.h"
 
-dev_t capi_dev;
+dev_t cxl_dev;
 
-extern struct class *capi_class;
+extern struct class *cxl_class;
 
 static int
 __afu_open(struct inode *inode, struct file *file, bool master)
 {
 	int minor = MINOR(inode->i_rdev);
-	int adapter_num = minor / CAPI_DEV_MINORS;
-	int slice = (minor % CAPI_DEV_MINORS - 1) % CAPI_MAX_SLICES;
-	struct capi_t *adapter;
-	struct capi_context_t *ctx;
+	int adapter_num = minor / CXL_DEV_MINORS;
+	int slice = (minor % CXL_DEV_MINORS - 1) % CXL_MAX_SLICES;
+	struct cxl_t *adapter;
+	struct cxl_context_t *ctx;
 
 	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
 
-	adapter = get_capi_adapter(adapter_num);
+	adapter = get_cxl_adapter(adapter_num);
 	if (!adapter)
 		return -ENODEV;
 	if (slice > adapter->slices)
@@ -51,12 +51,12 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	if (!try_module_get(adapter->driver->module))
 		return -ENODEV;
 
-	ctx = capi_context_alloc();
+	ctx = cxl_context_alloc();
 	if (!ctx)
 		return -ENOMEM;
 
-	capi_context_init(ctx, &adapter->slice[slice], master);
-	capi_context_start(ctx);
+	cxl_context_init(ctx, &adapter->slice[slice], master);
+	cxl_context_start(ctx);
 	file->private_data = (void *)ctx;
 
 	return 0;
@@ -76,32 +76,32 @@ afu_master_open(struct inode *inode, struct file *file)
 static int
 afu_release(struct inode *inode, struct file *file)
 {
-	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
+	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
 
-	pr_devel("%s: closing capi file descriptor. pe=%i\n",
+	pr_devel("%s: closing cxl file descriptor. pe=%i\n",
 		 __FUNCTION__, ctx->ph);
-	capi_context_detach(ctx);
+	cxl_context_detach(ctx);
 
 	module_put(ctx->afu->adapter->driver->module);
 
 	/* It should be safe to remove the context now */
-	capi_context_free(ctx);
+	cxl_context_free(ctx);
 
 	return 0;
 }
 
 static long
-afu_ioctl_start_work(struct capi_context_t *ctx,
-		     struct capi_ioctl_start_work __user *uwork)
+afu_ioctl_start_work(struct cxl_context_t *ctx,
+		     struct cxl_ioctl_start_work __user *uwork)
 {
-	struct capi_ioctl_start_work work;
+	struct cxl_ioctl_start_work work;
 	u64 amr;
 	int rc;
 
-	pr_devel("afu_ioctl: CAPI_START_WORK\n");
+	pr_devel("afu_ioctl: CXL_START_WORK\n");
 
 	if (copy_from_user(&work, uwork,
-			   sizeof(struct capi_ioctl_start_work)))
+			   sizeof(struct cxl_ioctl_start_work)))
 		return -EFAULT;
 	/*
 	 * Possible TODO: Have an administrative way to limit
@@ -119,36 +119,36 @@ afu_ioctl_start_work(struct capi_context_t *ctx,
 	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
 		return rc;
 
-	printk("capi amr: %llx uamor: %lx\n", work.amr, mfspr(SPRN_UAMOR));
+	printk("cxl amr: %llx uamor: %lx\n", work.amr, mfspr(SPRN_UAMOR));
 	amr = work.amr & mfspr(SPRN_UAMOR);
 
 	work.process_element = ctx->ph;
 
 	/* Returns PE and number of interrupts */
 	if (copy_to_user(uwork, &work,
-			 sizeof(struct capi_ioctl_start_work)))
+			 sizeof(struct cxl_ioctl_start_work)))
 		return -EFAULT;
 
 	/* fixme me: decide this based on the AFU */
-	if ((rc = capi_ops->init_process(ctx, false, work.wed, amr)))
+	if ((rc = cxl_ops->init_process(ctx, false, work.wed, amr)))
 		return rc;
 
 	return 0;
 }
 
 static long
-afu_ioctl_check_error(struct capi_context_t *ctx)
+afu_ioctl_check_error(struct cxl_context_t *ctx)
 {
 	if (!ctx->attached)
 		/* FIXME: What should we do here? */
 		return -EIO;
 
-	if (capi_ops->check_error && capi_ops->check_error(ctx->afu)) {
+	if (cxl_ops->check_error && cxl_ops->check_error(ctx->afu)) {
 		/* FIXME: This reset isn't sufficient to recover from the
 		 * condition I tested - this will basically need a hotplug or
 		 * PERST. May need several tests for different severities and
 		 * appropriate actions for each. */
-		return capi_ops->afu_reset(ctx->afu);
+		return cxl_ops->afu_reset(ctx->afu);
 	}
 	return -EPERM;
 }
@@ -156,14 +156,14 @@ afu_ioctl_check_error(struct capi_context_t *ctx)
 static long
 afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
+	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
 
 	if (!ctx->attached)
 		return -EIO;
 
 #if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
 	if (current->mm != ctx->afu->mm) {
-		pr_err("CAPI: %s (%i) attempted to perform ioctl on AFU with "
+		pr_err("CXL: %s (%i) attempted to perform ioctl on AFU with "
 		       "other memory map!\n", current->comm, current->pid);
 		return -EPERM;
 	}
@@ -171,22 +171,22 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	pr_devel("afu_ioctl\n");
 	switch (cmd) {
-		case CAPI_IOCTL_START_WORK:
+		case CXL_IOCTL_START_WORK:
 			return afu_ioctl_start_work(ctx,
-				(struct capi_ioctl_start_work __user *)arg);
-		case CAPI_IOCTL_LOAD_AFU_IMAGE:
+				(struct cxl_ioctl_start_work __user *)arg);
+		case CXL_IOCTL_LOAD_AFU_IMAGE:
 		{
-			struct capi_ioctl_load_afu_image __user *uwork =
-				(struct capi_ioctl_load_afu_image __user *)arg;
-			struct capi_ioctl_load_afu_image work;
+			struct cxl_ioctl_load_afu_image __user *uwork =
+				(struct cxl_ioctl_load_afu_image __user *)arg;
+			struct cxl_ioctl_load_afu_image work;
 
-                        if (copy_from_user(&work, uwork, sizeof(struct capi_ioctl_load_afu_image)))
+                        if (copy_from_user(&work, uwork, sizeof(struct cxl_ioctl_load_afu_image)))
                                 return -EFAULT;
 
 			// FIXME: check no one is using this
-			return capi_ops->load_afu_image(ctx->afu, work.vaddress, work.length);
+			return cxl_ops->load_afu_image(ctx->afu, work.vaddress, work.length);
 		}
-		case CAPI_IOCTL_CHECK_ERROR:
+		case CXL_IOCTL_CHECK_ERROR:
 			return afu_ioctl_check_error(ctx);
 	}
 	return -EINVAL;
@@ -195,7 +195,7 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static long
 afu_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	pr_warning("FIXME: capi_compat_ioctl STUB. cmd: %x, arg: %lx\n", cmd, arg);
+	pr_warning("FIXME: cxl_compat_ioctl STUB. cmd: %x, arg: %lx\n", cmd, arg);
 	/* FIXME */
 	return afu_ioctl(file, cmd, arg);
 }
@@ -203,18 +203,18 @@ afu_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int
 afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
-	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
+	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
 
 	if (!ctx->attached)
 		return -EIO;
 
-	return capi_context_iomap(ctx, vm);
+	return cxl_context_iomap(ctx, vm);
 }
 
 static unsigned int
 afu_poll(struct file *file, struct poll_table_struct *poll)
 {
-	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
+	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
 	int mask = 0;
 	unsigned long flags;
 
@@ -239,13 +239,13 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 static ssize_t
 afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 {
-	struct capi_context_t *ctx = (struct capi_context_t *)file->private_data;
-	struct capi_event event;
+	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
+	struct cxl_event event;
 	unsigned long flags;
 	ssize_t size;
 	DEFINE_WAIT(wait);
 
-	if (count < sizeof(struct capi_event_header))
+	if (count < sizeof(struct cxl_event_header))
 		return -EINVAL;
 
 	while (1) {
@@ -275,8 +275,8 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	event.header.process_element = ctx->ph;
 	if (ctx->pending_irq) {
 		pr_devel("afu_read delivering AFU interrupt\n");
-		event.header.size = sizeof(struct capi_event_afu_interrupt);
-		event.header.type = CAPI_EVENT_AFU_INTERRUPT;
+		event.header.size = sizeof(struct cxl_event_afu_interrupt);
+		event.header.type = CXL_EVENT_AFU_INTERRUPT;
 		event.irq.irq = find_first_bit(ctx->irq_bitmap, ctx->irq_count) + 1;
 
 		/* Only clear the IRQ if we can send the whole event: */
@@ -287,8 +287,8 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		}
 	} else if (ctx->pending_fault) {
 		pr_devel("afu_read delivering data storage fault\n");
-		event.header.size = sizeof(struct capi_event_data_storage);
-		event.header.type = CAPI_EVENT_DATA_STORAGE;
+		event.header.size = sizeof(struct cxl_event_data_storage);
+		event.header.type = CXL_EVENT_DATA_STORAGE;
 		event.fault.addr = ctx->fault_addr;
 
 		/* Only clear the fault if we can send the whole event: */
@@ -296,8 +296,8 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 			ctx->pending_fault = false;
 	} else if (ctx->pending_afu_err) {
 		pr_devel("afu_read delivering afu error\n");
-		event.header.size = sizeof(struct capi_event_afu_error);
-		event.header.type = CAPI_EVENT_AFU_ERROR;
+		event.header.size = sizeof(struct cxl_event_afu_error);
+		event.header.type = CXL_EVENT_AFU_ERROR;
 		event.afu_err.err = ctx->afu_err;
 
 		/* Only clear the fault if we can send the whole event: */
@@ -317,12 +317,12 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 }
 
 static int
-capi_open(struct inode *inode, struct file *file)
+cxl_open(struct inode *inode, struct file *file)
 {
 	int minor = MINOR(inode->i_rdev);
-	int adapter = minor / CAPI_DEV_MINORS;
+	int adapter = minor / CXL_DEV_MINORS;
 
-	pr_devel("STUB: capi_open adapter %i\n", adapter);
+	pr_devel("STUB: cxl_open adapter %i\n", adapter);
 	return -EPERM;
 }
 
@@ -330,14 +330,14 @@ capi_open(struct inode *inode, struct file *file)
  * FIXME TODO: This will eventually be used
 to enumerate and open the AFUs,
  * (possibly) reprogram them, etc. For now you have to open the AFUs directly
- * as /dev/capiN
+ * as /dev/cxlN
  */
-static const struct file_operations capi_fops = {
+static const struct file_operations cxl_fops = {
 	.owner		= THIS_MODULE,
-	.open		= capi_open,
+	.open		= cxl_open,
 #if 0
-	.unlocked_ioctl = capi_ioctl,
-	.compat_ioctl   = capi_compat_ioctl,
+	.unlocked_ioctl = cxl_ioctl,
+	.compat_ioctl   = cxl_compat_ioctl,
 #endif
 };
 
@@ -363,32 +363,32 @@ static const struct file_operations afu_master_fops = {
 	.mmap           = afu_mmap,
 };
 
-static char capi_dbg_sep[80+2] = "\n--------------------------------------------------------------------------------\n";
+static char cxl_dbg_sep[80+2] = "\n--------------------------------------------------------------------------------\n";
 
 static int psl_err_chk_show(struct seq_file *m, void *p)
 {
-	struct capi_t *capi = m->private;
-	struct capi_afu_t *a0 = &capi->slice[0];
+	struct cxl_t *cxl = m->private;
+	struct cxl_afu_t *a0 = &cxl->slice[0];
 
 	seq_puts(m, "************************ Checking PSL Error Registers **************************");
 
 #define show_reg(name, what) \
-	seq_write(m, capi_dbg_sep, sizeof(capi_dbg_sep)); \
+	seq_write(m, cxl_dbg_sep, sizeof(cxl_dbg_sep)); \
 	seq_printf(m, "%s = %16llx", name, what)
 
-	show_reg("PSL FIR1", capi_p1_read(capi, CAPI_PSL_FIR1));
-	show_reg("PSL FIR2", capi_p1_read(capi, CAPI_PSL_FIR2));
-	show_reg("PSL FIR CNTL", capi_p1_read(capi, CAPI_PSL_FIR_CNTL));
-	show_reg("PSL FIR SLICE A0", capi_p1n_read(a0, CAPI_PSL_FIR_SLICE_An));
-	show_reg("PSL RECOV FIR SLICE A0", capi_p1n_read(a0, CAPI_PSL_R_FIR_SLICE_An));
-	show_reg("PSL SERR A0", capi_p1n_read(a0, CAPI_PSL_SERR_An));
-	show_reg("PSL ERRIVTE", capi_p1_read(capi, CAPI_PSL_ErrIVTE));
-	show_reg("PSL DSISR A0", capi_p2n_read(a0, CAPI_PSL_DSISR_An));
-	show_reg("PSL SR", capi_p1n_read(a0, CAPI_PSL_SR_An));
-	show_reg("PSL SSTP0 A0", capi_p2n_read(a0, CAPI_SSTP0_An));
-	show_reg("PSL SSTP1 A0", capi_p2n_read(a0, CAPI_SSTP1_An));
-	show_reg("PSL DAR A0", capi_p2n_read(a0, CAPI_PSL_DAR_An));
-	show_reg("PSL ErrStat A0", capi_p2n_read(a0, CAPI_PSL_ErrStat_An));
+	show_reg("PSL FIR1", cxl_p1_read(cxl, CXL_PSL_FIR1));
+	show_reg("PSL FIR2", cxl_p1_read(cxl, CXL_PSL_FIR2));
+	show_reg("PSL FIR CNTL", cxl_p1_read(cxl, CXL_PSL_FIR_CNTL));
+	show_reg("PSL FIR SLICE A0", cxl_p1n_read(a0, CXL_PSL_FIR_SLICE_An));
+	show_reg("PSL RECOV FIR SLICE A0", cxl_p1n_read(a0, CXL_PSL_R_FIR_SLICE_An));
+	show_reg("PSL SERR A0", cxl_p1n_read(a0, CXL_PSL_SERR_An));
+	show_reg("PSL ERRIVTE", cxl_p1_read(cxl, CXL_PSL_ErrIVTE));
+	show_reg("PSL DSISR A0", cxl_p2n_read(a0, CXL_PSL_DSISR_An));
+	show_reg("PSL SR", cxl_p1n_read(a0, CXL_PSL_SR_An));
+	show_reg("PSL SSTP0 A0", cxl_p2n_read(a0, CXL_SSTP0_An));
+	show_reg("PSL SSTP1 A0", cxl_p2n_read(a0, CXL_SSTP1_An));
+	show_reg("PSL DAR A0", cxl_p2n_read(a0, CXL_PSL_DAR_An));
+	show_reg("PSL ErrStat A0", cxl_p2n_read(a0, CXL_PSL_ErrStat_An));
 #undef showreg
 	seq_putc(m, '\n');
 
@@ -436,23 +436,23 @@ static u64 dump_size(void)
 	return size;
 }
 
-void capi_stop_trace(struct capi_t *capi)
+void cxl_stop_trace(struct cxl_t *cxl)
 {
 	/* Stop the trace */
-	capi_p1_write(capi, CAPI_PSL_TRACE, 0x8000000000000017LL);
+	cxl_p1_write(cxl, CXL_PSL_TRACE, 0x8000000000000017LL);
 
 	/* Stop the trace slice */
-	capi_p1n_write(&capi->slice[0], CAPI_PSL_SLICE_TRACE, 0x8000000000000000LL);
+	cxl_p1n_write(&cxl->slice[0], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
 }
 
-static void dump_trace(unsigned long long *buffer, struct capi_t *capi)
+static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
 {
 	struct trcdsc *dsc = &descriptors[0];
 
-	capi_stop_trace(capi);
+	cxl_stop_trace(cxl);
 
 	/* Get read write machine state */
-	*buffer++ = capi_p1_read(capi, CAPI_PSL_TRACE);
+	*buffer++ = cxl_p1_read(cxl, CXL_PSL_TRACE);
 
 	while (dsc->addr) {
 		unsigned long long namev = 0;
@@ -461,12 +461,12 @@ static void dump_trace(unsigned long long *buffer, struct capi_t *capi)
 
 		/* Init trace engine */
 		if (dsc->slice)
-			capi_p1n_write(&capi->slice[0], CAPI_PSL_SLICE_TRACE,
+			cxl_p1n_write(&cxl->slice[0], CXL_PSL_SLICE_TRACE,
 				       0x8000000000000000LL |
 				       dsc->readsperline << 4 |
 				       dsc->traceid);
 		else
-			capi_p1_write(capi, CAPI_PSL_TRACE,
+			cxl_p1_write(cxl, CXL_PSL_TRACE,
 				      0x8000000000000000LL |
 				      dsc->readsperline << 4 |
 				      dsc->traceid);
@@ -485,8 +485,8 @@ static void dump_trace(unsigned long long *buffer, struct capi_t *capi)
 			for (j = 0; j < dsc->readsperline; j++)
 			{
 				*buffer++ = (dsc->slice) ?
-					capi_p1n_read(&capi->slice[0], CAPI_PSL_SLICE_TRACE) :
-					capi_p1_read(capi, CAPI_PSL_TRACE);
+					cxl_p1n_read(&cxl->slice[0], CXL_PSL_SLICE_TRACE) :
+					cxl_p1_read(cxl, CXL_PSL_TRACE);
 			}
 
 		dsc++;
@@ -501,7 +501,7 @@ static ssize_t read_trace(struct file *file, char __user *userbuf,
 			 size_t count, loff_t *ppos)
 {
 	u64 size = dump_size();
-	struct capi_t *capi = file->private_data;
+	struct cxl_t *cxl = file->private_data;
 
 	if (!trace_buffer) {
 		trace_buffer = (unsigned long long *) kzalloc(size, GFP_KERNEL);
@@ -510,7 +510,7 @@ static ssize_t read_trace(struct file *file, char __user *userbuf,
 	if (!trace_buffer)
 		return -ENOMEM;
 
-	dump_trace(trace_buffer, capi);
+	dump_trace(trace_buffer, cxl);
 	return simple_read_from_buffer(userbuf, count, ppos, trace_buffer, size);
 }
 
@@ -527,37 +527,37 @@ static const struct file_operations trace_fops = {
 	.read = read_trace,
 };
 
-int __init register_capi_dev(void)
+int __init register_cxl_dev(void)
 {
 	int result;
 
-	if ((result = alloc_chrdev_region(&capi_dev, 0,
-					  CAPI_NUM_MINORS, "capi"))) {
-		pr_err("Unable to allocate CAPI major number: %i\n", result);
+	if ((result = alloc_chrdev_region(&cxl_dev, 0,
+					  CXL_NUM_MINORS, "cxl"))) {
+		pr_err("Unable to allocate CXL major number: %i\n", result);
 		return -1;
 	}
 
-	pr_devel("CAPI device allocated, MAJOR %i\n", MAJOR(capi_dev));
+	pr_devel("CXL device allocated, MAJOR %i\n", MAJOR(cxl_dev));
 
 	return 0;
 }
 
-void unregister_capi_dev(void)
+void unregister_cxl_dev(void)
 {
-	unregister_chrdev_region(capi_dev, CAPI_NUM_MINORS);
+	unregister_chrdev_region(cxl_dev, CXL_NUM_MINORS);
 }
 
-int add_capi_dev(struct capi_t *adapter, int adapter_num)
+int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
 {
 	int rc;
-	int capi_major = MAJOR(capi_dev);
-	int capi_minor = adapter_num * CAPI_DEV_MINORS;
+	int cxl_major = MAJOR(cxl_dev);
+	int cxl_minor = adapter_num * CXL_DEV_MINORS;
 	char tmp[32];
 
-	cdev_init(&(adapter->cdev), &capi_fops);
-	rc = cdev_add(&(adapter->cdev), MKDEV(capi_major, capi_minor), 1);
+	cdev_init(&(adapter->cdev), &cxl_fops);
+	rc = cdev_add(&(adapter->cdev), MKDEV(cxl_major, cxl_minor), 1);
 	if (rc) {
-		pr_err("Unable to register CAPI character device: %i\n", rc);
+		pr_err("Unable to register CXL character device: %i\n", rc);
 		return rc;
 	}
 
@@ -568,18 +568,18 @@ int add_capi_dev(struct capi_t *adapter, int adapter_num)
 		goto out;
 	}
 
-	if (capi_sysfs_adapter_add(adapter))
+	if (cxl_sysfs_adapter_add(adapter))
 		goto out1;
 
 	/* Create debugfs entries */
 	/* FIXME: Drop these for upstreaming. Maybe move them somewhere more
-	 * appropriate under sysfs or debugfs for debugging - capi%i isn't
+	 * appropriate under sysfs or debugfs for debugging - cxl%i isn't
 	 * great since it assumes 1 afu per card */
-	pr_devel("Creating CAPI debugfs entries\n");
+	pr_devel("Creating CXL debugfs entries\n");
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
-		snprintf(tmp, 32, "capi%i_trace", adapter_num);
+		snprintf(tmp, 32, "cxl%i_trace", adapter_num);
 		adapter->trace = debugfs_create_file(tmp, 0444, NULL, adapter, &trace_fops);
-		snprintf(tmp, 32, "capi%i_psl_err_chk", adapter_num);
+		snprintf(tmp, 32, "cxl%i_psl_err_chk", adapter_num);
 		adapter->psl_err_chk = debugfs_create_file(tmp, 0444, NULL, adapter, &psl_err_chk_fops);
 	}
 	return 0;
@@ -592,54 +592,54 @@ out:
 	return rc;
 }
 
-extern struct class *capi_class;
+extern struct class *cxl_class;
 
-void capi_release(struct device *dev)
+void cxl_release(struct device *dev)
 {
-	pr_devel("capi release\n");
+	pr_devel("cxl release\n");
 }
 
-int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
+int add_cxl_afu_dev(struct cxl_afu_t *afu, int slice)
 {
 	int rc;
-	unsigned int capi_major = MAJOR(afu->adapter->device.devt);
-	unsigned int capi_minor = MINOR(afu->adapter->device.devt);
+	unsigned int cxl_major = MAJOR(afu->adapter->device.devt);
+	unsigned int cxl_minor = MINOR(afu->adapter->device.devt);
 
 	/* Add the AFU slave device */
 	/* FIXME check afu->pp_mmio to see if we need this file */
 	afu->device.parent = &afu->adapter->device;
-	afu->device.class = capi_class;
+	afu->device.class = cxl_class;
 	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, slice);
-	afu->device.devt = MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice);
-	afu->device.release = capi_release;
+	afu->device.devt = MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + slice);
+	afu->device.release = cxl_release;
 
 	if ((rc = device_register(&afu->device)))
 		return rc;
 
 	cdev_init(&afu->adapter->afu_cdev, &afu_fops);
-	rc = cdev_add(&afu->adapter->afu_cdev, MKDEV(capi_major, capi_minor + CAPI_MAX_SLICES + 1 + slice), afu->adapter->slices);
+	rc = cdev_add(&afu->adapter->afu_cdev, MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + slice), afu->adapter->slices);
 	if (rc) {
-		pr_err("Unable to register CAPI AFU character devices: %i\n", rc);
+		pr_err("Unable to register CXL AFU character devices: %i\n", rc);
 		goto out;
 	}
 
 	/* Add the AFU master device */
 	afu->device_master.parent = &afu->device;
-	afu->device_master.class = capi_class;
+	afu->device_master.class = cxl_class;
 	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, slice);
-	afu->device_master.devt = MKDEV(capi_major, capi_minor + 1 + slice);
-	afu->device_master.release = capi_release;
+	afu->device_master.devt = MKDEV(cxl_major, cxl_minor + 1 + slice);
+	afu->device_master.release = cxl_release;
 
 	if ((rc = device_register(&afu->device_master)))
 		goto out1;
 
-	if ((rc = capi_sysfs_afu_add(afu)))
+	if ((rc = cxl_sysfs_afu_add(afu)))
 		goto out2;
 
 	cdev_init(&afu->adapter->afu_master_cdev, &afu_master_fops);
-	rc = cdev_add(&afu->adapter->afu_master_cdev, MKDEV(capi_major, capi_minor + 1 + slice), afu->adapter->slices);
+	rc = cdev_add(&afu->adapter->afu_master_cdev, MKDEV(cxl_major, cxl_minor + 1 + slice), afu->adapter->slices);
 	if (rc) {
-		pr_err("Unable to register CAPI AFU master character devices: %i\n", rc);
+		pr_err("Unable to register CXL AFU master character devices: %i\n", rc);
 		goto out3;
 	}
 
@@ -652,7 +652,7 @@ int add_capi_afu_dev(struct capi_afu_t *afu, int slice)
 out4:
 	cdev_del(&afu->adapter->afu_master_cdev);
 out3:
-	capi_sysfs_afu_remove(afu);
+	cxl_sysfs_afu_remove(afu);
 out2:
 	device_unregister(&afu->device_master);
 out1:
@@ -662,25 +662,25 @@ out:
 	return rc;
 }
 
-void del_capi_dev(struct capi_t *adapter, int adapter_num)
+void del_cxl_dev(struct cxl_t *adapter, int adapter_num)
 {
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
-	capi_sysfs_adapter_remove(adapter);
+	cxl_sysfs_adapter_remove(adapter);
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;
 	cdev_del(&adapter->cdev);
-	adapter->device.release = capi_release;
+	adapter->device.release = cxl_release;
 	device_unregister(&adapter->device);
 }
 
-void del_capi_afu_dev(struct capi_afu_t *afu)
+void del_cxl_afu_dev(struct cxl_afu_t *afu)
 {
 	sysfs_remove_link(&afu->device.kobj, dev_name(&afu->device));
-	capi_sysfs_afu_remove(afu);
+	cxl_sysfs_afu_remove(afu);
 	cdev_del(&afu->adapter->afu_master_cdev);
 	device_unregister(&afu->device_master);
 	cdev_del(&afu->adapter->afu_cdev);
 	device_unregister(&afu->device);
-	capi_context_detach_all(afu);
+	cxl_context_detach_all(afu);
 }

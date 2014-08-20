@@ -16,28 +16,28 @@
 #include <asm/pci-bridge.h> /* for struct pci_controller */
 #include "../arch/powerpc/platforms/powernv/pci.h" /* FIXME - for struct pnv_phb */
 
-#include "capi.h"
+#include "cxl.h"
 
-#define CAPI_PCI_VSEC_ID	0x1280
+#define CXL_PCI_VSEC_ID	0x1280
 
-#define CAPI_PROTOCOL_MASK	(7ull << 21)
-#define CAPI_PROTOCOL_256TB	(1ull << 23) /* Power 8 uses this */
-#define CAPI_PROTOCOL_512TB	(1ull << 22)
-#define CAPI_PROTOCOL_1024TB	(1ull << 21)
-#define CAPI_PROTOCOL_ENABLE	(1ull << 16)
-#define CAPI_PERST_RELOAD	(1ull << 29)
-#define CAPI_USER_IMAGE		(1ull << 28)
+#define CXL_PROTOCOL_MASK	(7ull << 21)
+#define CXL_PROTOCOL_256TB	(1ull << 23) /* Power 8 uses this */
+#define CXL_PROTOCOL_512TB	(1ull << 22)
+#define CXL_PROTOCOL_1024TB	(1ull << 21)
+#define CXL_PROTOCOL_ENABLE	(1ull << 16)
+#define CXL_PERST_RELOAD	(1ull << 29)
+#define CXL_USER_IMAGE		(1ull << 28)
 
-#define CAPI_VSEC_LENGTH(vsec)		(vsec + 0x6) /* WORD */
-#define CAPI_VSEC_NAFUS(vsec)		(vsec + 0x8) /* BYTE */
-#define CAPI_VSEC_AFU_DESC_OFF(vsec)	(vsec + 0x20)
-#define CAPI_VSEC_AFU_DESC_SIZE(vsec)	(vsec + 0x24)
-#define CAPI_VSEC_PS_OFF(vsec)		(vsec + 0x28)
-#define CAPI_VSEC_PS_SIZE(vsec)		(vsec + 0x2c)
+#define CXL_VSEC_LENGTH(vsec)		(vsec + 0x6) /* WORD */
+#define CXL_VSEC_NAFUS(vsec)		(vsec + 0x8) /* BYTE */
+#define CXL_VSEC_AFU_DESC_OFF(vsec)	(vsec + 0x20)
+#define CXL_VSEC_AFU_DESC_SIZE(vsec)	(vsec + 0x24)
+#define CXL_VSEC_PS_OFF(vsec)		(vsec + 0x28)
+#define CXL_VSEC_PS_SIZE(vsec)		(vsec + 0x2c)
 
 /* This works a little different than the p1/p2 register accesses to make it
  * easier to pull out individual fields */
-#define AFUD_READ(afu, off)		_capi_reg_read(afu->afu_desc_mmio + off)
+#define AFUD_READ(afu, off)		_cxl_reg_read(afu->afu_desc_mmio + off)
 #define EXTRACT_PPC_BIT(val, bit)	(!!(val & PPC_BIT(bit)))
 #define EXTRACT_PPC_BITS(val, bs, be)	((val & PPC_BITMASK(bs, be)) >> PPC_BITLSHIFT(be))
 
@@ -62,7 +62,7 @@
 #define   AFUD_EB_LEN(val)		EXTRACT_PPC_BITS(val, 8, 63)
 #define AFUD_READ_EB_OFF(afu)		AFUD_READ(afu, 0x48)
 
-DEFINE_PCI_DEVICE_TABLE(capi_pci_tbl) = {
+DEFINE_PCI_DEVICE_TABLE(cxl_pci_tbl) = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0477), },
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x044b), },
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x04cf), },
@@ -70,28 +70,28 @@ DEFINE_PCI_DEVICE_TABLE(capi_pci_tbl) = {
 
 	{ }
 };
-MODULE_DEVICE_TABLE(pci, capi_pci_tbl);
+MODULE_DEVICE_TABLE(pci, cxl_pci_tbl);
 
-static int find_capi_vsec(struct pci_dev *dev)
+static int find_cxl_vsec(struct pci_dev *dev)
 {
 	int vsec = 0;
 	u16 val;
 
 	while ((vsec = pci_find_next_ext_capability(dev, vsec, PCI_EXT_CAP_ID_VNDR))) {
 		pci_read_config_word(dev, vsec + 0x4, &val);
-		if (val == CAPI_PCI_VSEC_ID)
+		if (val == CXL_PCI_VSEC_ID)
 			return vsec;
 	}
 	return 0;
 
 }
 
-static void dump_capi_config_space(struct pci_dev *dev)
+static void dump_cxl_config_space(struct pci_dev *dev)
 {
 	int vsec;
 	u32 val;
 
-	dev_info(&dev->dev, "dump_capi_config_space\n");
+	dev_info(&dev->dev, "dump_cxl_config_space\n");
 
 	pci_read_config_dword(dev, PCI_BASE_ADDRESS_0, &val);
 	dev_info(&dev->dev, "BAR0: %#.8x\n", val);
@@ -110,77 +110,77 @@ static void dump_capi_config_space(struct pci_dev *dev)
 	dev_info(&dev->dev, "p2 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 0), pci_resource_len(dev, 0));
 	dev_info(&dev->dev, "BAR 4/5: %#llx, len: %#llx\n", pci_resource_start(dev, 4), pci_resource_len(dev, 4));
 
-	if (!(vsec = find_capi_vsec(dev)))
+	if (!(vsec = find_cxl_vsec(dev)))
 		return;
 
 	pci_read_config_dword(dev, vsec + 0x0, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Cap ID",		(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Cap Ver",	(val >> 16) & 0xf);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Next Cap Ptr",	(val >> 20) & 0xfff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Cap ID",		(val >>  0) & 0xffff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Cap Ver",	(val >> 16) & 0xf);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Next Cap Ptr",	(val >> 20) & 0xfff);
 	pci_read_config_dword(dev, vsec + 0x4, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "VSEC ID",	(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "VSEC Rev",	(val >> 16) & 0xf);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "VSEC Length",	(val >> 20) & 0xfff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "VSEC ID",	(val >>  0) & 0xffff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "VSEC Rev",	(val >> 16) & 0xf);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "VSEC Length",	(val >> 20) & 0xfff);
 	pci_read_config_dword(dev, vsec + 0x8, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Num AFUs",	(val >>  0) & 0xff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Status",		(val >>  8) & 0xff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Mode Control",	(val >> 16) & 0xff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	(val >> 24) & 0xff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Num AFUs",	(val >>  0) & 0xff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Status",		(val >>  8) & 0xff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Mode Control",	(val >> 16) & 0xff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	(val >> 24) & 0xff);
 	pci_read_config_dword(dev, vsec + 0xc, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Rev",	(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "CAIA Ver",	(val >> 16) & 0xffff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "PSL Rev",	(val >>  0) & 0xffff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "CAIA Ver",	(val >> 16) & 0xffff);
 	pci_read_config_dword(dev, vsec + 0x10, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Base Image Rev",	(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	(val >> 16) & 0x0fff);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Image Control",	(val >> 28) & 0x3);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	(val >> 30) & 0x1);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Image Loaded",	(val >> 31) & 0x1);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Base Image Rev",	(val >>  0) & 0xffff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	(val >> 16) & 0x0fff);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Image Control",	(val >> 28) & 0x3);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	(val >> 30) & 0x1);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Image Loaded",	(val >> 31) & 0x1);
 	pci_read_config_dword(dev, vsec + 0x14, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved",	val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	val);
 
 	pci_read_config_dword(dev, vsec + 0x18, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x1c, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 
 	pci_read_config_dword(dev, vsec + 0x20, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "AFU Descriptor Offset", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "AFU Descriptor Offset", val);
 	pci_read_config_dword(dev, vsec + 0x24, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "AFU Descriptor Size", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "AFU Descriptor Size", val);
 	pci_read_config_dword(dev, vsec + 0x28, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Problem State Offset", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Problem State Offset", val);
 	pci_read_config_dword(dev, vsec + 0x2c, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Problem State Size", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Problem State Size", val);
 
 	pci_read_config_dword(dev, vsec + 0x30, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x34, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x38, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x3c, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 
 	pci_read_config_dword(dev, vsec + 0x40, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Programming Port", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "PSL Programming Port", val);
 	pci_read_config_dword(dev, vsec + 0x44, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "PSL Programming Control", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "PSL Programming Control", val);
 	pci_read_config_dword(dev, vsec + 0x48, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x4c, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Reserved", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x50, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Address Register", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Address Register", val);
 	pci_read_config_dword(dev, vsec + 0x54, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Size Register", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Size Register", val);
 
 	pci_read_config_dword(dev, vsec + 0x58, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Status/Control Register", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Status/Control Register", val);
 	pci_read_config_dword(dev, vsec + 0x58, &val);
-	dev_info(&dev->dev, "capi vsec: %30s: %#x\n", "Flash Data Port", val);
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Data Port", val);
 }
 
-static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, struct capi_afu_t *afu)
+static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
 {
 	u64 val;
 
@@ -226,14 +226,14 @@ static int cmpbar(const void *p1, const void *p2)
 	resource_size_t l1 = r1->end - r1->start;
 	resource_size_t l2 = r2->end - r2->start;
 
-	pr_warn("capi %#.16llx <> %#.16llx : %#llx\n", l1, l2, l1 - l2);
+	pr_warn("cxl %#.16llx <> %#.16llx : %#llx\n", l1, l2, l1 - l2);
 
 	return l1 - l2;
 }
 
 extern struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev);
 
-static int init_implementation_adapter_regs(struct capi_t *adapter)
+static int init_implementation_adapter_regs(struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct device_node *np;
@@ -241,7 +241,7 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 	u64 psl_dsnctl;
 	u64 chipid;
 
-	dev_info(&dev->dev, "capi: **** Setup PSL Implementation Specific Registers ****\n");
+	dev_info(&dev->dev, "cxl: **** Setup PSL Implementation Specific Registers ****\n");
 
 	if (!(np = pnv_pci_to_phb_node(dev)))
 		return -ENODEV;
@@ -253,54 +253,54 @@ static int init_implementation_adapter_regs(struct capi_t *adapter)
 	chipid = be32_to_cpup(prop);
 	of_node_put(np);
 
-	dev_info(&dev->dev, "capi: Found ibm,chip-id: %#llx\n", chipid);
+	dev_info(&dev->dev, "cxl: Found ibm,chip-id: %#llx\n", chipid);
 
 	/* cappid 0:2 nodeid 3:5 chipid */
 	/* psl_dsnctl = 0x02e8100000000000ULL | (node << (63-2)) | (pos << (63-5)); */
 	psl_dsnctl = 0x02E8900002000000ULL | (chipid << (63-5));
 
-	capi_p1_write(adapter, CAPI_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
-	capi_p1_write(adapter, CAPI_PSL_RESLCKTO, 0x20000000200);
-	capi_p1_write(adapter, CAPI_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL); /* snoop write mask */
-	capi_p1_write(adapter, CAPI_PSL_FIR_CNTL, 0x0800000000000000ULL); /* set fir_accum */
+	cxl_p1_write(adapter, CXL_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
+	cxl_p1_write(adapter, CXL_PSL_RESLCKTO, 0x20000000200);
+	cxl_p1_write(adapter, CXL_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL); /* snoop write mask */
+	cxl_p1_write(adapter, CXL_PSL_FIR_CNTL, 0x0800000000000000ULL); /* set fir_accum */
 
 #if 0
-	capi_p1_write(adapter, CAPI_PSL_TRACERD, 0x0000F0FC00000000ULL); /* for debugging with trace arrays */
+	cxl_p1_write(adapter, CXL_PSL_TRACERD, 0x0000F0FC00000000ULL); /* for debugging with trace arrays */
 #else
 	/* changes recommended per JT and Yoanna 11/15/2013 */
-	capi_p1_write(adapter, CAPI_PSL_TRACE, 0x0000FF7C00000000ULL); /* for debugging with trace arrays */
+	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x0000FF7C00000000ULL); /* for debugging with trace arrays */
 #endif
 
-	dev_info(&dev->dev, "capi: **** Workaround to disable PSL QuickTag to fix miscompares - PSL_SNWRALLOC - HW249157 ****\n");
-	capi_p1_write(adapter, CAPI_PSL_SNWRALLOC, 0x80000000FFFFFFFFULL); /* HW249157 */
+	dev_info(&dev->dev, "cxl: **** Workaround to disable PSL QuickTag to fix miscompares - PSL_SNWRALLOC - HW249157 ****\n");
+	cxl_p1_write(adapter, CXL_PSL_SNWRALLOC, 0x80000000FFFFFFFFULL); /* HW249157 */
 
 	return 0;
 }
 
-static int init_implementation_afu_regs(struct capi_afu_t *afu)
+static int init_implementation_afu_regs(struct cxl_afu_t *afu)
 {
-	capi_p1n_write(afu, CAPI_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL); /* read/write masks for this slice */
-	capi_p1n_write(afu, CAPI_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL); /* APC read/write masks for this slice */
+	cxl_p1n_write(afu, CXL_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL); /* read/write masks for this slice */
+	cxl_p1n_write(afu, CXL_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL); /* APC read/write masks for this slice */
 
 	/* changes recommended per JT and Yoanna 11/15/2013 */
-	capi_p1n_write(afu, CAPI_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
+	cxl_p1n_write(afu, CXL_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
 
-	capi_p1n_write(afu, CAPI_PSL_RXCTL_A, 0xF000000000000000ULL);
+	cxl_p1n_write(afu, CXL_PSL_RXCTL_A, 0xF000000000000000ULL);
 
 	return 0;
 }
 
 /* Defined in powernv pci-ioda.c */
-extern int pnv_capi_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
+extern int pnv_cxl_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 		unsigned int hwirq, unsigned int virq);
 
-static int setup_capi_msi(struct capi_t *adapter, unsigned int hwirq, unsigned int virq)
+static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq, unsigned int virq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
 
-	return pnv_capi_ioda_msi_setup(phb, dev, hwirq, virq);
+	return pnv_cxl_ioda_msi_setup(phb, dev, hwirq, virq);
 }
 
 static int _alloc_hwirqs(struct pci_dev *dev, int num)
@@ -323,7 +323,7 @@ static void _release_hwirqs(struct pci_dev *dev, int hwirq, int num)
 	msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq - phb->msi_base, num);
 }
 
-static int alloc_hwirq_ranges(struct capi_irq_ranges *irqs, struct pci_dev *dev, int num)
+static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct pci_dev *dev, int num)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
@@ -331,7 +331,7 @@ static int alloc_hwirq_ranges(struct capi_irq_ranges *irqs, struct pci_dev *dev,
 	int hwirq;
 	int try;
 
-	memset(irqs, 0, sizeof(struct capi_irq_ranges));
+	memset(irqs, 0, sizeof(struct cxl_irq_ranges));
 
 	for (range = 0; range < 4 && num; range++) {
 		try = num;
@@ -346,7 +346,7 @@ static int alloc_hwirq_ranges(struct capi_irq_ranges *irqs, struct pci_dev *dev,
 
 		irqs->offset[range] = phb->msi_base + hwirq;
 		irqs->range[range] = try;
-		dev_info(&dev->dev, "capi alloc irq range 0x%x: offset: 0x%lx  limit: %li\n",
+		dev_info(&dev->dev, "cxl alloc irq range 0x%x: offset: 0x%lx  limit: %li\n",
 			 range, irqs->offset[range], irqs->range[range]);
 		num -= try;
 	}
@@ -363,13 +363,13 @@ fail:
 	return -ENOSPC;
 }
 
-static int alloc_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter, unsigned int num)
+static int alloc_hwirqs(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	return alloc_hwirq_ranges(irqs, dev, num);
 }
 
-static void release_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter)
+static void release_hwirqs(struct cxl_irq_ranges *irqs, struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
@@ -380,7 +380,7 @@ static void release_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter)
 	for (range = 0; range < 4; range++) {
 		hwirq = irqs->offset[range] - phb->msi_base;
 		if (irqs->range[range]) {
-			dev_info(&dev->dev, "capi release irq range 0x%x: offset: 0x%lx  limit: %ld\n",
+			dev_info(&dev->dev, "cxl release irq range 0x%x: offset: 0x%lx  limit: %ld\n",
 				 range, irqs->offset[range],
 				 irqs->range[range]);
 			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
@@ -389,36 +389,36 @@ static void release_hwirqs(struct capi_irq_ranges *irqs, struct capi_t *adapter)
 	}
 }
 
-static void capi_release_adapter(struct capi_t *adapter)
+static void cxl_release_adapter(struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
 	_release_hwirqs(dev, adapter->err_hwirq, 1);
 }
 
-static void capi_release_afu(struct capi_afu_t *afu)
+static void cxl_release_afu(struct cxl_afu_t *afu)
 {
 	struct pci_dev *dev = to_pci_dev(afu->adapter->device.parent);
 
 	_release_hwirqs(dev, afu->err_hwirq, 1);
 }
 
-static int capi_reset(struct capi_t *adapter);
-static struct capi_driver_ops capi_pci_driver_ops = {
+static int cxl_reset(struct cxl_t *adapter);
+static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.module = THIS_MODULE,
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
 	.alloc_irqs = alloc_hwirqs,
 	.release_irqs = release_hwirqs,
-	.setup_irq = setup_capi_msi,
-	.release_adapter = capi_release_adapter,
-	.release_afu = capi_release_afu,
-	.reset = capi_reset,
+	.setup_irq = setup_cxl_msi,
+	.release_adapter = cxl_release_adapter,
+	.release_afu = cxl_release_afu,
+	.reset = cxl_reset,
 };
 
 
 
-static void reassign_capi_bars(struct pci_dev *dev)
+static void reassign_cxl_bars(struct pci_dev *dev)
 {
 	const u32 *window_prop;
 	LIST_HEAD(head);
@@ -429,15 +429,15 @@ static void reassign_capi_bars(struct pci_dev *dev)
 	resource_size_t len;
 	struct device_node *np;
 
-	dev_warn(&dev->dev, "Reassign CAPI BARs\n");
+	dev_warn(&dev->dev, "Reassign CXL BARs\n");
 
 	if (!(np = pnv_pci_to_phb_node(dev))) {
-		dev_warn(&dev->dev, "WARNING: Unable to get capi phb node, using BAR assignment from Linux\n");
+		dev_warn(&dev->dev, "WARNING: Unable to get cxl phb node, using BAR assignment from Linux\n");
 		return;
 	}
 
 	/*
-	 * MASSIVE HACK: CAPI requires the m64 address space for BAR
+	 * MASSIVE HACK: CXL requires the m64 address space for BAR
 	 * assignment. Our PHB code in Linux doesn't use it yet, and Linux will
 	 * have assigned BARs from the m32 space. For now just reassign the
 	 * BARs from the m64 space.
@@ -469,7 +469,7 @@ static void reassign_capi_bars(struct pci_dev *dev)
 		}
 	}
 
-	/* BAR 4/5 is for the CAPI protocol. Bits[48:49] must be set to 10 */
+	/* BAR 4/5 is for the CXL protocol. Bits[48:49] must be set to 10 */
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00000000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00020000);
 	dev_info(&dev->dev, "wrote BAR4/5\n");
@@ -479,16 +479,16 @@ static void reassign_capi_bars(struct pci_dev *dev)
  *  pciex node: ibm,opal-m64-window = <0x3d058 0x0 0x3d058 0x0 0x8 0x0>;
  */
 
-static int switch_card_to_capi(struct pci_dev *dev)
+static int switch_card_to_cxl(struct pci_dev *dev)
 {
 	int vsec;
 	u32 val;
 	int rc;
 
-	dev_info(&dev->dev, "switch card to capi\n");
+	dev_info(&dev->dev, "switch card to cxl\n");
 
-	if (!(vsec = find_capi_vsec(dev))) {
-		dev_err(&dev->dev, "capi: WARNING: CAPI VSEC not found, assuming card is already in CAPI mode!\n");
+	if (!(vsec = find_cxl_vsec(dev))) {
+		dev_err(&dev->dev, "cxl: WARNING: CXL VSEC not found, assuming card is already in CXL mode!\n");
 		/* return -ENODEV; */
 		return 0;
 	}
@@ -499,39 +499,39 @@ static int switch_card_to_capi(struct pci_dev *dev)
 		dev_err(&dev->dev, "failed to read current mode control: %i", rc);
 		return rc;
 	}
-	val &= ~CAPI_PROTOCOL_MASK;
-	val |= CAPI_PROTOCOL_256TB | CAPI_PROTOCOL_ENABLE;
+	val &= ~CXL_PROTOCOL_MASK;
+	val |= CXL_PROTOCOL_256TB | CXL_PROTOCOL_ENABLE;
 	if ((rc = pci_write_config_dword(dev, vsec + 0x8, val))) {
-		dev_err(&dev->dev, "failed to enable capi protocol: %i", rc);
+		dev_err(&dev->dev, "failed to enable cxl protocol: %i", rc);
 		return rc;
 	}
 
 	return 0;
 }
 
-extern int pnv_phb_to_capi(struct pci_dev *dev);
+extern int pnv_phb_to_cxl(struct pci_dev *dev);
 
-int enable_capi_protocol(struct pci_dev *dev)
+int enable_cxl_protocol(struct pci_dev *dev)
 {
 	int rc;
 
-	if ((rc = switch_card_to_capi(dev)))
+	if ((rc = switch_card_to_cxl(dev)))
 		return rc;
 
-	if ((rc = pnv_phb_to_capi(dev)))
+	if ((rc = pnv_phb_to_cxl(dev)))
 		return rc;
 
 	return rc;
 }
 
-static int init_slice(struct capi_t *adapter,
+static int init_slice(struct cxl_t *adapter,
 		      u64 p1_base, u64 p2_base,
 		      u64 ps_off, u64 ps_size,
 		      u64 afu_desc_off, u64 afu_desc_size,
 		      int slice, struct pci_dev *dev)
 {
 	int rc;
-	struct capi_afu_t *afu = &(adapter->slice[slice]);
+	struct cxl_afu_t *afu = &(adapter->slice[slice]);
 	u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
 	int err_hwirq;
 	u64 val;
@@ -544,7 +544,7 @@ static int init_slice(struct capi_t *adapter,
 	psn_base = p2_base + (ps_off + (slice * ps_size));
 	afu_desc = p2_base + afu_desc_off + (slice * afu_desc_size);
 
-	if ((rc = capi_map_slice_regs(afu,
+	if ((rc = cxl_map_slice_regs(afu,
 				      p1n_base, p1n_size,
 				      p2n_base, p2n_size,
 				      psn_base, ps_size,
@@ -556,8 +556,8 @@ static int init_slice(struct capi_t *adapter,
 
 	/* FIXME: mask the MMIO timeout for
 	   now.  need to * fix this long term */
-	capi_p1n_write(afu, CAPI_PSL_SERR_An, 0x0000000000000000);
-	capi_ops->afu_reset(afu);
+	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
+	cxl_ops->afu_reset(afu);
 	dump_afu_descriptor(dev, afu);
 
 	val = AFUD_READ_INFO(afu);
@@ -594,8 +594,8 @@ static int init_slice(struct capi_t *adapter,
 		goto out;
 	}
 
-	if ((rc = capi_init_afu(afu, 0, err_hwirq))) {
-		dev_err(&dev->dev, "capi_init_afu failed: %i\n", rc);
+	if ((rc = cxl_init_afu(afu, 0, err_hwirq))) {
+		dev_err(&dev->dev, "cxl_init_afu failed: %i\n", rc);
 		goto out1;
 	}
 
@@ -604,26 +604,26 @@ static int init_slice(struct capi_t *adapter,
 out1:
 	_release_hwirqs(dev, err_hwirq, 1);
 out:
-	capi_unmap_slice_regs(afu);
+	cxl_unmap_slice_regs(afu);
 	return rc;
 }
 
-static void remove_slice(struct capi_t *adapter, int slice)
+static void remove_slice(struct cxl_t *adapter, int slice)
 {
-	struct capi_afu_t *afu = &(adapter->slice[slice]);
+	struct cxl_afu_t *afu = &(adapter->slice[slice]);
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
-	capi_unmap_slice_regs(afu);
+	cxl_unmap_slice_regs(afu);
 	_release_hwirqs(dev, afu->err_hwirq, 1);
-	capi_unregister_afu(afu);
+	cxl_unregister_afu(afu);
 }
 
-int init_capi_pci(struct pci_dev *dev)
+int init_cxl_pci(struct pci_dev *dev)
 {
 	u64 p1_base, p1_size;
 	u64 p2_base, p2_size;
-	int vsec = find_capi_vsec(dev);
-	struct capi_t *adapter;
+	int vsec = find_cxl_vsec(dev);
+	struct cxl_t *adapter;
 	u32 afu_desc_off, afu_desc_size;
 	u32 ps_off, ps_size;
 	u16 vseclen;
@@ -631,9 +631,9 @@ int init_capi_pci(struct pci_dev *dev)
 	int slice;
 	int rc = -EBUSY;
 	int err_hwirq;
-	struct capi_native_data backend_data;
+	struct cxl_native_data backend_data;
 
-	if (!(adapter = kzalloc(sizeof(struct capi_t), GFP_KERNEL))) {
+	if (!(adapter = kzalloc(sizeof(struct cxl_t), GFP_KERNEL))) {
 		rc = -ENOMEM;
 		goto err;
 	}
@@ -651,18 +651,18 @@ int init_capi_pci(struct pci_dev *dev)
 	p2_size = pci_resource_len(dev, 0);
 
 	if (!vsec) {
-		dev_err(&dev->dev, "no capi vsec found\n");
+		dev_err(&dev->dev, "no cxl vsec found\n");
 		goto err3;
 	}
 
-	dev_info(&dev->dev, "capi vsec found at offset %#x\n", vsec);
-	pci_read_config_word(dev, CAPI_VSEC_LENGTH(vsec), &vseclen);
+	dev_info(&dev->dev, "cxl vsec found at offset %#x\n", vsec);
+	pci_read_config_word(dev, CXL_VSEC_LENGTH(vsec), &vseclen);
 	vseclen = vseclen >> 4;
-	pci_read_config_byte(dev, CAPI_VSEC_NAFUS(vsec), &nAFUs);
-	pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
-	pci_read_config_dword(dev, CAPI_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
-	pci_read_config_dword(dev, CAPI_VSEC_PS_OFF(vsec), &ps_off);
-	pci_read_config_dword(dev, CAPI_VSEC_PS_SIZE(vsec), &ps_size);
+	pci_read_config_byte(dev, CXL_VSEC_NAFUS(vsec), &nAFUs);
+	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_OFF(vsec), &afu_desc_off);
+	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_SIZE(vsec), &afu_desc_size);
+	pci_read_config_dword(dev, CXL_VSEC_PS_OFF(vsec), &ps_off);
+	pci_read_config_dword(dev, CXL_VSEC_PS_SIZE(vsec), &ps_size);
 
 	ps_off  *= 64 * 1024;
 	ps_size *= 64 * 1024;
@@ -686,8 +686,8 @@ int init_capi_pci(struct pci_dev *dev)
 	backend_data.p2_base = p2_base;
 	backend_data.p2_size = p2_size;
 	backend_data.err_hwirq = err_hwirq;
-	if ((rc = capi_init_adapter(adapter, &capi_pci_driver_ops, &dev->dev, nAFUs, &backend_data))) {
-		dev_err(&dev->dev, "capi_alloc_adapter failed: %i\n", rc);
+	if ((rc = cxl_init_adapter(adapter, &cxl_pci_driver_ops, &dev->dev, nAFUs, &backend_data))) {
+		dev_err(&dev->dev, "cxl_alloc_adapter failed: %i\n", rc);
 		goto err4;
 	}
 
@@ -700,7 +700,7 @@ int init_capi_pci(struct pci_dev *dev)
 err5:
 	for (slice--; slice >= 0; slice--)
 		remove_slice(adapter, slice);
-	capi_unregister_adapter(adapter);
+	cxl_unregister_adapter(adapter);
 err4:
 	_release_hwirqs(dev, err_hwirq, 1);
 err3:
@@ -716,7 +716,7 @@ err:
 bool pci_bus_read_dev_vendor_id(struct pci_bus *bus, int devfn, u32 *pl,
 				int crs_timeout);
 
-static int capi_reset(struct capi_t *adapter)
+static int cxl_reset(struct cxl_t *adapter)
 {
 	struct pci_dev *pdev = to_pci_dev(adapter->device.parent);
 	int vsec;
@@ -725,8 +725,8 @@ static int capi_reset(struct capi_t *adapter)
 
 	dev_info(&pdev->dev, "pci reset\n");
 
-	if (!(vsec = find_capi_vsec(pdev))) {
-		dev_err(&pdev->dev, "capi: WARNING: CAPI VSEC not found, assuming card is already in CAPI mode!\n");
+	if (!(vsec = find_cxl_vsec(pdev))) {
+		dev_err(&pdev->dev, "cxl: WARNING: CXL VSEC not found, assuming card is already in CXL mode!\n");
 		/* return -ENODEV; */
 		return 0;
 	}
@@ -734,9 +734,9 @@ static int capi_reset(struct capi_t *adapter)
 		dev_err(&pdev->dev, "failed to read vsec offset 10 (for image control): %i", rc);
 		return rc;
 	}
-	val |= CAPI_PERST_RELOAD | CAPI_USER_IMAGE;
+	val |= CXL_PERST_RELOAD | CXL_USER_IMAGE;
 	if (adapter->reset_image_factory)
-		val &= ~CAPI_USER_IMAGE;
+		val &= ~CXL_USER_IMAGE;
 
 	if ((rc = pci_write_config_dword(pdev, vsec + 0x10, val))) {
 		dev_err(&pdev->dev, "failed to enable perst reload: %i", rc);
@@ -753,24 +753,24 @@ static int capi_reset(struct capi_t *adapter)
 	pci_bus_read_dev_vendor_id(pdev->bus, pdev->devfn, &val, 60*1000);
 	dev_info(&pdev->dev, "v = %08x\n", val);
 
-	/* Now lets setup the device again.. stolen from capi_probe() */
-	dump_capi_config_space(pdev);
-	reassign_capi_bars(pdev);
+	/* Now lets setup the device again.. stolen from cxl_probe() */
+	dump_cxl_config_space(pdev);
+	reassign_cxl_bars(pdev);
 
-	/* just do the card as the CAPP unit should still be in CAPI mode */
-	if ((rc = switch_card_to_capi(pdev))){
-		dev_err(&pdev->dev, "enable_capi_protocol failed: %i\n", rc);
+	/* just do the card as the CAPP unit should still be in CXL mode */
+	if ((rc = switch_card_to_cxl(pdev))){
+		dev_err(&pdev->dev, "enable_cxl_protocol failed: %i\n", rc);
 		goto out;
 	}
-	dev_info(&pdev->dev, "capi protocol enabled\n");
+	dev_info(&pdev->dev, "cxl protocol enabled\n");
 
 /*	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
 		return rc;
 	}
 */
-/*	if ((rc = init_capi_pci(dev))) {
-		dev_err(&dev->dev, "init_capi_pci failed: %i\n", rc);
+/*	if ((rc = init_cxl_pci(dev))) {
+		dev_err(&dev->dev, "init_cxl_pci failed: %i\n", rc);
 		return rc;
 	}
 */
@@ -780,41 +780,41 @@ out:
 
 }
 
-static int capi_probe(struct pci_dev *dev, const struct pci_device_id *id)
+static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
 	int rc;
 
 	dev_info(&dev->dev, "pci probe\n");
 	pci_dev_get(dev);
-	dump_capi_config_space(dev);
+	dump_cxl_config_space(dev);
 
-	reassign_capi_bars(dev);
+	reassign_cxl_bars(dev);
 
-	if ((rc = enable_capi_protocol(dev))) {
-		dev_err(&dev->dev, "enable_capi_protocol failed: %i\n", rc);
+	if ((rc = enable_cxl_protocol(dev))) {
+		dev_err(&dev->dev, "enable_cxl_protocol failed: %i\n", rc);
 		return rc;
 	}
-	dev_info(&dev->dev, "capi protocol enabled\n");
+	dev_info(&dev->dev, "cxl protocol enabled\n");
 
 	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
 		return rc;
 	}
 
-	if ((rc = init_capi_pci(dev))) {
-		dev_err(&dev->dev, "init_capi_pci failed: %i\n", rc);
+	if ((rc = init_cxl_pci(dev))) {
+		dev_err(&dev->dev, "init_cxl_pci failed: %i\n", rc);
 		return rc;
 	}
 
 	return 0;
 }
 
-static void capi_remove(struct pci_dev *dev)
+static void cxl_remove(struct pci_dev *dev)
 {
-	struct capi_t *adapter = pci_get_drvdata(dev);
+	struct cxl_t *adapter = pci_get_drvdata(dev);
 
 	dev_warn(&dev->dev, "pci remove\n");
-	capi_unregister_adapter(adapter);
+	cxl_unregister_adapter(adapter);
 	pci_release_region(dev, 0);
 	pci_release_region(dev, 2);
 	kfree(adapter);
@@ -824,11 +824,11 @@ static void capi_remove(struct pci_dev *dev)
 
 }
 
-static struct pci_driver capi_pci_driver = {
-	.name = "capi-pci",
-	.id_table = capi_pci_tbl,
-	.probe = capi_probe,
-	.remove = capi_remove,
+static struct pci_driver cxl_pci_driver = {
+	.name = "cxl-pci",
+	.id_table = cxl_pci_tbl,
+	.probe = cxl_probe,
+	.remove = cxl_remove,
 
 	/* TODO:
 	 * #ifdef CONFIG_PM
@@ -837,7 +837,7 @@ static struct pci_driver capi_pci_driver = {
 	 * #endif */
 };
 
-module_driver(capi_pci_driver, pci_register_driver, pci_unregister_driver);
+module_driver(cxl_pci_driver, pci_register_driver, pci_unregister_driver);
 
 MODULE_DESCRIPTION("IBM Coherent Accelerator");
 MODULE_AUTHOR("Ian Munsie <imunsie@au1.ibm.com>");
