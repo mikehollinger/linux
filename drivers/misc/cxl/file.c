@@ -418,7 +418,31 @@ struct trcdsc
 
 struct trcdsc descriptors[] =
 {
-#include "trace_stat_descriptor.c"
+	{ "ahctr  ", 1, 0x3, 0x0, 512 } ,
+	{ "ersptr ", 1, 0x1, 0x3, 512 } ,
+	{ "twdatr ", 1, 0x9, 0xa, 512 } ,
+	{ "crsptr ", 1, 0x1, 0x2, 512 } ,
+	{ "hartr  ", 1, 0x1, 0x1, 512 } ,
+	{ "twtr   ", 1, 0x2, 0x7, 512 } ,
+	{ "rtwtr  ", 1, 0x2, 0x8, 512 } ,
+	{ "ssprot ", 0, 0x3, 0xc, 512 } ,
+	{ "datr   ", 0, 0x6, 0xf, 4096 } ,
+	{ "r0tiftr", 1, 0x3, 0xd, 512 } ,
+	{ "b0rvalt", 1, 0x9, 0x4, 512 } ,
+	{ "b0wvalt", 1, 0x9, 0x5, 512 } ,
+	{ "rwtiftr", 0, 0x3, 0x9, 512 } ,
+	{ "rqinftr", 0, 0x3, 0x8, 512 } ,
+	{ "rqinft2", 0, 0x3, 0xa, 512 } ,
+	{ "pslcmd ", 0, 0x3, 0x3, 512 } ,
+	{ "pslcmd2", 0, 0x3, 0xe, 64 } ,
+	{ "rdintr ", 0, 0x9, 0x4, 512 } ,
+	{ "wrrdy  ", 0, 0x1, 0x5, 512 } ,
+	{ "wdoutr ", 0, 0x9, 0x6, 512 } ,
+	{ "rxdcdtr", 0, 0x3, 0x0, 512 } ,
+	{ "rxsnp  ", 0, 0x2, 0x1, 512 } ,
+	{ "apcrspt", 0, 0x2, 0x2, 512 } ,
+	{ "dsisrtr", 1, 0x1, 0x6, 512 } ,
+	{ "jmcmdtr", 1, 0x1, 0xe, 512 } ,
 	{ {0x0}, 0, 0, 0, 0 },
 };
 
