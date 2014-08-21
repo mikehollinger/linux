@@ -85,7 +85,8 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
 	u64 len = vma->vm_end - vma->vm_start;
 	len = min(len, ctx->psn_size);
 
-	if (ctx->afu->afu_dedicated_mode) {
+	/* FIXME: Clean this up to separate current vs. supported models */
+	if (!ctx->afu->afu_directed_mode) {
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 		return vm_iomap_memory(vma, ctx->afu->psn_phys, ctx->afu->psn_size);
 	}
