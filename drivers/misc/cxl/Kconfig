@@ -2,9 +2,14 @@
 # Coherent Accelerator Processor Interface compatible devices
 #
 
+config CXL_BASE
+	bool
+	default n
+
 config CXL
 	tristate "Support for CAIA compliant accelerators"
 	depends on PPC_POWERNV || PPC_PSERIES
+	select CXL_BASE
 	default m
 	help
 	  Select this option to enable support for adapters that follow the
