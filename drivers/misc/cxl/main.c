@@ -269,6 +269,9 @@ int cxl_init_adapter(struct cxl_t *adapter,
 	if (!slices)
 		return -EINVAL;
 
+	/* FIXME: We have a scheduling while atomic bug here when we call
+	 * device_add with this held. I've been meaning to change this to use
+	 * idr to allocate indexes to pointers, which should fix this. */
 	spin_lock(&adapter_list_lock);
 	adapter->adapter_num = cxl_get_num_adapters();
 
