@@ -1129,7 +1129,8 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 			WARN_ON(1);
 		}
 #endif
-		check_paca_psize(ea, mm, psize, user_region);
+		if (likely(current->mm == mm))
+			check_paca_psize(ea, mm, psize, user_region);
 
 		goto bail;
 	}
@@ -1176,7 +1177,8 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 		}
 	}
 
-	check_paca_psize(ea, mm, psize, user_region);
+	if (likely(current->mm == mm))
+		check_paca_psize(ea, mm, psize, user_region);
 #endif /* CONFIG_PPC_64K_PAGES */
 
 #ifdef CONFIG_PPC_HAS_HASH_64K
