@@ -53,7 +53,7 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 	ctx->pending_fault = false;
 	ctx->pending_afu_err = false;
 
-	/* FIXME: Need to move this to the start work ioctl */
+	/* FIXME: need to make this two stage between the open and the ioctl */
 	ctx->attached = 1;
 
 	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
