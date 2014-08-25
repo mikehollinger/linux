@@ -89,9 +89,6 @@ static int psl_purge(struct cxl_afu_t *afu)
 
 	pr_devel("PSL purge request\n");
 
-	BUG_ON(PSL_CNTL == ~0ULL); /* FIXME: eeh path */
-	BUG_ON(AFU_Cntl == ~0ULL); /* FIXME: eeh path */
-
 	if ((AFU_Cntl & CXL_AFU_Cntl_An_ES_MASK) != CXL_AFU_Cntl_An_ES_Disabled) {
 		WARN(1, "psl_purge request while AFU not disabled!\n");
 		afu_disable(afu);
@@ -108,7 +105,6 @@ static int psl_purge(struct cxl_afu_t *afu)
 			return -EBUSY;
 		}
 		dsisr = cxl_p2n_read(afu, CXL_PSL_DSISR_An);
-		BUG_ON(dsisr == ~0ULL); /* FIXME: eeh path */
 		pr_devel_ratelimited("PSL purging... PSL_CNTL: 0x%.16llx  PSL_DSISR: 0x%.16llx\n", PSL_CNTL, dsisr);
 		if (dsisr & CXL_PSL_DSISR_TRANS) {
 			dar = cxl_p2n_read(afu, CXL_PSL_DAR_An);
@@ -121,7 +117,6 @@ static int psl_purge(struct cxl_afu_t *afu)
 			cpu_relax();
 		}
 		PSL_CNTL = cxl_p1n_read(afu, CXL_PSL_SCNTL_An);
-		BUG_ON(PSL_CNTL == ~0ULL); /* FIXME: eeh path */
 	};
 	end = mftb();
 	pr_devel("PSL purged in %lld 512MHz tb ticks\n", end - start);
