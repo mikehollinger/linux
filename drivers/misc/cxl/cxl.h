@@ -389,7 +389,7 @@ struct cxl_context_t {
 	u64 fault_addr;
 	u64 afu_err;
 	bool pending_afu_err;
-	unsigned long attached;
+	bool attached;
 
 	u32 irq_count;
 

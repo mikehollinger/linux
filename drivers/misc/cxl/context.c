@@ -53,7 +53,7 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 	ctx->pending_fault = false;
 	ctx->pending_afu_err = false;
 
-	/* FIXME: Need to move this. */
+	/* FIXME: Need to move this to the start work ioctl */
 	ctx->attached = 1;
 
 	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
@@ -122,10 +122,13 @@ static void __detach_context(struct cxl_context_t *ctx)
 	/* FIXME: If we opened it but never started it, this will WARN */
 	/* FIXME: check this is the last context to shut down */
 
-	if (!test_and_clear_bit(0, &ctx->attached))
-		return;
 
 	spin_lock(&ctx->afu->contexts_lock);
+	if (!ctx->attached) {
+		spin_unlock(&ctx->afu->contexts_lock);
+		return;
+	}
+	ctx->attached = false;
 	list_del(&ctx->list);
 	spin_unlock(&ctx->afu->contexts_lock);
 	WARN_ON(cxl_ops->detach_process(ctx));
