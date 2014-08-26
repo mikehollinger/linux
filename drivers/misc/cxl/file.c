@@ -56,6 +56,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 		return -ENOMEM;
 
 	cxl_context_init(ctx, &adapter->slice[slice], master);
+	pr_devel("afu_open pe: %i\n", ctx->ph);
 	cxl_context_start(ctx);
 	file->private_data = (void *)ctx;
 
@@ -78,7 +79,7 @@ afu_release(struct inode *inode, struct file *file)
 {
 	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
 
-	pr_devel("%s: closing cxl file descriptor. pe=%i\n",
+	pr_devel("%s: closing cxl file descriptor. pe: %i\n",
 		 __FUNCTION__, ctx->ph);
 	cxl_context_detach(ctx);
 
@@ -98,7 +99,7 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 	u64 amr;
 	int rc;
 
-	pr_devel("afu_ioctl: CXL_START_WORK\n");
+	pr_devel("afu_ioctl: pe: %i CXL_START_WORK\n", ctx->ph);
 
 	if (copy_from_user(&work, uwork,
 			   sizeof(struct cxl_ioctl_start_work)))
@@ -119,7 +120,6 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
 		return rc;
 
-	printk("cxl amr: %llx uamor: %lx\n", work.amr, mfspr(SPRN_UAMOR));
 	amr = work.amr & mfspr(SPRN_UAMOR);
 
 	work.process_element = ctx->ph;
@@ -223,7 +223,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 
 	poll_wait(file, &ctx->wq, poll);
 
-	pr_devel("afu_poll wait done\n");
+	pr_devel("afu_poll wait done pe: %i\n", ctx->ph);
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	if (ctx->pending_irq || ctx->pending_fault ||
@@ -231,7 +231,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 		mask |= POLLIN | POLLRDNORM;
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
-	pr_devel("afu_poll returning %#x\n", mask);
+	pr_devel("afu_poll pe: %i returning %#x\n", ctx->ph, mask);
 
 	return mask;
 }
