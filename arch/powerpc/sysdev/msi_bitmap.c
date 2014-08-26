@@ -24,13 +24,20 @@ int msi_bitmap_alloc_hwirqs(struct msi_bitmap *bmp, int num)
 	 * This is fast, but stricter than we need. We might want to add
 	 * a fallback routine which does a linear search with no alignment.
 	 */
-	offset = bitmap_find_free_region(bmp->bitmap, bmp->irq_count, order);
+	offset = bitmap_find_next_zero_area(bmp->bitmap, bmp->irq_count, 0,
+					    num, (1 << order) - 1);
+	if (offset > bmp->irq_count)
+		goto err;
+	bitmap_set(bmp->bitmap, offset, num);
 	spin_unlock_irqrestore(&bmp->lock, flags);
 
 	pr_debug("msi_bitmap: allocated 0x%x (2^%d) at offset 0x%x\n",
 		 num, order, offset);
 
 	return offset;
+err:
+	spin_unlock_irqrestore(&bmp->lock, flags);
+	return -ENOMEM;
 }
 EXPORT_SYMBOL(msi_bitmap_alloc_hwirqs);
 
@@ -38,13 +45,12 @@ void msi_bitmap_free_hwirqs(struct msi_bitmap *bmp, unsigned int offset,
 			    unsigned int num)
 {
 	unsigned long flags;
-	int order = get_count_order(num);
 
-	pr_debug("msi_bitmap: freeing 0x%x (2^%d) at offset 0x%x\n",
-		 num, order, offset);
+	pr_debug("msi_bitmap: freeing 0x%x at offset 0x%x\n",
+		 num, offset);
 
 	spin_lock_irqsave(&bmp->lock, flags);
-	bitmap_release_region(bmp->bitmap, offset, order);
+	bitmap_clear(bmp->bitmap, offset, num);
 	spin_unlock_irqrestore(&bmp->lock, flags);
 }
 EXPORT_SYMBOL(msi_bitmap_free_hwirqs);
