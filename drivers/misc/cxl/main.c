@@ -116,7 +116,7 @@ void cxl_slbia(struct mm_struct *mm)
 				if (task->mm != mm)
 					goto next;
 
-				pr_devel("cxl_slbia matched mm - card %i afu %i pe %i\n", card, slice, ctx->ph);
+				pr_devel("cxl_slbia matched mm - card: %i afu: %i pe: %i\n", card, slice, ctx->ph);
 
 				spin_lock_irqsave(&ctx->sst_lock, flags);
 				if (!ctx->sstp)
