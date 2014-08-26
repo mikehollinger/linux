@@ -194,8 +194,8 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 	}
 	BUG_ON(r >= CXL_IRQ_RANGES);
 
-	pr_devel("Received AFU interrupt %i for afu context %p (virq %i hwirq %lx)\n",
-	       afu_irq, ctx, irq, hwirq);
+	pr_devel("Received AFU interrupt %i for pe: %i (virq %i hwirq %lx)\n",
+	       afu_irq, ctx->ph, irq, hwirq);
 
 	BUG_ON(!ctx->irq_bitmap);
 	spin_lock(&ctx->lock);
