@@ -336,7 +336,7 @@ static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct pci_dev *dev, 
 	for (range = 0; range < 4 && num; range++) {
 		try = num;
 		while (try) {
-			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
+			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, try);
 			if (hwirq >= 0)
 				break;
 			try /= 2;
