@@ -379,23 +379,20 @@ EXPORT_SYMBOL(cxl_unregister_afu);
 
 void cxl_unregister_adapter(struct cxl_t *adapter)
 {
-	struct cxl_t *tmp;
 	int adapter_num = 0, slice;
 
 	/* Unregister CXL adapter device */
 
 	spin_lock(&adapter_list_lock);
-	list_for_each_entry_safe(adapter, tmp, &adapter_list, list) {
-		for (slice = 0; slice < adapter->slices; slice++)
-			cxl_unregister_afu(&adapter->slice[slice]);
-		del_cxl_dev(adapter, adapter_num++);
+	for (slice = 0; slice < adapter->slices; slice++)
+		cxl_unregister_afu(&adapter->slice[slice]);
+	del_cxl_dev(adapter, adapter_num++);
 
-		/* CXL-HV/Native adapter release */
-		if (cxl_ops->release_adapter)
-			cxl_ops->release_adapter(adapter);
+	/* CXL-HV/Native adapter release */
+	if (cxl_ops->release_adapter)
+		cxl_ops->release_adapter(adapter);
 
-		list_del(&adapter->list);
-	}
+	list_del(&adapter->list);
 	spin_unlock(&adapter_list_lock);
 
 	unregister_cxl_dev();

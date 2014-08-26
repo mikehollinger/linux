@@ -400,6 +400,7 @@ static void cxl_release_afu(struct cxl_afu_t *afu)
 {
 	struct pci_dev *dev = to_pci_dev(afu->adapter->device.parent);
 
+	cxl_unmap_slice_regs(afu);
 	_release_hwirqs(dev, afu->err_hwirq, 1);
 }
 
@@ -612,16 +613,6 @@ out:
 	return rc;
 }
 
-static void remove_slice(struct cxl_t *adapter, int slice)
-{
-	struct cxl_afu_t *afu = &(adapter->slice[slice]);
-	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
-
-	cxl_unmap_slice_regs(afu);
-	_release_hwirqs(dev, afu->err_hwirq, 1);
-	cxl_unregister_afu(afu);
-}
-
 int init_cxl_pci(struct pci_dev *dev)
 {
 	u64 p1_base, p1_size;
@@ -703,7 +694,11 @@ int init_cxl_pci(struct pci_dev *dev)
 	return 0;
 err5:
 	for (slice--; slice >= 0; slice--)
-		remove_slice(adapter, slice);
+		cxl_unregister_afu(&adapter->slice[slice]);
+	/* FIXME: Calling this is going to double call a bunch of crap, like
+	 * cxl_unregister_afu and _release_hwirqs - I need to take a good long
+	 * hard look at our error paths and convince myself that they actually
+	 * do the right thing */
 	cxl_unregister_adapter(adapter);
 err4:
 	_release_hwirqs(dev, err_hwirq, 1);
