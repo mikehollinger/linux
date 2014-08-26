@@ -316,6 +316,12 @@ static int _alloc_hwirqs(struct pci_dev *dev, int num)
 	return phb->msi_base + hwirq;
 }
 
+static int alloc_one_hwirq(struct cxl_t *adapter)
+{
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+	return _alloc_hwirqs(dev, 1);
+}
+
 static void _release_hwirqs(struct pci_dev *dev, int hwirq, int num)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
@@ -323,7 +329,13 @@ static void _release_hwirqs(struct pci_dev *dev, int hwirq, int num)
 	msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq - phb->msi_base, num);
 }
 
-static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct pci_dev *dev, int num)
+static void release_one_hwirq(struct cxl_t *adapter, int hwirq)
+{
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+	return _release_hwirqs(dev, hwirq, 1);
+}
+
+static int _alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct pci_dev *dev, int num)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
@@ -333,7 +345,7 @@ static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct pci_dev *dev, 
 
 	memset(irqs, 0, sizeof(struct cxl_irq_ranges));
 
-	for (range = 0; range < 4 && num; range++) {
+	for (range = 1; range < CXL_IRQ_RANGES && num; range++) {
 		try = num;
 		while (try) {
 			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, try);
@@ -363,13 +375,13 @@ fail:
 	return -ENOSPC;
 }
 
-static int alloc_hwirqs(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
+static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
-	return alloc_hwirq_ranges(irqs, dev, num);
+	return _alloc_hwirq_ranges(irqs, dev, num);
 }
 
-static void release_hwirqs(struct cxl_irq_ranges *irqs, struct cxl_t *adapter)
+static void release_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
@@ -402,6 +414,7 @@ static void cxl_release_afu(struct cxl_afu_t *afu)
 
 	cxl_unmap_slice_regs(afu);
 	_release_hwirqs(dev, afu->err_hwirq, 1);
+	_release_hwirqs(dev, afu->psl_hwirq, 1);
 }
 
 static int cxl_reset(struct cxl_t *adapter);
@@ -409,8 +422,10 @@ static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.module = THIS_MODULE,
 	.init_adapter = init_implementation_adapter_regs,
 	.init_afu = init_implementation_afu_regs,
-	.alloc_irqs = alloc_hwirqs,
-	.release_irqs = release_hwirqs,
+	.alloc_one_irq = alloc_one_hwirq,
+	.release_one_irq = release_one_hwirq,
+	.alloc_irq_ranges = alloc_hwirq_ranges,
+	.release_irq_ranges = release_hwirq_ranges,
 	.setup_irq = setup_cxl_msi,
 	.release_adapter = cxl_release_adapter,
 	.release_afu = cxl_release_afu,
