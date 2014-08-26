@@ -10,7 +10,6 @@
 #include <linux/wait.h>
 #include <linux/slab.h>
 #include <linux/pid.h>
-#include <linux/of.h>
 #include <asm/cputable.h>
 
 #include "cxl.h"

@@ -9,8 +9,8 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/mutex.h>
-#include <asm/synch.h>
 #include <linux/mm.h>
+#include <asm/synch.h>
 #include <asm/uaccess.h>
 
 #include "cxl.h"

@@ -13,8 +13,8 @@
 #include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/of.h>
-#include <asm/cputable.h>
 #include <linux/slab.h>
+#include <asm/cputable.h>
 
 #include "cxl.h"
 

@@ -17,12 +17,11 @@
 #include <linux/pid.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/debugfs.h>
+#include <linux/slab.h>
 #include <asm/cputable.h>
 #include <asm/current.h>
 #include <asm/copro.h>
-#include <linux/debugfs.h>
-#include <linux/slab.h>
-#include <linux/idr.h>
 
 #include "cxl.h"
 

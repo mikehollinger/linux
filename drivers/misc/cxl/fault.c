@@ -7,7 +7,6 @@
 #include <linux/workqueue.h>
 #include <linux/sched.h>
 #include <linux/pid.h>
-/* #include <linux/log2.h> */
 #include <linux/mm.h>
 #include <linux/moduleparam.h>
 
