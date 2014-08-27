@@ -5,20 +5,17 @@
 #endif
 
 #include <linux/module.h>
-#include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/bitmap.h>
 #include <linux/sched.h>
-#include <linux/poll.h>
 #include <linux/pid.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/debugfs.h>
+#include <linux/slab.h>
 #include <asm/cputable.h>
 #include <asm/current.h>
 #include <asm/copro.h>
-#include <linux/debugfs.h>
-#include <linux/slab.h>
-#include <linux/idr.h>
 
 #include "cxl.h"
 

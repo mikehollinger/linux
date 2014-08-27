@@ -16,11 +16,8 @@ static int read_handle(struct device_node *np, u64 *handle)
 	if (size)
 		return -EINVAL;
 
-	/* FIXME: Hardcoded 2 cells, should recursively search parents for
-	 * #address-cells like of_translate_address does (in fact, I could
-	 * probably just cheat and use of_translate_address since the
-	 * translation should be 1:1): */
-	*handle = of_read_number(prop, 2);
+	*handle = of_read_number(prop, of_n_addr_cells(np));
+
 	return 0;
 }
 

@@ -11,7 +11,6 @@
 #include <linux/of.h>
 #include <linux/delay.h>
 #include <asm/opal.h>
-
 #include <asm/msi_bitmap.h>
 #include <asm/pci-bridge.h> /* for struct pci_controller */
 #include "../arch/powerpc/platforms/powernv/pci.h" /* FIXME - for struct pnv_phb */
