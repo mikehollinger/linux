@@ -96,7 +96,7 @@ static int psl_purge(struct cxl_afu_t *afu)
 
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An,
 		       PSL_CNTL | CXL_PSL_SCNTL_An_Pc);
-	start = mftb();
+	start = local_clock();
 	PSL_CNTL = cxl_p1n_read(afu, CXL_PSL_SCNTL_An);
 	while ((PSL_CNTL &  CXL_PSL_SCNTL_An_Ps_MASK)
 			== CXL_PSL_SCNTL_An_Ps_Pending) {
@@ -118,8 +118,8 @@ static int psl_purge(struct cxl_afu_t *afu)
 		}
 		PSL_CNTL = cxl_p1n_read(afu, CXL_PSL_SCNTL_An);
 	};
-	end = mftb();
-	pr_devel("PSL purged in %lld 512MHz tb ticks\n", end - start);
+	end = local_clock();
+	pr_devel("PSL purged in %lld ns\n", end - start);
 	/* FIXME: Should this be re-enabled here, or after resetting the AFU? */
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An,
 		       PSL_CNTL & ~CXL_PSL_SCNTL_An_Pc);
