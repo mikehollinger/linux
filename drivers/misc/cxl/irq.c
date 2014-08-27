@@ -292,13 +292,12 @@ int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 	 * refactored to remove pnv phb dependency */
 	BUG_ON(!ctx->afu->adapter->driver);
 	BUG_ON(!ctx->afu->adapter->driver->alloc_irq_ranges);
+	if ((rc = ctx->afu->adapter->driver->alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter, count)))
+		return rc;
 
 	/* Multiplexed PSL Interrupt */
 	ctx->irqs.offset[0] = ctx->afu->psl_hwirq;
 	ctx->irqs.range[0] = 1;
-
-	if ((rc = ctx->afu->adapter->driver->alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter, count)))
-		return rc;
 
 	ctx->irq_count = count;
 	ctx->irq_bitmap = kcalloc(BITS_TO_LONGS(count),
