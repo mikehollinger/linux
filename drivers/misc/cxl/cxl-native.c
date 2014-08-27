@@ -350,7 +350,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 		    (cmd | (cmd >> 16) | ctx->ph))
 			break;
 		/* FIXME: maybe look for a while before schedule if this
-		 * becomes a performace bottleneck
+		 * becomes a performance bottleneck
 		 */
 		schedule();
 
@@ -440,7 +440,7 @@ init_afu_directed_process(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	int r, result;
 
 	/* FIXME:
-	 * - Add to exising SPA list if one already exists
+	 * - Add to existing SPA list if one already exists
 	 * - Reject if already enabled in different mode, max processes
 	 *   exceeded, etc
 	 */
