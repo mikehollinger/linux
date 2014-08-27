@@ -23,11 +23,3 @@ config CXL_PCI
 	  Select this option to support CXL devices detected via PCI, e.g.
 	  when running under Sapphire. This has no effect on CXL devices
 	  detected via the device tree, such as when running under PowerVM.
-
-config CXL_OF
-	tristate "Support for CXL devices on PowerVM"
-	depends on CXL
-	default y
-	help
-	  Select this option to support CXL devices detected via the device
-	  tree, such as when running under PowerVM.

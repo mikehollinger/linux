@@ -571,7 +571,6 @@ void cxl_prefault(struct cxl_context_t *ctx, u64 wed);
 struct cxl_t * get_cxl_adapter(int num);
 int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1);
 
-void init_cxl_hv(void);
 void init_cxl_native(void);
 
 struct cxl_context_t *cxl_context_alloc(void);
@@ -626,10 +625,6 @@ struct cxl_native_data {
 	u64 p2_base;
 	u64 p2_size;
 	irq_hw_number_t err_hwirq;
-};
-
-struct cxl_hv_data {
-	u64 handle;
 };
 
 /* XXX: LAB DEBUGGING */

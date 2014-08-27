@@ -14,7 +14,6 @@
 #include <asm/uaccess.h>
 
 #include "cxl.h"
-#include "cxl_hcalls.h"
 
 static int afu_control(struct cxl_afu_t *afu, u64 command,
 		       u64 result, u64 mask, bool enabled)

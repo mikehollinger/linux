@@ -347,6 +347,9 @@ static int __init init_cxl(void)
 
 	pr_devel("---------- init_cxl called ---------\n");
 
+	if (!cpu_has_feature(CPU_FTR_HVMODE))
+		return -1;
+
 	cxl_class = class_create(THIS_MODULE, "cxl");
 	if (IS_ERR(cxl_class)) {
 		pr_warn("Unable to create cxl class\n");
@@ -354,10 +357,7 @@ static int __init init_cxl(void)
 	}
 	cxl_class->devnode = cxl_devnode;
 
-	if (cpu_has_feature(CPU_FTR_HVMODE))
-		init_cxl_native();
-	else
-		init_cxl_hv();
+	init_cxl_native();
 
 	if (register_cxl_dev())
 		return -1;
