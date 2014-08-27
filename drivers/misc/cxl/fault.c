@@ -100,8 +100,6 @@ find_free_sste(struct cxl_sste *primary_group, bool sec_hash,
 /*
  * XXX: check for existing segment? in a wrapper? for prefault?
  */
-/* Should be called with sst_lock still held since finding the segment to avoid
- * races with slb invalidations */
 static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data, u64 vsid_data)
 {
 	/* mask is the group index, we search primary and secondary here. */
@@ -109,6 +107,8 @@ static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data, u64 vsid_
 	bool sec_hash = 1;
 	struct cxl_sste *sste;
 	unsigned int hash;
+
+	WARN_ON_SMP(!spin_is_locked(&ctx->sst_lock));
 
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		sec_hash = !!(cxl_p1n_read(ctx->afu, CXL_PSL_SR_An) & CXL_PSL_SR_An_SC);
