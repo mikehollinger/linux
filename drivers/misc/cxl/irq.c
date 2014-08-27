@@ -43,7 +43,7 @@ static irqreturn_t handle_psl_slice_error(struct cxl_context_t *ctx, u64 dsisr, 
 
 irqreturn_t cxl_slice_irq_err(int irq, void *data)
 {
-	struct cxl_afu_t *afu = (struct cxl_afu_t *)data;
+	struct cxl_afu_t *afu = data;
 	u64 fir_slice, fir_recov_slice, serr;
 
 	WARN(irq, "CXL SLICE ERROR interrupt %i\n", irq);
@@ -64,7 +64,7 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data)
 
 irqreturn_t cxl_irq_err(int irq, void *data)
 {
-	struct cxl_t *adapter = (struct cxl_t *)data;
+	struct cxl_t *adapter = data;
 	u64 fir1, fir2, err_ivte;
 	int slice;
 
@@ -101,7 +101,7 @@ static irqreturn_t schedule_cxl_fault(struct cxl_context_t *ctx, u64 dsisr, u64 
 
 static irqreturn_t cxl_irq(int irq, void *data)
 {
-	struct cxl_context_t *ctx = (struct cxl_context_t *)data;
+	struct cxl_context_t *ctx = data;
 	struct cxl_irq_info irq_info;
 	u64 dsisr, dar;
 	int result;
@@ -175,7 +175,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 
 static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 {
-	struct cxl_afu_t *afu = (struct cxl_afu_t *)data;
+	struct cxl_afu_t *afu = data;
 	struct cxl_context_t *ctx;
 	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
 
@@ -191,7 +191,7 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 
 static irqreturn_t cxl_irq_afu(int irq, void *data)
 {
-	struct cxl_context_t *ctx = (struct cxl_context_t *)data;
+	struct cxl_context_t *ctx = data;
 	irq_hw_number_t hwirq = irqd_to_hwirq(irq_get_irq_data(irq));
 	int irq_off, afu_irq = 1;
 	__u16 range;

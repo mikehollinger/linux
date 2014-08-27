@@ -57,7 +57,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	cxl_context_init(ctx, &adapter->slice[slice], master);
 	pr_devel("afu_open pe: %i\n", ctx->ph);
 	cxl_context_start(ctx);
-	file->private_data = (void *)ctx;
+	file->private_data = ctx;
 
 	return 0;
 }
@@ -76,7 +76,7 @@ afu_master_open(struct inode *inode, struct file *file)
 static int
 afu_release(struct inode *inode, struct file *file)
 {
-	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
+	struct cxl_context_t *ctx = file->private_data;
 
 	pr_devel("%s: closing cxl file descriptor. pe: %i\n",
 		 __FUNCTION__, ctx->ph);
@@ -155,7 +155,7 @@ afu_ioctl_check_error(struct cxl_context_t *ctx)
 static long
 afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
+	struct cxl_context_t *ctx = file->private_data;
 
 	if (!ctx->attached)
 		return -EIO;
@@ -202,7 +202,7 @@ afu_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int
 afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
-	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
+	struct cxl_context_t *ctx = file->private_data;
 
 	if (!ctx->attached)
 		return -EIO;
@@ -213,7 +213,7 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 static unsigned int
 afu_poll(struct file *file, struct poll_table_struct *poll)
 {
-	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
+	struct cxl_context_t *ctx = file->private_data;
 	int mask = 0;
 	unsigned long flags;
 
@@ -238,7 +238,7 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 static ssize_t
 afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 {
-	struct cxl_context_t *ctx = (struct cxl_context_t *)file->private_data;
+	struct cxl_context_t *ctx = file->private_data;
 	struct cxl_event event;
 	unsigned long flags;
 	ssize_t size;
