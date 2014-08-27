@@ -325,24 +325,15 @@ int cxl_init_afu(struct cxl_afu_t *afu, u64 handle, irq_hw_number_t err_irq)
 
 	afu->err_hwirq = err_irq;
 
-	if ((rc = cxl_register_psl_irq(afu)))
-		return rc;
-
 	/* Initialise the hardware? */
 	if ((rc = cxl_ops->init_afu(afu, handle)))
-		goto err;
+	    return rc;
 
 	/* Add afu character devices */
-	if ((rc = add_cxl_afu_dev(afu, afu->slice))) {
-		/* FIXME: init_afu may have allocated an error interrupt */
-		goto err;
-	}
+	if ((rc = add_cxl_afu_dev(afu, afu->slice)))
+		return rc;
 
 	return 0;
-
-err:
-	cxl_release_psl_irq(afu);
-	return rc;
 }
 EXPORT_SYMBOL(cxl_init_afu);
 
@@ -381,7 +372,6 @@ static int __init init_cxl(void)
 
 void cxl_unregister_afu(struct cxl_afu_t *afu)
 {
-	cxl_release_psl_irq(afu);
 	del_cxl_afu_dev(afu);
 	cxl_ops->release_afu(afu);
 }

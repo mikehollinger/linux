@@ -170,23 +170,8 @@ static irqreturn_t cxl_irq(int irq, void *data)
 	if (dsisr & CXL_PSL_DSISR_An_OC)
 		pr_devel("CXL interrupt: OS Context Warning\n");
 
-	WARN(1, "Unhandled CXL PSL IRQ\n");
-	return IRQ_HANDLED;
-}
+	WARN(1, "Unhandled CXL IRQ\n");
 
-static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
-{
-	struct cxl_afu_t *afu = (struct cxl_afu_t *)afu;
-	struct cxl_context_t *ctx;
-	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
-
-	/* TODO: Use IPR to associate the PH with the context for fast lookup */
-	list_for_each_entry(ctx, &afu->contexts, list) {
-		if (ctx->ph == ph)
-			return cxl_irq(irq, (void*)ctx);
-	}
-
-	WARN(1, "Unable to demultiplex CXL PSL IRQ\n");
 	return IRQ_HANDLED;
 }
 
@@ -194,11 +179,11 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 {
 	struct cxl_context_t *ctx = (struct cxl_context_t *)data;
 	irq_hw_number_t hwirq = irqd_to_hwirq(irq_get_irq_data(irq));
-	int irq_off, afu_irq = 1;
+	int irq_off, afu_irq = 0;
 	__u16 range;
 	int r;
 
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		irq_off = hwirq - ctx->irqs.offset[r];
 		range = ctx->irqs.range[r];
 		if (irq_off >= 0 && irq_off < range) {
@@ -257,47 +242,19 @@ void cxl_unmap_irq(unsigned int virq, void *cookie)
 	irq_dispose_mapping(virq);
 }
 
-int cxl_register_psl_irq(struct cxl_afu_t *afu)
-{
-	int hwirq, virq;
-
-	if ((hwirq = afu->adapter->driver->alloc_one_irq(afu->adapter)) < 0)
-		return hwirq;
-
-	if (!(virq = cxl_map_irq(afu->adapter, hwirq, cxl_irq_multiplexed, (void*)afu)))
-		goto err;
-
-	afu->psl_hwirq = hwirq;
-	afu->psl_virq = virq;
-
-	return 0;
-err:
-	afu->adapter->driver->release_one_irq(afu->adapter, hwirq);
-	return -ENOMEM;
-}
-
-void cxl_release_psl_irq(struct cxl_afu_t *afu)
-{
-	cxl_unmap_irq(afu->psl_virq, (void*)afu);
-	afu->adapter->driver->release_one_irq(afu->adapter, afu->psl_hwirq);
-}
-
 int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 {
+	irq_handler_t handler = cxl_irq;
 	irq_hw_number_t hwirq;
 	int rc, r, i;
 
-	/* FIXME: Will be completely broken on phyp & BML/Mambo until we add an
+	/* FIXME: Assign all PSL IRQs to same IRQ to reduce wastage
+	 * FIXME: Will be completely broken on phyp & BML/Mambo until we add an
 	 * irq allocator for them - alloc_hwirq_ranges() can be used if
 	 * refactored to remove pnv phb dependency */
 	BUG_ON(!ctx->afu->adapter->driver);
-	BUG_ON(!ctx->afu->adapter->driver->alloc_irq_ranges);
-
-	/* Multiplexed PSL Interrupt */
-	ctx->irqs.offset[0] = ctx->afu->psl_hwirq;
-	ctx->irqs.range[0] = 1;
-
-	if ((rc = ctx->afu->adapter->driver->alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter, count)))
+	BUG_ON(!ctx->afu->adapter->driver->alloc_irqs);
+	if ((rc = ctx->afu->adapter->driver->alloc_irqs(&ctx->irqs, ctx->afu->adapter, count + 1)))
 		return rc;
 
 	ctx->irq_count = count;
@@ -305,11 +262,12 @@ int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 				  sizeof(*ctx->irq_bitmap), GFP_KERNEL);
 	if (!ctx->irq_bitmap)
 		return -ENOMEM;
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			cxl_map_irq(ctx->afu->adapter, hwirq,
-				     cxl_irq_afu, (void*)ctx);
+				     handler, (void*)ctx);
+			handler = cxl_irq_afu;
 		}
 	}
 
@@ -324,7 +282,7 @@ void afu_enable_irqs(struct cxl_context_t *ctx)
 
 	pr_info("Enabling CXL Interrupts\n");
 
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			virq = irq_find_mapping(NULL, hwirq);
@@ -341,7 +299,7 @@ void afu_disable_irqs(struct cxl_context_t *ctx)
 
 	pr_info("Disabling CXL Interrupts\n");
 
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			virq = irq_find_mapping(NULL, hwirq);
@@ -356,7 +314,7 @@ void afu_release_irqs(struct cxl_context_t *ctx)
 	unsigned int virq;
 	int r, i;
 
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			virq = irq_find_mapping(NULL, hwirq);
@@ -365,5 +323,5 @@ void afu_release_irqs(struct cxl_context_t *ctx)
 		}
 	}
 
-	ctx->afu->adapter->driver->release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
+	ctx->afu->adapter->driver->release_irqs(&ctx->irqs, ctx->afu->adapter);
 }

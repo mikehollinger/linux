@@ -311,9 +311,6 @@ struct cxl_afu_t {
 		};
 		u64 handle;
 	};
-	irq_hw_number_t psl_hwirq; /* Shared by all contexts on this AFU */
-	unsigned int psl_virq;
-
 	void __iomem *p2n_mmio;
 	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
@@ -439,10 +436,8 @@ struct cxl_driver_ops {
 	struct module *module;
 	int (*init_adapter) (struct cxl_t *adapter);
 	int (*init_afu) (struct cxl_afu_t *afu);
-	int (*alloc_one_irq) (struct cxl_t *adapter);
-	void (*release_one_irq) (struct cxl_t *adapter, int hwirq);
-	int (*alloc_irq_ranges) (struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
-	void (*release_irq_ranges) (struct cxl_irq_ranges *irqs, struct cxl_t *adapter);
+	int (*alloc_irqs) (struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
+	void (*release_irqs) (struct cxl_irq_ranges *irqs, struct cxl_t *adapter);
 	int (*setup_irq) (struct cxl_t *adapter, unsigned int hwirq, unsigned int virq);
 	void (*release_adapter) (struct cxl_t *adapter);
 	void (*release_afu) (struct cxl_afu_t *afu);
@@ -556,8 +551,6 @@ void cxl_sysfs_afu_remove(struct cxl_afu_t *afu);
 unsigned int
 cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void cxl_unmap_irq(unsigned int virq, void *cookie);
-int cxl_register_psl_irq(struct cxl_afu_t *afu);
-void cxl_release_psl_irq(struct cxl_afu_t *afu);
 int afu_register_irqs(struct cxl_context_t *ctx, u32 count);
 void afu_enable_irqs(struct cxl_context_t *ctx);
 void afu_disable_irqs(struct cxl_context_t *ctx);
