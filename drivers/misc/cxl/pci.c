@@ -105,117 +105,131 @@ static void dump_cxl_config_space(struct pci_dev *dev)
 	pci_read_config_dword(dev, PCI_BASE_ADDRESS_5, &val);
 	dev_info(&dev->dev, "BAR5: %#.8x\n", val);
 
-	dev_info(&dev->dev, "p1 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 2), pci_resource_len(dev, 2));
-	dev_info(&dev->dev, "p2 regs: %#llx, len: %#llx\n", pci_resource_start(dev, 0), pci_resource_len(dev, 0));
-	dev_info(&dev->dev, "BAR 4/5: %#llx, len: %#llx\n", pci_resource_start(dev, 4), pci_resource_len(dev, 4));
+	dev_info(&dev->dev, "p1 regs: %#llx, len: %#llx\n",
+		pci_resource_start(dev, 2), pci_resource_len(dev, 2));
+	dev_info(&dev->dev, "p2 regs: %#llx, len: %#llx\n",
+		pci_resource_start(dev, 0), pci_resource_len(dev, 0));
+	dev_info(&dev->dev, "BAR 4/5: %#llx, len: %#llx\n",
+		pci_resource_start(dev, 4), pci_resource_len(dev, 4));
 
 	if (!(vsec = find_cxl_vsec(dev)))
 		return;
 
-	pci_read_config_dword(dev, vsec + 0x0, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Cap ID",		(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Cap Ver",	(val >> 16) & 0xf);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Next Cap Ptr",	(val >> 20) & 0xfff);
-	pci_read_config_dword(dev, vsec + 0x4, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "VSEC ID",	(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "VSEC Rev",	(val >> 16) & 0xf);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "VSEC Length",	(val >> 20) & 0xfff);
-	pci_read_config_dword(dev, vsec + 0x8, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Num AFUs",	(val >>  0) & 0xff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Status",		(val >>  8) & 0xff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Mode Control",	(val >> 16) & 0xff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	(val >> 24) & 0xff);
-	pci_read_config_dword(dev, vsec + 0xc, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "PSL Rev",	(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "CAIA Ver",	(val >> 16) & 0xffff);
-	pci_read_config_dword(dev, vsec + 0x10, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Base Image Rev",	(val >>  0) & 0xffff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	(val >> 16) & 0x0fff);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Image Control",	(val >> 28) & 0x3);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	(val >> 30) & 0x1);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Image Loaded",	(val >> 31) & 0x1);
-	pci_read_config_dword(dev, vsec + 0x14, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved",	val);
+#define show_reg(name, what) \
+	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", name, what)
 
+	pci_read_config_dword(dev, vsec + 0x0, &val);
+	show_reg("Cap ID", (val >> 0) & 0xffff);
+	show_reg("Cap Ver", (val >> 16) & 0xf);
+	show_reg("Next Cap Ptr", (val >> 20) & 0xfff);
+	pci_read_config_dword(dev, vsec + 0x4, &val);
+	show_reg("VSEC ID", (val >> 0) & 0xffff);
+	show_reg("VSEC Rev", (val >> 16) & 0xf);
+	show_reg("VSEC Length",	(val >> 20) & 0xfff);
+	pci_read_config_dword(dev, vsec + 0x8, &val);
+	show_reg("Num AFUs", (val >> 0) & 0xff);
+	show_reg("Status", (val >> 8) & 0xff);
+	show_reg("Mode Control", (val >> 16) & 0xff);
+	show_reg("Reserved", (val >> 24) & 0xff);
+	pci_read_config_dword(dev, vsec + 0xc, &val);
+	show_reg("PSL Rev", (val >> 0) & 0xffff);
+	show_reg("CAIA Ver", (val >> 16) & 0xffff);
+	pci_read_config_dword(dev, vsec + 0x10, &val);
+	show_reg("Base Image Rev", (val >> 0) & 0xffff);
+	show_reg("Reserved", (val >> 16) & 0x0fff);
+	show_reg("Image Control", (val >> 28) & 0x3);
+	show_reg("Reserved", (val >> 30) & 0x1);
+	show_reg("Image Loaded", (val >> 31) & 0x1);
+
+	pci_read_config_dword(dev, vsec + 0x14, &val);
+	show_reg("Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x18, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
+	show_reg("Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x1c, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
+	show_reg("Reserved", val);
 
 	pci_read_config_dword(dev, vsec + 0x20, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "AFU Descriptor Offset", val);
+	show_reg("AFU Descriptor Offset", val);
 	pci_read_config_dword(dev, vsec + 0x24, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "AFU Descriptor Size", val);
+	show_reg("AFU Descriptor Size", val);
 	pci_read_config_dword(dev, vsec + 0x28, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Problem State Offset", val);
+	show_reg("Problem State Offset", val);
 	pci_read_config_dword(dev, vsec + 0x2c, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Problem State Size", val);
+	show_reg("Problem State Size", val);
 
 	pci_read_config_dword(dev, vsec + 0x30, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
+	show_reg("Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x34, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
+	show_reg("Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x38, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
+	show_reg("Reserved", val);
 	pci_read_config_dword(dev, vsec + 0x3c, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
+	show_reg("Reserved", val);
 
 	pci_read_config_dword(dev, vsec + 0x40, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "PSL Programming Port", val);
+	show_reg("PSL Programming Port", val);
 	pci_read_config_dword(dev, vsec + 0x44, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "PSL Programming Control", val);
-	pci_read_config_dword(dev, vsec + 0x48, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
-	pci_read_config_dword(dev, vsec + 0x4c, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Reserved", val);
-	pci_read_config_dword(dev, vsec + 0x50, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Address Register", val);
-	pci_read_config_dword(dev, vsec + 0x54, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Size Register", val);
+	show_reg("PSL Programming Control", val);
 
+	pci_read_config_dword(dev, vsec + 0x48, &val);
+	show_reg("Reserved", val);
+	pci_read_config_dword(dev, vsec + 0x4c, &val);
+	show_reg("Reserved", val);
+
+	pci_read_config_dword(dev, vsec + 0x50, &val);
+	show_reg("Flash Address Register", val);
+	pci_read_config_dword(dev, vsec + 0x54, &val);
+	show_reg("Flash Size Register", val);
 	pci_read_config_dword(dev, vsec + 0x58, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Status/Control Register", val);
+	show_reg("Flash Status/Control Register", val);
 	pci_read_config_dword(dev, vsec + 0x58, &val);
-	dev_info(&dev->dev, "cxl vsec: %30s: %#x\n", "Flash Data Port", val);
+	show_reg("Flash Data Port", val);
+
+#undef show_reg
 }
 
 static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
 {
 	u64 val;
 
+#define show_reg(name, what) \
+	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", name, what)
+
 	val = AFUD_READ_INFO(afu);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_ints_per_process", AFUD_NUM_INTS_PER_PROC(val));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_processes",     AFUD_NUM_PROCS(val));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "num_of_afu_CRs",       AFUD_NUM_CRS(val));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "req_prog_model",       ((val & 0x000000000000ffffULL)));
+	show_reg("num_ints_per_process", AFUD_NUM_INTS_PER_PROC(val));
+	show_reg("num_of_processes", AFUD_NUM_PROCS(val));
+	show_reg("num_of_afu_CRs", AFUD_NUM_CRS(val));
+	show_reg("req_prog_model", val & 0xffffULL);
 
 	val = AFUD_READ(afu, 0x8);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
+	show_reg("Reserved", val);
 	val = AFUD_READ(afu, 0x10);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
+	show_reg("Reserved", val);
 	val = AFUD_READ(afu, 0x18);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved", val);
+	show_reg("Reserved", val);
 
 	val = AFUD_READ_CR(afu);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_format (v0.11)", ((val & 0xff00000000000000ULL) >> (63-7))); /* Reserved >= 0.12 */
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_len",            AFUD_CR_LEN(val));
+	show_reg("Reserved", (val >> (63-7)) & 0xff);
+	show_reg("AFU_CR_len", AFUD_CR_LEN(val));
 
 	val = AFUD_READ_CR_OFF(afu);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_CR_offset", val);
+	show_reg("AFU_CR_offset", val);
 
 	val = AFUD_READ_PPPSA(afu);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_control", ((val & 0xff00000000000000ULL) >> (63-7)));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_control", AFUD_PPPSA_LEN(val));
+	show_reg("PerProcessPSA_control", (val >> (63-7)) & 0xff);
+	show_reg("PerProcessPSA_control", AFUD_PPPSA_LEN(val));
 
 	val = AFUD_READ_PPPSA_OFF(afu);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "PerProcessPSA_offset", val);
+	show_reg("PerProcessPSA_offset", val);
 
 	val = AFUD_READ_EB(afu);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "Reserved",   (val & (0xff00000000000000ULL) >> (63-7)));
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_len", AFUD_EB_LEN(val));
+	show_reg("Reserved", (val >> (63-7)) & 0xff);
+	show_reg("AFU_EB_len", AFUD_EB_LEN(val));
 
 	val = AFUD_READ_EB_OFF(afu);
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", "AFU_EB_offset", val);
+	show_reg("AFU_EB_offset", val);
+
+#undef show_reg
 }
 
 static int cmpbar(const void *p1, const void *p2)
