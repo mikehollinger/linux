@@ -176,7 +176,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 
 static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 {
-	struct cxl_afu_t *afu = (struct cxl_afu_t *)afu;
+	struct cxl_afu_t *afu = (struct cxl_afu_t *)data;
 	struct cxl_context_t *ctx;
 	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
 
