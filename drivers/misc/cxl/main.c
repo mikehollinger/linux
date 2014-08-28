@@ -232,17 +232,6 @@ struct cxl_t * get_cxl_adapter(int num)
 	return ret;
 }
 
-int cxl_get_num_adapters(void)
-{
-	struct cxl_t *adapter;
-	int i = 0;
-
-	list_for_each_entry(adapter, &adapter_list, list)
-		i++;
-
-	return i;
-}
-
 static void afu_t_init(struct cxl_t *adapter, int slice)
 {
 	struct cxl_afu_t *afu = &adapter->slice[slice];
@@ -253,6 +242,8 @@ static void afu_t_init(struct cxl_t *adapter, int slice)
 	spin_lock_init(&afu->afu_cntl_lock);
 	mutex_init(&afu->spa_mutex);
 }
+
+static atomic_t nr_adapters;
 
 /* FIXME: The calling convention here is a mess and needs to be cleaned up.
  * Maybe better to have the caller fill in the struct and call us? */
@@ -269,11 +260,7 @@ int cxl_init_adapter(struct cxl_t *adapter,
 	if (!slices)
 		return -EINVAL;
 
-	/* FIXME: We have a scheduling while atomic bug here when we call
-	 * device_add with this held. I've been meaning to change this to use
-	 * idr to allocate indexes to pointers, which should fix this. */
-	spin_lock(&adapter_list_lock);
-	adapter->adapter_num = cxl_get_num_adapters();
+	adapter->adapter_num = atomic_inc_return(&nr_adapters) - 1;
 
 	adapter->driver = driver;
 	adapter->device.class = cxl_class;
@@ -300,6 +287,7 @@ int cxl_init_adapter(struct cxl_t *adapter,
 	for (slice = 0; slice < slices; slice++)
 		afu_t_init(adapter, slice);
 
+	spin_lock(&adapter_list_lock);
 	list_add_tail(&(adapter)->list, &adapter_list);
 	spin_unlock(&adapter_list_lock);
 
@@ -310,7 +298,7 @@ out2:
 out1:
 	cxl_ops->release_adapter(adapter);
 out:
-	spin_unlock(&adapter_list_lock);
+	atomic_dec(&nr_adapters);
 	pr_devel("cxl_init_adapter: %i\n", rc);
 	return rc;
 }
@@ -406,6 +394,8 @@ void cxl_unregister_adapter(struct cxl_t *adapter)
 	spin_unlock(&adapter_list_lock);
 
 	unregister_cxl_dev();
+
+	atomic_dec(&nr_adapters);
 }
 EXPORT_SYMBOL(cxl_unregister_adapter);
 
