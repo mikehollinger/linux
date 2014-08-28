@@ -345,8 +345,11 @@ EXPORT_SYMBOL(cxl_init_afu);
 
 static char *cxl_devnode(struct device *dev, umode_t *mode)
 {
-	if (MINOR(dev->devt) % CXL_DEV_MINORS == 0)
+	if (MINOR(dev->devt) % CXL_DEV_MINORS == 0) {
+		/* These minor numbers will eventually be used to program the
+		 * PSL and AFUs once we have dynamic reprogramming support */
 		return NULL;
+	}
 	return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(dev));
 }
 

@@ -315,31 +315,6 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	return size;
 }
 
-static int
-cxl_open(struct inode *inode, struct file *file)
-{
-	int minor = MINOR(inode->i_rdev);
-	int adapter = minor / CXL_DEV_MINORS;
-
-	pr_devel("STUB: cxl_open adapter %i\n", adapter);
-	return -EPERM;
-}
-
-/*
- * FIXME TODO: This will eventually be used
-to enumerate and open the AFUs,
- * (possibly) reprogram them, etc. For now you have to open the AFUs directly
- * as /dev/cxlN
- */
-static const struct file_operations cxl_fops = {
-	.owner		= THIS_MODULE,
-	.open		= cxl_open,
-#if 0
-	.unlocked_ioctl = cxl_ioctl,
-	.compat_ioctl   = cxl_compat_ioctl,
-#endif
-};
-
 static const struct file_operations afu_fops = {
 	.owner		= THIS_MODULE,
 	.open           = afu_open,
@@ -574,26 +549,16 @@ void unregister_cxl_dev(void)
 int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
 {
 	int rc;
-	int cxl_major = MAJOR(cxl_dev);
-	int cxl_minor = adapter_num * CXL_DEV_MINORS;
 	char tmp[32];
-
-	cdev_init(&(adapter->cdev), &cxl_fops);
-	rc = cdev_add(&(adapter->cdev), MKDEV(cxl_major, cxl_minor), 1);
-	if (rc) {
-		pr_err("Unable to register CXL character device: %i\n", rc);
-		return rc;
-	}
 
 	/* Create sysfs attributes */
 	adapter->afu_kobj = kobject_create_and_add("afu", &adapter->device.kobj);
 	if (IS_ERR(adapter->afu_kobj)) {
-		rc = PTR_ERR(adapter->afu_kobj);
-		goto out;
+		return PTR_ERR(adapter->afu_kobj);
 	}
 
-	if (cxl_sysfs_adapter_add(adapter))
-		goto out1;
+	if ((rc = cxl_sysfs_adapter_add(adapter)))
+		goto out;
 
 	/* Create debugfs entries */
 	/* FIXME: Drop these for upstreaming. Maybe move them somewhere more
@@ -608,11 +573,9 @@ int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
 	}
 	return 0;
 
-out1:
+out:
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;
-out:
-	cdev_del(&adapter->cdev);
 	return rc;
 }
 
@@ -693,7 +656,6 @@ void del_cxl_dev(struct cxl_t *adapter)
 	cxl_sysfs_adapter_remove(adapter);
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;
-	cdev_del(&adapter->cdev);
 	adapter->device.release = cxl_release;
 	device_unregister(&adapter->device);
 }

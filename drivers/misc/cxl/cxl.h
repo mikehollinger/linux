@@ -424,7 +424,6 @@ struct cxl_t {
 	};
 	struct cxl_driver_ops *driver;
 	struct cxl_afu_t slice[CXL_MAX_SLICES];
-	struct cdev cdev;
 	struct cdev afu_cdev;
 	struct cdev afu_master_cdev;
 	struct device device;
