@@ -302,11 +302,6 @@ int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 	irq_hw_number_t hwirq;
 	int rc, r, i;
 
-	/* FIXME: Will be completely broken on phyp & BML/Mambo until we add an
-	 * irq allocator for them - alloc_hwirq_ranges() can be used if
-	 * refactored to remove pnv phb dependency */
-	BUG_ON(!ctx->afu->adapter->driver);
-	BUG_ON(!ctx->afu->adapter->driver->alloc_irq_ranges);
 	if ((rc = ctx->afu->adapter->driver->alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter, count)))
 		return rc;
 
