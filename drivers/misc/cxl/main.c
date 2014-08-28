@@ -62,16 +62,16 @@ void cxl_slbie(unsigned long addr)
 	/* Potential optimisation - may be able to use slbfee instruction to
 	 * get SLB from current CPU and grab B, C and TA fields from it */
 	switch (REGION_ID(addr)) {
-		case USER_REGION_ID:
-			ssize = user_segment_size(addr);
-			break;
-		case VMALLOC_REGION_ID:
-		case KERNEL_REGION_ID:
-			ssize = mmu_kernel_ssize;
-			break;
-		default:
-			WARN(1, "cxl_slbie: Unsupported region\n");
-			return;
+	case USER_REGION_ID:
+		ssize = user_segment_size(addr);
+		break;
+	case VMALLOC_REGION_ID:
+	case KERNEL_REGION_ID:
+		ssize = mmu_kernel_ssize;
+		break;
+	default:
+		WARN(1, "cxl_slbie: Unsupported region\n");
+		return;
 	}
 
 	spin_lock(&adapter_list_lock);
@@ -223,11 +223,11 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	return 0;
 }
 
-struct cxl_t * get_cxl_adapter(int num)
+struct cxl_t *get_cxl_adapter(int num)
 {
 	struct cxl_t *adapter;
 	int i = 0;
-	struct cxl_t * ret = NULL;
+	struct cxl_t *ret = NULL;
 
 	spin_lock(&adapter_list_lock);
 	list_for_each_entry(adapter, &adapter_list, list) {
@@ -244,6 +244,7 @@ struct cxl_t * get_cxl_adapter(int num)
 static void afu_t_init(struct cxl_t *adapter, int slice)
 {
 	struct cxl_afu_t *afu = &adapter->slice[slice];
+
 	afu->adapter = adapter;
 	afu->slice = slice;
 	idr_init(&afu->contexts_idr);
