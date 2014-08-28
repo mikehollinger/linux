@@ -393,6 +393,7 @@ fail:
 		hwirq = irqs->offset[range] - phb->msi_base;
 		msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
 				       irqs->range[range]);
+		irqs->range[range] = 0;
 	}
 	return -ENOSPC;
 }
