@@ -377,14 +377,14 @@ EXPORT_SYMBOL(cxl_unregister_afu);
 
 void cxl_unregister_adapter(struct cxl_t *adapter)
 {
-	int adapter_num = 0, slice;
+	int slice;
 
 	/* Unregister CXL adapter device */
 
 	spin_lock(&adapter_list_lock);
 	for (slice = 0; slice < adapter->slices; slice++)
 		cxl_unregister_afu(&adapter->slice[slice]);
-	del_cxl_dev(adapter, adapter_num++);
+	del_cxl_dev(adapter);
 
 	/* CXL-HV/Native adapter release */
 	if (cxl_ops->release_adapter)

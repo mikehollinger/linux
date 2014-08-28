@@ -540,7 +540,7 @@ void cxl_unregister_afu(struct cxl_afu_t *afu);
 int register_cxl_dev(void);
 void unregister_cxl_dev(void);
 int add_cxl_dev(struct cxl_t *cxl, int adapter_num);
-void del_cxl_dev(struct cxl_t *cxl, int adapter_num);
+void del_cxl_dev(struct cxl_t *cxl);
 int add_cxl_afu_dev(struct cxl_afu_t *afu, int slice);
 void del_cxl_afu_dev(struct cxl_afu_t *afu);
 void cxl_context_detach_all(struct cxl_afu_t *afu);

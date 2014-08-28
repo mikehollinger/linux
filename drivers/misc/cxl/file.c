@@ -687,7 +687,7 @@ out:
 	return rc;
 }
 
-void del_cxl_dev(struct cxl_t *adapter, int adapter_num)
+void del_cxl_dev(struct cxl_t *adapter)
 {
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
