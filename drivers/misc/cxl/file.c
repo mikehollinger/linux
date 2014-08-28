@@ -195,8 +195,6 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static long
 afu_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	pr_warning("FIXME: cxl_compat_ioctl STUB. cmd: %x, arg: %lx\n", cmd, arg);
-	/* FIXME */
 	return afu_ioctl(file, cmd, arg);
 }
 
