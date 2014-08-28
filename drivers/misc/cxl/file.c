@@ -501,7 +501,7 @@ static ssize_t read_trace(struct file *file, char __user *userbuf,
 	struct cxl_t *cxl = file->private_data;
 
 	if (!trace_buffer) {
-		trace_buffer = (unsigned long long *) kzalloc(size, GFP_KERNEL);
+		trace_buffer = kzalloc(size, GFP_KERNEL);
 	}
 
 	if (!trace_buffer)
