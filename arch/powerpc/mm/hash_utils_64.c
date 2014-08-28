@@ -1129,7 +1129,7 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 			WARN_ON(1);
 		}
 #endif
-		if (likely(current->mm == mm))
+		if (current->mm == mm)
 			check_paca_psize(ea, mm, psize, user_region);
 
 		goto bail;
