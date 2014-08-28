@@ -38,7 +38,7 @@ static int slbfee_mm(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 
 	*esid = (ea & ESID_MASK) | SLB_ESID_V;
 
-	switch(REGION_ID(ea)) {
+	switch (REGION_ID(ea)) {
 	case USER_REGION_ID:
 		pr_devel("slbfee_mm: 0x%llx -- USER_REGION_ID\n", ea);
 #ifdef CONFIG_PPC_MM_SLICES
@@ -348,7 +348,7 @@ MODULE_PARM_DESC(prefault_how, "How much to prefault on afu start: "
 
 void cxl_prefault(struct cxl_context_t *ctx, u64 wed)
 {
-	switch(prefault_how) {
+	switch (prefault_how) {
 	case CXL_PREFAULT_WED:
 		cxl_prefault_one(ctx, wed);
 		break;

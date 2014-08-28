@@ -61,7 +61,7 @@ void cxl_slbie(unsigned long addr)
 
 	/* Potential optimisation - may be able to use slbfee instruction to
 	 * get SLB from current CPU and grab B, C and TA fields from it */
-	switch(REGION_ID(addr)) {
+	switch (REGION_ID(addr)) {
 		case USER_REGION_ID:
 			ssize = user_segment_size(addr);
 			break;
