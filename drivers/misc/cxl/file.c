@@ -310,7 +310,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
-	size = min(count, (size_t)event.header.size);
+	size = min_t(size_t, count, event.header.size);
 	copy_to_user(buf, &event, size);
 
 	return size;
