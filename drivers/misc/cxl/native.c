@@ -312,13 +312,14 @@ static void cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
 	cxl_p2n_write(afu, CXL_SSTP1_An, sstp1);
 }
 
-/* must hold ctx->afu->spa_mutex */
 static void
 slb_invalid(struct cxl_context_t *ctx)
 {
 	/* FIXME use per slice version of SLBIA? */
 	struct cxl_t *adapter = ctx->afu->adapter;
 	u64 slbia;
+
+	WARN_ON(!mutex_is_locked(&ctx->afu->spa_mutex));
 
 	cxl_p1_write(adapter, CXL_PSL_LBISEL,
 			((u64)be32_to_cpu(ctx->elem->common.pid) << 32) |
