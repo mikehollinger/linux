@@ -282,7 +282,7 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter)
 	psl_dsnctl = 0x02E8900002000000ULL | (chipid << (63-5));
 
 	cxl_p1_write(adapter, CXL_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
-	cxl_p1_write(adapter, CXL_PSL_RESLCKTO, 0x20000000200);
+	cxl_p1_write(adapter, CXL_PSL_RESLCKTO, 0x20000000200ULL);
 	cxl_p1_write(adapter, CXL_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL); /* snoop write mask */
 	cxl_p1_write(adapter, CXL_PSL_FIR_CNTL, 0x0800000000000000ULL); /* set fir_accum */
 

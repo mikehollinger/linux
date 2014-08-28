@@ -273,7 +273,7 @@ init_afu_native(struct cxl_afu_t *afu, u64 handle)
 		return -ENOMEM;
 
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_AFU);
-	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
+	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
 	cxl_p1n_write(afu, CXL_PSL_ID_An, CXL_PSL_ID_An_F | CXL_PSL_ID_An_L);
 
 	afu_disable(afu); /* FIXME: remove this */
@@ -528,7 +528,7 @@ init_dedicated_process_native(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	/* Hypervisor initialise: */
 	cxl_p1n_write(afu, CXL_PSL_CtxTime_An, 0); /* disable */
 	cxl_p1n_write(afu, CXL_PSL_SPAP_An, 0);    /* disable */
-	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFF);
+	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
 
 	cxl_p1n_write(afu, CXL_PSL_LPID_An, mfspr(SPRN_LPID));
 	cxl_p1n_write(afu, CXL_HAURP_An, 0);       /* disable */

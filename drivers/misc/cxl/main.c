@@ -204,7 +204,7 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	if (ssize == MMU_SEGSIZE_256M)
 		ea_mask =    0xfffff00;
 	else if (ssize == MMU_SEGSIZE_1T)
-		ea_mask = 0xffffffff00;
+		ea_mask = 0xffffffff00ULL;
 	else {
 		WARN(1, "CXL: Unsupported segment size\n");
 		free_page((u64)ctx->sstp);
