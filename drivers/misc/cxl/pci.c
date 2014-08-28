@@ -458,7 +458,7 @@ static struct cxl_driver_ops cxl_pci_driver_ops = {
 
 static void reassign_cxl_bars(struct pci_dev *dev)
 {
-	const u32 *window_prop;
+	const __be32 *window_prop;
 	LIST_HEAD(head);
 	u64 window, size;
 	u64 off, addr;
