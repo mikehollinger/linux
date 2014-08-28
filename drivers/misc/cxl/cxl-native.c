@@ -402,7 +402,7 @@ terminate_process_element(struct cxl_context_t *ctx)
 	pr_devel("%s Terminate pe: %i started\n", __FUNCTION__, ctx->ph);
 	rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_TERMINATE,
 				    CXL_PE_SOFTWARE_STATE_V | CXL_PE_SOFTWARE_STATE_T);
-	ctx->elem->software_state = cpu_to_be32(0); 	/* Remove Valid bit */
+	ctx->elem->software_state = 0; 	/* Remove Valid bit */
 	pr_devel("%s Terminate pe: %i finished\n", __FUNCTION__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
@@ -455,9 +455,9 @@ init_afu_directed_process(struct cxl_context_t *ctx, u64 wed, u64 amr)
 
 	assign_psn_space(ctx);
 
-	ctx->elem->ctxtime = cpu_to_be64(0); /* disable */
-	ctx->elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
-	ctx->elem->haurp = cpu_to_be64(0); /* disable */
+	ctx->elem->ctxtime = 0; /* disable */
+	ctx->elem->lpid = cpu_to_be32(mfspr(SPRN_LPID));
+	ctx->elem->haurp = 0; /* disable */
 	ctx->elem->sdr = cpu_to_be64(mfspr(SPRN_SDR1));
 
 	sr = CXL_PSL_SR_An_SC;
@@ -475,14 +475,14 @@ init_afu_directed_process(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	} else { /* Initialise for kernel */
 		WARN_ONCE(1, "CXL initialised for kernel, this won't work on GA1 hardware!\n");
 		sr |= (mfmsr() & MSR_SF) | CXL_PSL_SR_An_HV;
-		ctx->elem->common.pid = cpu_to_be32(0);
+		ctx->elem->common.pid = 0;
 	}
-	ctx->elem->common.tid = cpu_to_be32(0);
+	ctx->elem->common.tid = 0;
 	ctx->elem->sr = cpu_to_be64(sr);
 
-	ctx->elem->common.csrp = cpu_to_be64(0); /* disable */
-	ctx->elem->common.aurp0 = cpu_to_be64(0); /* disable */
-	ctx->elem->common.aurp1 = cpu_to_be64(0); /* disable */
+	ctx->elem->common.csrp = 0; /* disable */
+	ctx->elem->common.aurp0 = 0; /* disable */
+	ctx->elem->common.aurp1 = 0; /* disable */
 
 	if ((result = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
 		return result;
