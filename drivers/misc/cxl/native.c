@@ -162,7 +162,7 @@ init_adapter_native(struct cxl_t *adapter, void *backend_data)
 	adapter->err_hwirq = data->err_hwirq;
 	pr_devel("cxl_err_ivte: %#lx\n", adapter->err_hwirq);
 
-	adapter->err_virq = cxl_map_irq(adapter, adapter->err_hwirq, cxl_irq_err, (void*)adapter);
+	adapter->err_virq = cxl_map_irq(adapter, adapter->err_hwirq, cxl_irq_err, adapter);
 	if (!adapter->err_virq) {
 		rc = -ENOSPC;
 		goto out2;
@@ -186,7 +186,7 @@ static void release_adapter_native(struct cxl_t *adapter)
 {
 	iounmap(adapter->p1_mmio);
 	iounmap(adapter->p2_mmio);
-	cxl_unmap_irq(adapter->err_virq, (void*)adapter);
+	cxl_unmap_irq(adapter->err_virq, adapter);
 	if (adapter->driver && adapter->driver->release_adapter)
 		adapter->driver->release_adapter(adapter);
 }
@@ -255,7 +255,7 @@ init_afu_native(struct cxl_afu_t *afu, u64 handle)
 
 	if (afu->err_hwirq) { /* Can drop this test when the BML support is pulled out - under phyp we use cxl-of.c */
 		pr_devel("cxl slice error IVTE: %#lx\n", afu->err_hwirq);
-		afu->err_virq = cxl_map_irq(afu->adapter, afu->err_hwirq, cxl_slice_irq_err, (void*)afu);
+		afu->err_virq = cxl_map_irq(afu->adapter, afu->err_hwirq, cxl_slice_irq_err, afu);
 		val = cxl_p1n_read(afu, CXL_PSL_SERR_An);
 		val = (val & 0x00ffffffffff0000ULL) | (afu->err_hwirq & 0xffff);
 		cxl_p1n_write(afu, CXL_PSL_SERR_An, val);
@@ -291,7 +291,7 @@ static void release_afu_native(struct cxl_afu_t *afu)
 	iounmap(afu->p2n_mmio);
 	iounmap(afu->psn_mmio);
 
-	cxl_unmap_irq(afu->err_virq, (void*)afu);
+	cxl_unmap_irq(afu->err_virq, afu);
 	if (afu->adapter->driver && afu->adapter->driver->release_afu)
 		afu->adapter->driver->release_afu(afu);
 }

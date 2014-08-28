@@ -92,7 +92,7 @@ irqreturn_t cxl_irq_err(int irq, void *data)
 
 	for (slice = 0; slice < adapter->slices; slice++) {
 		pr_warn("SLICE %i\n", slice);
-		cxl_slice_irq_err(0, (void *)(&adapter->slice[slice]));
+		cxl_slice_irq_err(0, &adapter->slice[slice]);
 	}
 
 	BUG(); // we never recover, so let's just die
@@ -194,7 +194,7 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 	rcu_read_lock();
 	ctx = idr_find(&afu->contexts_idr, ph);
 	if (ctx) {
-               ret = cxl_irq(irq, (void*)ctx);
+               ret = cxl_irq(irq, ctx);
 	       rcu_read_unlock();
 	       return ret;
 	}
@@ -279,7 +279,7 @@ int cxl_register_psl_irq(struct cxl_afu_t *afu)
 	if ((hwirq = afu->adapter->driver->alloc_one_irq(afu->adapter)) < 0)
 		return hwirq;
 
-	if (!(virq = cxl_map_irq(afu->adapter, hwirq, cxl_irq_multiplexed, (void*)afu)))
+	if (!(virq = cxl_map_irq(afu->adapter, hwirq, cxl_irq_multiplexed, afu)))
 		goto err;
 
 	afu->psl_hwirq = hwirq;
@@ -293,7 +293,7 @@ err:
 
 void cxl_release_psl_irq(struct cxl_afu_t *afu)
 {
-	cxl_unmap_irq(afu->psl_virq, (void*)afu);
+	cxl_unmap_irq(afu->psl_virq, afu);
 	afu->adapter->driver->release_one_irq(afu->adapter, afu->psl_hwirq);
 }
 
@@ -318,7 +318,7 @@ int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			cxl_map_irq(ctx->afu->adapter, hwirq,
-				     cxl_irq_afu, (void*)ctx);
+				     cxl_irq_afu, ctx);
 		}
 	}
 
@@ -370,7 +370,7 @@ void afu_release_irqs(struct cxl_context_t *ctx)
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			virq = irq_find_mapping(NULL, hwirq);
 			if (virq)
-				cxl_unmap_irq(virq, (void*)ctx);
+				cxl_unmap_irq(virq, ctx);
 		}
 	}
 
