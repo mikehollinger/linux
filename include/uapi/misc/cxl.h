@@ -2,13 +2,9 @@
 #define _UAPI_ASM_CXL_H
 
 #include <linux/types.h>
+#include <linux/ioctl.h>
 
 /* ioctls */
-
-/* Argument is a pointer to a struct cxl_ioctl_start_work */
-#define CXL_IOCTL_START_WORK      0
-#define CXL_IOCTL_CHECK_ERROR     2
-
 struct cxl_ioctl_start_work {
 	__u64 wed;
 	__u64 amr;
@@ -21,6 +17,10 @@ struct cxl_ioctl_start_work {
 	__u64 reserved5;
 	__u64 reserved6;
 };
+
+#define CXL_MAGIC 0xCA
+#define CXL_IOCTL_START_WORK      _IOWR(CXL_MAGIC, 0x00, struct cxl_ioctl_start_work)
+#define CXL_IOCTL_CHECK_ERROR     _IO(CXL_MAGIC,   0x02)
 
 /* events from read() */
 

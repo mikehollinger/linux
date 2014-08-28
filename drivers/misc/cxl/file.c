@@ -149,11 +149,8 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 }
 
 static long
-afu_ioctl_check_error(struct cxl_context_t *ctx, unsigned long arg)
+afu_ioctl_check_error(struct cxl_context_t *ctx)
 {
-	if (arg)
-		return -EINVAL;
-
 	if (!ctx->attached)
 		/* FIXME: What should we do here? */
 		return -EIO;
@@ -190,7 +187,7 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return afu_ioctl_start_work(ctx,
 				(struct cxl_ioctl_start_work __user *)arg);
 		case CXL_IOCTL_CHECK_ERROR:
-			return afu_ioctl_check_error(ctx, arg);
+			return afu_ioctl_check_error(ctx);
 	}
 	return -EINVAL;
 }
