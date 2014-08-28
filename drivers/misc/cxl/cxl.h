@@ -355,6 +355,7 @@ struct cxl_afu_t {
 
 	/* FIXME: Below items should be in a separate context struct for virtualisation */
 	struct idr contexts_idr;
+	spinlock_t contexts_lock;
 	struct mutex spa_mutex;
 	spinlock_t afu_cntl_lock;
 };

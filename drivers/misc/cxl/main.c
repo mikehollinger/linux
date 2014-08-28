@@ -247,6 +247,7 @@ static void afu_t_init(struct cxl_t *adapter, int slice)
 	afu->adapter = adapter;
 	afu->slice = slice;
 	idr_init(&afu->contexts_idr);
+	spin_lock_init(&afu->contexts_lock);
 	spin_lock_init(&afu->afu_cntl_lock);
 	mutex_init(&afu->spa_mutex);
 }

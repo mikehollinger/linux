@@ -62,8 +62,12 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 	/* FIXME: need to make this two stage between the open and the ioctl */
 	ctx->attached = 1;
 
+	idr_preload(GFP_KERNEL);
+	spin_lock(&afu->contexts_lock);
 	i = idr_alloc(&ctx->afu->contexts_idr, ctx, 0,
-		      ctx->afu->num_procs, GFP_KERNEL);
+		      ctx->afu->num_procs, GFP_NOWAIT);
+	spin_unlock(&afu->contexts_lock);
+	idr_preload_end();
 	if (i < 0)
 		return i;
 
