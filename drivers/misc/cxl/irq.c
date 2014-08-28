@@ -187,12 +187,18 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 	struct cxl_afu_t *afu = data;
 	struct cxl_context_t *ctx;
 	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
+	int ret;
 
 	/* TODO: Use IPR to associate the PH with the context for fast lookup */
-	list_for_each_entry(ctx, &afu->contexts, list) {
-		if (ctx->ph == ph)
-			return cxl_irq(irq, (void*)ctx);
+
+	rcu_read_lock();
+	ctx = idr_find(&afu->contexts_idr, ph);
+	if (ctx) {
+               ret = cxl_irq(irq, (void*)ctx);
+	       rcu_read_unlock();
+	       return ret;
 	}
+	rcu_read_unlock();
 
 	printk("Unable to demultiplex CXL PSL IRQ\n");
 	BUG();

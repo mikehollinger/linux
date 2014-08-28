@@ -102,7 +102,7 @@ void cxl_slbia(struct mm_struct *mm)
 	struct cxl_context_t *ctx;
 	struct task_struct *task;
 	unsigned long flags;
-	int card = 0, slice;
+	int card = 0, slice, id;
 
 	pr_devel("cxl_slbia called\n");
 
@@ -115,8 +115,8 @@ void cxl_slbia(struct mm_struct *mm)
 			afu = &adapter->slice[slice];
 			if (!afu->enabled)
 				continue;
-			spin_lock(&afu->contexts_lock);
-			list_for_each_entry(ctx, &afu->contexts, list) {
+			rcu_read_lock();
+			idr_for_each_entry(&afu->contexts_idr, ctx, id) {
 				if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 					pr_devel("cxl_slbia unable to get task %i\n", pid_nr(ctx->pid));
 					continue;
@@ -139,7 +139,7 @@ next_unlock:
 next:
 				put_task_struct(task);
 			}
-			spin_unlock(&afu->contexts_lock);
+			rcu_read_unlock();
 		}
 		card++;
 	}
@@ -246,8 +246,7 @@ static void afu_t_init(struct cxl_t *adapter, int slice)
 	struct cxl_afu_t *afu = &adapter->slice[slice];
 	afu->adapter = adapter;
 	afu->slice = slice;
-	INIT_LIST_HEAD(&afu->contexts);
-	spin_lock_init(&afu->contexts_lock);
+	idr_init(&afu->contexts_idr);
 	spin_lock_init(&afu->afu_cntl_lock);
 	mutex_init(&afu->spa_mutex);
 }

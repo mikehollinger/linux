@@ -62,8 +62,8 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 	/* FIXME: need to make this two stage between the open and the ioctl */
 	ctx->attached = 1;
 
-	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
-			   ctx->afu->num_procs, GFP_KERNEL);
+	i = idr_alloc(&ctx->afu->contexts_idr, ctx, 0,
+		      ctx->afu->num_procs, GFP_KERNEL);
 	if (i < 0)
 		return i;
 
@@ -78,9 +78,6 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
  */
 void cxl_context_start(struct cxl_context_t *ctx)
 {
-	spin_lock(&ctx->afu->contexts_lock);
-	list_add(&ctx->list, &ctx->afu->contexts);
-	spin_unlock(&ctx->afu->contexts_lock);
 }
 
 /*
@@ -129,14 +126,13 @@ static void __detach_context(struct cxl_context_t *ctx)
 	/* FIXME: check this is the last context to shut down */
 
 
-	spin_lock(&ctx->afu->contexts_lock);
+	rcu_read_lock();
 	if (!ctx->attached) {
-		spin_unlock(&ctx->afu->contexts_lock);
+		rcu_read_unlock();
 		return;
 	}
 	ctx->attached = false;
-	list_del(&ctx->list);
-	spin_unlock(&ctx->afu->contexts_lock);
+	rcu_read_unlock();
 	WARN_ON(cxl_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
 	WARN_ON(work_busy(&ctx->fault_work)); /* FIXME: maybe bogus.  hardware may not be done */
@@ -159,21 +155,26 @@ void cxl_context_detach(struct cxl_context_t *ctx)
  */
 void cxl_context_detach_all(struct cxl_afu_t *afu)
 {
-	struct cxl_context_t *ctx, *tmp;
+	struct cxl_context_t *ctx;
+	int tmp;
 
-	list_for_each_entry_safe(ctx, tmp, &afu->contexts, list)
+	rcu_read_lock();
+	idr_for_each_entry(&afu->contexts_idr, ctx, tmp)
 		__detach_context(ctx);
+	rcu_read_unlock();
 }
 
 void cxl_context_free(struct cxl_context_t *ctx)
 {
 	unsigned long flags;
 
-	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
+	idr_remove(&ctx->afu->contexts_idr, ctx->ph);
 	spin_lock_irqsave(&ctx->sst_lock, flags);
 	free_page((u64)ctx->sstp);
 	ctx->sstp = NULL;
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 	put_pid(ctx->pid);
+	synchronize_rcu();
+
 	kfree(ctx);
 }

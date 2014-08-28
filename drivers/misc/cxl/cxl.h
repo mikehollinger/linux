@@ -353,10 +353,8 @@ struct cxl_afu_t {
 	int spa_max_procs;
 	__be64 *sw_command_status;
 
-	spinlock_t contexts_lock;
-	struct list_head contexts;
-
-	struct ida pe_index_ida;
+	/* FIXME: Below items should be in a separate context struct for virtualisation */
+	struct idr contexts_idr;
 	struct mutex spa_mutex;
 	spinlock_t afu_cntl_lock;
 };
@@ -402,9 +400,6 @@ struct cxl_context_t {
 	bool attached;
 
 	u32 irq_count;
-
-	/* Used to but each context into the appropriate AFU context list */
-	struct list_head list;
 
 	/* XXX: Is it possible to need multiple work items at once? */
 	struct work_struct fault_work;
