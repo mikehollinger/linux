@@ -138,15 +138,15 @@ static irqreturn_t cxl_irq(int irq, void *data)
 		return schedule_cxl_fault(ctx, dsisr, dar);
 	}
 
-	if (dsisr & CXL_PSL_DSISR_An_M )
+	if (dsisr & CXL_PSL_DSISR_An_M)
 		pr_devel("CXL interrupt: PTE not found\n");
-	if (dsisr & CXL_PSL_DSISR_An_P )
+	if (dsisr & CXL_PSL_DSISR_An_P)
 		pr_devel("CXL interrupt: Storage protection violation\n");
-	if (dsisr & CXL_PSL_DSISR_An_A )
+	if (dsisr & CXL_PSL_DSISR_An_A)
 		pr_devel("CXL interrupt: AFU lock access to write through or cache inhibited storage\n");
-	if (dsisr & CXL_PSL_DSISR_An_S )
+	if (dsisr & CXL_PSL_DSISR_An_S)
 		pr_devel("CXL interrupt: Access was afu_wr or afu_zero\n");
-	if (dsisr & CXL_PSL_DSISR_An_K )
+	if (dsisr & CXL_PSL_DSISR_An_K)
 		pr_devel("CXL interrupt: Access not permitted by virtual page class key protection\n");
 
 	if (dsisr & CXL_PSL_DSISR_An_DM) {
