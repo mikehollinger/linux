@@ -356,8 +356,6 @@ struct cxl_afu_t {
 	spinlock_t contexts_lock;
 	struct list_head contexts;
 
-	/* FIXME: Below items should be in a separate context struct for virtualisation */
-
 	struct ida pe_index_ida;
 	struct mutex spa_mutex;
 	spinlock_t afu_cntl_lock;
@@ -610,7 +608,6 @@ struct cxl_irq_info {
 
 struct cxl_backend_ops {
 	int (*init_adapter) (struct cxl_t *adapter, void *backend_data);
-	/* FIXME: Clean this up */
 	int (*init_afu) (struct cxl_afu_t *afu, u64 handle);
 
 	int (*init_process) (struct cxl_context_t *ctx, bool kernel,

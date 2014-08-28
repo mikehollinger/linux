@@ -137,7 +137,6 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 			 sizeof(struct cxl_ioctl_start_work)))
 		return -EFAULT;
 
-	/* fixme me: decide this based on the AFU */
 	if ((rc = cxl_ops->init_process(ctx, false, work.wed, amr)))
 		return rc;
 

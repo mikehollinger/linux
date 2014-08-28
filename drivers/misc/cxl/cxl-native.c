@@ -128,7 +128,7 @@ static int psl_purge(struct cxl_afu_t *afu)
 	};
 	end = local_clock();
 	pr_devel("PSL purged in %lld ns\n", end - start);
-	/* FIXME: Should this be re-enabled here, or after resetting the AFU? */
+
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An,
 		       PSL_CNTL & ~CXL_PSL_SCNTL_An_Pc);
 	return 0;
@@ -388,7 +388,7 @@ add_process_element(struct cxl_context_t *ctx)
 	return rc;
 }
 
-/* FIXME merge this with add_process_element */
+/* TODO: merge this with add_process_element */
 static int
 terminate_process_element(struct cxl_context_t *ctx)
 {
