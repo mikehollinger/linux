@@ -75,6 +75,7 @@ static ssize_t mmio_size_show_master(struct device *device,
 				     char *buf)
 {
 	struct cxl_afu_t *afu = master_to_afu(device);
+
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->psn_size);
 }
 
@@ -83,6 +84,7 @@ static ssize_t pp_mmio_off_show(struct device *device,
 				char *buf)
 {
 	struct cxl_afu_t *afu = master_to_afu(device);
+
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_offset);
 }
 
@@ -91,6 +93,7 @@ static ssize_t pp_mmio_len_show(struct device *device,
 				char *buf)
 {
 	struct cxl_afu_t *afu = master_to_afu(device);
+
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_size);
 }
 
@@ -131,6 +134,7 @@ static ssize_t irqs_min_show(struct device *device,
 			     char *buf)
 {
 	struct cxl_afu_t *afu = to_afu(device);
+
 	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->pp_irqs);
 }
 
@@ -162,7 +166,7 @@ static ssize_t mode_show(struct device *device,
 }
 
 static ssize_t mode_store(struct device *device,
-		          struct device_attribute *attr,
+			  struct device_attribute *attr,
 			  const char *buf, size_t count)
 {
 	if (!strncmp(buf, "dedicated_process", 17))

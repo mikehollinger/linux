@@ -19,8 +19,8 @@
 #include <linux/sched.h>
 #include <linux/mutex.h>
 #include <linux/mm.h>
+#include <linux/uaccess.h>
 #include <asm/synch.h>
-#include <asm/uaccess.h>
 
 #include "cxl.h"
 
@@ -395,7 +395,7 @@ terminate_process_element(struct cxl_context_t *ctx)
 	pr_devel("%s Terminate pe: %i started\n", __func__, ctx->ph);
 	rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_TERMINATE,
 				    CXL_PE_SOFTWARE_STATE_V | CXL_PE_SOFTWARE_STATE_T);
-	ctx->elem->software_state = 0; 	/* Remove Valid bit */
+	ctx->elem->software_state = 0;	/* Remove Valid bit */
 	pr_devel("%s Terminate pe: %i finished\n", __func__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
@@ -506,7 +506,7 @@ init_afu_directed_process(struct cxl_context_t *ctx, u64 wed, u64 amr)
 static int
 init_dedicated_process_native(struct cxl_context_t *ctx, u64 wed, u64 amr)
 {
-	struct cxl_afu_t * afu = ctx->afu;
+	struct cxl_afu_t *afu = ctx->afu;
 	u64 sr, sstp0, sstp1;
 	int result;
 
@@ -561,12 +561,12 @@ init_dedicated_process_native(struct cxl_context_t *ctx, u64 wed, u64 amr)
 		       (((u64)ctx->irqs.offset[0] & 0xffff) << 48) |
 		       (((u64)ctx->irqs.offset[1] & 0xffff) << 32) |
 		       (((u64)ctx->irqs.offset[2] & 0xffff) << 16) |
-		        ((u64)ctx->irqs.offset[3] & 0xffff));
+			((u64)ctx->irqs.offset[3] & 0xffff));
 	cxl_p1n_write(afu, CXL_PSL_IVTE_Limit_An, (u64)
 		       (((u64)ctx->irqs.range[0] & 0xffff) << 48) |
 		       (((u64)ctx->irqs.range[1] & 0xffff) << 32) |
 		       (((u64)ctx->irqs.range[2] & 0xffff) << 16) |
-		        ((u64)ctx->irqs.range[3] & 0xffff));
+			((u64)ctx->irqs.range[3] & 0xffff));
 
 	cxl_p2n_write(afu, CXL_PSL_AMR_An, amr);
 
@@ -617,6 +617,7 @@ static int detach_process_native(struct cxl_context_t *ctx)
 static int get_irq_native(struct cxl_context_t *ctx, struct cxl_irq_info *info)
 {
 	u64 pidtid;
+
 	info->dsisr = cxl_p2n_read(ctx->afu, CXL_PSL_DSISR_An);
 	info->dar = cxl_p2n_read(ctx->afu, CXL_PSL_DAR_An);
 	info->dsr = cxl_p2n_read(ctx->afu, CXL_PSL_DSR_An);
@@ -625,6 +626,7 @@ static int get_irq_native(struct cxl_context_t *ctx, struct cxl_irq_info *info)
 	info->tid = pidtid & 0xffffffff;
 	info->afu_err = cxl_p2n_read(ctx->afu, CXL_AFU_ERR_An);
 	info->fir_r_slice = cxl_p1n_read(ctx->afu, CXL_PSL_R_FIR_SLICE_An);
+
 	return 0;
 }
 
