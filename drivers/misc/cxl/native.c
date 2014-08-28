@@ -337,7 +337,6 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 				  u64 cmd, u64 pe_state)
 {
 	u64 state;
-	u64 dsisr, dar;
 
 	BUG_ON(!ctx->afu->enabled);
 
@@ -360,12 +359,6 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 		 */
 		schedule();
 
-		/* debug code to double check DSISR */
-		dsisr = cxl_p2n_read(ctx->afu, CXL_PSL_DSISR_An);
-		if (dsisr) {
-			dar = cxl_p2n_read(ctx->afu, CXL_PSL_DAR_An);
-			pr_warn_ratelimited("DSISR non-zero  DSISR: 0x%.16llx, DAR: 0x%.16llx\n", dsisr, dar);
-		}
 	}
 	return 0;
 }
