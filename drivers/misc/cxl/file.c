@@ -181,18 +181,6 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		case CXL_IOCTL_START_WORK:
 			return afu_ioctl_start_work(ctx,
 				(struct cxl_ioctl_start_work __user *)arg);
-		case CXL_IOCTL_LOAD_AFU_IMAGE:
-		{
-			struct cxl_ioctl_load_afu_image __user *uwork =
-				(struct cxl_ioctl_load_afu_image __user *)arg;
-			struct cxl_ioctl_load_afu_image work;
-
-                        if (copy_from_user(&work, uwork, sizeof(struct cxl_ioctl_load_afu_image)))
-                                return -EFAULT;
-
-			// FIXME: check no one is using this
-			return cxl_ops->load_afu_image(ctx->afu, work.vaddress, work.length);
-		}
 		case CXL_IOCTL_CHECK_ERROR:
 			return afu_ioctl_check_error(ctx);
 	}

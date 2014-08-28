@@ -7,7 +7,6 @@
 
 /* Argument is a pointer to a struct cxl_ioctl_start_work */
 #define CXL_IOCTL_START_WORK      0
-#define CXL_IOCTL_LOAD_AFU_IMAGE  1
 #define CXL_IOCTL_CHECK_ERROR     2
 
 struct cxl_ioctl_start_work {
@@ -21,11 +20,6 @@ struct cxl_ioctl_start_work {
 	__u64 reserved2;
 	__u64 reserved3;
 	__u64 reserved4;
-};
-
-struct cxl_ioctl_load_afu_image {
-	__u64 vaddress;
-	__u64 length;
 };
 
 /* events from read() */

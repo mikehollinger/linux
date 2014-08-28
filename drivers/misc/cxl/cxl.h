@@ -619,7 +619,6 @@ struct cxl_backend_ops {
 
 	void (*release_adapter) (struct cxl_t *adapter);
 	void (*release_afu) (struct cxl_afu_t *afu);
-	int (*load_afu_image) (struct cxl_afu_t *afu, u64 vaddress, u64 length);
 	int (*check_error) (struct cxl_afu_t *afu);
 	int (*afu_reset) (struct cxl_afu_t *afu);
 };
