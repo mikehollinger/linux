@@ -381,8 +381,7 @@ static const struct file_operations psl_err_chk_fops = {
 	.llseek = seq_lseek,
 };
 
-struct trcdsc
-{
+struct trcdsc {
 	unsigned char name[8];
 	unsigned int slice;
 	unsigned int readsperline;
@@ -390,8 +389,7 @@ struct trcdsc
 	unsigned int addr;
 };
 
-static struct trcdsc descriptors[] =
-{
+static struct trcdsc descriptors[] = {
 	{ "ahctr  ", 1, 0x3, 0x0, 512 } ,
 	{ "ersptr ", 1, 0x1, 0x3, 512 } ,
 	{ "twdatr ", 1, 0x9, 0xa, 512 } ,
@@ -492,7 +490,6 @@ static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
 	}
 
 	*buffer++ = 0xE0F0000000000000LL;
-	return;
 }
 
 static unsigned long long *trace_buffer = NULL;
