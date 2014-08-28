@@ -303,6 +303,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 			ctx->pending_afu_err = false;
 	} else if (!ctx->attached) {
 		pr_warn("afu_read fatal error\n");
+		spin_unlock_irqrestore(&ctx->lock, flags);
 		return -EIO;
 	} else
 		BUG();
