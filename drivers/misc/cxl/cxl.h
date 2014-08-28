@@ -16,10 +16,10 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/pid.h>
+#include <linux/io.h>
 #include <asm/cputable.h>
 #include <asm/mmu.h>
 #include <asm/reg.h>
-#include <asm/io.h>
 
 #include <uapi/misc/cxl.h>
 
@@ -144,8 +144,8 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_PSL_DLCNTL_C (0x1ull << (63-29))
 #define CXL_PSL_DLCNTL_E (0x1ull << (63-30))
 #define CXL_PSL_DLCNTL_S (0x1ull << (63-31))
-#define CXL_PSL_DLCNTL_CE ( CXL_PSL_DLCNTL_C | CXL_PSL_DLCNTL_E )
-#define CXL_PSL_DLCNTL_DCES ( CXL_PSL_DLCNTL_D | CXL_PSL_DLCNTL_CE | CXL_PSL_DLCNTL_S)
+#define CXL_PSL_DLCNTL_CE (CXL_PSL_DLCNTL_C | CXL_PSL_DLCNTL_E)
+#define CXL_PSL_DLCNTL_DCES (CXL_PSL_DLCNTL_D | CXL_PSL_DLCNTL_CE | CXL_PSL_DLCNTL_S)
 
 /****** CXL_PSL_SR_An ******************************************************/
 #define CXL_PSL_SR_An_SF  MSR_SF            /* 64bit */
@@ -438,16 +438,16 @@ struct cxl_t {
 
 struct cxl_driver_ops {
 	struct module *module;
-	int (*init_adapter) (struct cxl_t *adapter);
-	int (*init_afu) (struct cxl_afu_t *afu);
-	int (*alloc_one_irq) (struct cxl_t *adapter);
-	void (*release_one_irq) (struct cxl_t *adapter, int hwirq);
-	int (*alloc_irq_ranges) (struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
-	void (*release_irq_ranges) (struct cxl_irq_ranges *irqs, struct cxl_t *adapter);
-	int (*setup_irq) (struct cxl_t *adapter, unsigned int hwirq, unsigned int virq);
-	void (*release_adapter) (struct cxl_t *adapter);
-	void (*release_afu) (struct cxl_afu_t *afu);
-	int (*reset) (struct cxl_t *adapter);
+	int (*init_adapter)(struct cxl_t *adapter);
+	int (*init_afu)(struct cxl_afu_t *afu);
+	int (*alloc_one_irq)(struct cxl_t *adapter);
+	void (*release_one_irq)(struct cxl_t *adapter, int hwirq);
+	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
+	void (*release_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter);
+	int (*setup_irq)(struct cxl_t *adapter, unsigned int hwirq, unsigned int virq);
+	void (*release_adapter)(struct cxl_t *adapter);
+	void (*release_afu)(struct cxl_afu_t *afu);
+	int (*reset)(struct cxl_t *adapter);
 };
 
 /* common == phyp + powernv */
@@ -593,20 +593,20 @@ struct cxl_irq_info {
 };
 
 struct cxl_backend_ops {
-	int (*init_adapter) (struct cxl_t *adapter, void *backend_data);
-	int (*init_afu) (struct cxl_afu_t *afu, u64 handle);
+	int (*init_adapter)(struct cxl_t *adapter, void *backend_data);
+	int (*init_afu)(struct cxl_afu_t *afu, u64 handle);
 
-	int (*init_process) (struct cxl_context_t *ctx, bool kernel,
-			               u64 wed, u64 amr);
-	int (*detach_process) (struct cxl_context_t *ctx);
+	int (*init_process)(struct cxl_context_t *ctx, bool kernel, u64 wed,
+			    u64 amr);
+	int (*detach_process)(struct cxl_context_t *ctx);
 
-	int (*get_irq) (struct cxl_context_t *ctx, struct cxl_irq_info *info);
-	int (*ack_irq) (struct cxl_context_t *ctx, u64 tfc, u64 psl_reset_mask);
+	int (*get_irq)(struct cxl_context_t *ctx, struct cxl_irq_info *info);
+	int (*ack_irq)(struct cxl_context_t *ctx, u64 tfc, u64 psl_reset_mask);
 
-	void (*release_adapter) (struct cxl_t *adapter);
-	void (*release_afu) (struct cxl_afu_t *afu);
-	int (*check_error) (struct cxl_afu_t *afu);
-	int (*afu_reset) (struct cxl_afu_t *afu);
+	void (*release_adapter)(struct cxl_t *adapter);
+	void (*release_afu)(struct cxl_afu_t *afu);
+	int (*check_error)(struct cxl_afu_t *afu);
+	int (*afu_reset)(struct cxl_afu_t *afu);
 };
 extern const struct cxl_backend_ops *cxl_ops;
 
@@ -629,10 +629,10 @@ static inline u64 slbfee(u64 ea)
 
 	/* asm volatile("slbfee. %0,%1" : "=r"(rt) : "r"(rb) : ); */
 	asm volatile(".long ( 31 << (31 -  5)"
-		         " |  %0 << (31 - 10)"
-			 " |  %1 << (31 - 20)"
-			 " | 979 << (31 - 30)"
-			 " | 1)" : "=r"(rt) : "r"(rb) : );
+			" |  %0 << (31 - 10)"
+			" |  %1 << (31 - 20)"
+			" | 979 << (31 - 30)"
+			" | 1)" : "=r"(rt) : "r"(rb) : );
 	return rt;
 }
 
