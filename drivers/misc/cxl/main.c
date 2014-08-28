@@ -160,7 +160,7 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	ctx->sst_size = PAGE_SIZE;
 	ctx->sst_lru = 0;
 	if (!ctx->sstp) {
-		ctx->sstp = (struct cxl_sste*)get_zeroed_page(GFP_KERNEL);
+		ctx->sstp = (struct cxl_sste *)get_zeroed_page(GFP_KERNEL);
 		pr_devel("SSTP allocated at 0x%p\n", ctx->sstp);
 	} else {
 		pr_devel("Zeroing and reusing SSTP already allocated at 0x%p\n", ctx->sstp);

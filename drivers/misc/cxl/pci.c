@@ -253,7 +253,7 @@ static int cmpbar(const void *p1, const void *p2)
 	return l1 - l2;
 }
 
-extern struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev);
+extern struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev);
 
 static int init_implementation_adapter_regs(struct cxl_t *adapter)
 {
@@ -464,7 +464,7 @@ static void reassign_cxl_bars(struct pci_dev *dev)
 	u64 window, size;
 	u64 off, addr;
 	int bar, i;
-	struct resource * bars[2];
+	struct resource *bars[2];
 	resource_size_t len;
 	struct device_node *np;
 
