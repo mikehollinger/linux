@@ -455,7 +455,7 @@ static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
 	while (dsc->addr) {
 		unsigned long long namev = 0;
 		unsigned long long sv = 64-8;
-		int i,j;
+		int i, j;
 
 		/* Init trace engine */
 		if (dsc->slice)
@@ -480,8 +480,7 @@ static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
 
 		/* Read out trace */
 		for (i = 0; i < dsc->addr; i++)
-			for (j = 0; j < dsc->readsperline; j++)
-			{
+			for (j = 0; j < dsc->readsperline; j++) {
 				*buffer++ = (dsc->slice) ?
 					cxl_p1n_read(&cxl->slice[0], CXL_PSL_SLICE_TRACE) :
 					cxl_p1_read(cxl, CXL_PSL_TRACE);
@@ -493,16 +492,16 @@ static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
 	*buffer++ = 0xE0F0000000000000LL;
 }
 
-static unsigned long long *trace_buffer = NULL;
+static unsigned long long *trace_buffer;
+
 static ssize_t read_trace(struct file *file, char __user *userbuf,
 			 size_t count, loff_t *ppos)
 {
 	u64 size = dump_size();
 	struct cxl_t *cxl = file->private_data;
 
-	if (!trace_buffer) {
+	if (!trace_buffer)
 		trace_buffer = kzalloc(size, GFP_KERNEL);
-	}
 
 	if (!trace_buffer)
 		return -ENOMEM;
@@ -511,7 +510,7 @@ static ssize_t read_trace(struct file *file, char __user *userbuf,
 	return simple_read_from_buffer(userbuf, count, ppos, trace_buffer, size);
 }
 
-static int open_trace (struct inode *inode, struct file *file)
+static int open_trace(struct inode *inode, struct file *file)
 {
 	file->private_data = inode->i_private;
 
@@ -551,9 +550,8 @@ int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
 
 	/* Create sysfs attributes */
 	adapter->afu_kobj = kobject_create_and_add("afu", &adapter->device.kobj);
-	if (IS_ERR(adapter->afu_kobj)) {
+	if (IS_ERR(adapter->afu_kobj))
 		return PTR_ERR(adapter->afu_kobj);
-	}
 
 	if ((rc = cxl_sysfs_adapter_add(adapter)))
 		goto out;
