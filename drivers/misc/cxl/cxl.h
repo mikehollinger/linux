@@ -483,7 +483,7 @@ struct cxl_process_element {
 #define _cxl_reg_read(addr) \
 	in_be64((u64 __iomem *)(addr))
 
-static inline void __iomem * _cxl_p1_addr(struct cxl_t *cxl, cxl_p1_reg_t reg)
+static inline void __iomem *_cxl_p1_addr(struct cxl_t *cxl, cxl_p1_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
 	return cxl->p1_mmio + cxl_reg_off(reg);
@@ -493,7 +493,7 @@ static inline void __iomem * _cxl_p1_addr(struct cxl_t *cxl, cxl_p1_reg_t reg)
 #define cxl_p1_read(cxl, reg) \
 	_cxl_reg_read(_cxl_p1_addr(cxl, reg))
 
-static inline void __iomem * _cxl_p1n_addr(struct cxl_afu_t *afu, cxl_p1n_reg_t reg)
+static inline void __iomem *_cxl_p1n_addr(struct cxl_afu_t *afu, cxl_p1n_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
 	return afu->p1n_mmio + cxl_reg_off(reg);
@@ -503,7 +503,7 @@ static inline void __iomem * _cxl_p1n_addr(struct cxl_afu_t *afu, cxl_p1n_reg_t 
 #define cxl_p1n_read(afu, reg) \
 	_cxl_reg_read(_cxl_p1n_addr(afu, reg))
 
-static inline void __iomem * _cxl_p2n_addr(struct cxl_afu_t *afu, cxl_p2n_reg_t reg)
+static inline void __iomem *_cxl_p2n_addr(struct cxl_afu_t *afu, cxl_p2n_reg_t reg)
 {
 	return afu->p2n_mmio + cxl_reg_off(reg);
 }
@@ -513,7 +513,7 @@ static inline void __iomem * _cxl_p2n_addr(struct cxl_afu_t *afu, cxl_p2n_reg_t 
 	_cxl_reg_read(_cxl_p2n_addr(afu, reg))
 
 /* TODO: Move PS out of kernel */
-static inline void __iomem * _cxl_afu_ps_addr(struct cxl_afu_t *afu, int reg)
+static inline void __iomem *_cxl_afu_ps_addr(struct cxl_afu_t *afu, int reg)
 {
 	return afu->psn_mmio + reg;
 }
@@ -569,7 +569,7 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data);
 void cxl_handle_fault(struct work_struct *work);
 void cxl_prefault(struct cxl_context_t *ctx, u64 wed);
 
-struct cxl_t * get_cxl_adapter(int num);
+struct cxl_t *get_cxl_adapter(int num);
 int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1);
 
 void init_cxl_native(void);
