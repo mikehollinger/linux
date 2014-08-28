@@ -725,7 +725,6 @@ static const struct cxl_backend_ops cxl_native_ops = {
 	.ack_irq = ack_irq_native,
 	.release_adapter = release_adapter_native,
 	.release_afu = release_afu_native,
-	.load_afu_image = load_afu_image_native,
 	.check_error = check_error,
 	.afu_reset = afu_reset,
 };
