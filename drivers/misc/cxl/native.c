@@ -39,6 +39,7 @@ static int afu_control(struct cxl_afu_t *afu, u64 command,
 	while ((AFU_Cntl & mask) != result) {
 		if (time_after_eq(jiffies, timeout)) {
 			pr_warn("WARNING: AFU control timed out!\n");
+			spin_unlock(&afu->afu_cntl_lock);
 			return -EBUSY;
 		}
 		pr_devel_ratelimited("AFU control... (0x%.16llx)\n",
