@@ -183,11 +183,11 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	pr_devel("afu_ioctl\n");
 	switch (cmd) {
-		case CXL_IOCTL_START_WORK:
-			return afu_ioctl_start_work(ctx,
-				(struct cxl_ioctl_start_work __user *)arg);
-		case CXL_IOCTL_CHECK_ERROR:
-			return afu_ioctl_check_error(ctx);
+	case CXL_IOCTL_START_WORK:
+		return afu_ioctl_start_work(ctx,
+			(struct cxl_ioctl_start_work __user *)arg);
+	case CXL_IOCTL_CHECK_ERROR:
+		return afu_ioctl_check_error(ctx);
 	}
 	return -EINVAL;
 }
@@ -348,8 +348,10 @@ static int psl_err_chk_show(struct seq_file *m, void *p)
 	seq_puts(m, "************************ Checking PSL Error Registers **************************");
 
 #define show_reg(name, what) \
-	seq_write(m, cxl_dbg_sep, sizeof(cxl_dbg_sep)); \
-	seq_printf(m, "%s = %16llx", name, what)
+	do { \
+		seq_write(m, cxl_dbg_sep, sizeof(cxl_dbg_sep)); \
+		seq_printf(m, "%s = %16llx", name, what); \
+	} while (0)
 
 	show_reg("PSL FIR1", cxl_p1_read(cxl, CXL_PSL_FIR1));
 	show_reg("PSL FIR2", cxl_p1_read(cxl, CXL_PSL_FIR2));
@@ -473,10 +475,10 @@ static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
 		*buffer++ = 0xb0f0000000000000LL | (dsc->addr * dsc->readsperline);
 
 		for (i = 0; i < 8; i++)	{
-			namev |= (unsigned long long )(dsc->name[i]) << sv;
+			namev |= (unsigned long long)(dsc->name[i]) << sv;
 			sv -= 8;
 		}
-		*buffer++ = namev ;
+		*buffer++ = namev;
 
 		/* Read out trace */
 		for (i = 0; i < dsc->addr; i++)
