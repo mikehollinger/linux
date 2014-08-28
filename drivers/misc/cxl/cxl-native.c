@@ -456,7 +456,7 @@ init_afu_directed_process(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	assign_psn_space(ctx);
 
 	ctx->elem->ctxtime = 0; /* disable */
-	ctx->elem->lpid = cpu_to_be64(mfspr(SPRN_LPID));
+	ctx->elem->lpid = cpu_to_be32(mfspr(SPRN_LPID));
 	ctx->elem->haurp = 0; /* disable */
 	ctx->elem->sdr = cpu_to_be64(mfspr(SPRN_SDR1));
 
