@@ -341,7 +341,7 @@ struct cxl_afu_t {
 	bool mmio;
 	bool pp_mmio;
 
-	u64 enabled;
+	bool enabled;
 
 	/* Only the first part of the SPA is used for the process element
 	 * linked list. The only other part that software needs to worry about
