@@ -185,7 +185,8 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 			return cxl_irq(irq, (void*)ctx);
 	}
 
-	WARN(1, "Unable to demultiplex CXL PSL IRQ\n");
+	printk("Unable to demultiplex CXL PSL IRQ\n");
+	BUG();
 	return IRQ_HANDLED;
 }
 
