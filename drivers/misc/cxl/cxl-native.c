@@ -730,7 +730,7 @@ static const struct cxl_backend_ops cxl_native_ops = {
 	.afu_reset = afu_reset,
 };
 
-void init_cxl_native()
+void init_cxl_native(void)
 {
 	cxl_ops = &cxl_native_ops;
 }
