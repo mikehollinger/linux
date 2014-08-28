@@ -66,7 +66,7 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data)
 
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
 
-	BUG(); // we never recover, so let's just die
+	BUG(); /* we never recover, so let's just die */
 
 	return IRQ_HANDLED;
 }
@@ -95,7 +95,7 @@ irqreturn_t cxl_irq_err(int irq, void *data)
 		cxl_slice_irq_err(0, &adapter->slice[slice]);
 	}
 
-	BUG(); // we never recover, so let's just die
+	BUG(); /* we never recover, so let's just die */
 
 	return IRQ_HANDLED;
 }

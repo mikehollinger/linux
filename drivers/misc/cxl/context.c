@@ -131,7 +131,7 @@ static void __detach_context(struct cxl_context_t *ctx)
 	unsigned long flags;
 	bool attached;
 
-	// FIXME: need locking on attach here
+	/* FIXME: need locking on attach here */
 	spin_lock_irqsave(&ctx->sst_lock, flags);
 	attached = ctx->attached;
 	ctx->attached = false;

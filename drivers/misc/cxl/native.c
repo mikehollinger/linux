@@ -266,7 +266,7 @@ init_afu_native(struct cxl_afu_t *afu, u64 handle)
 			return rc;
 	}
 
-	// FIXME: check we are afu_directed in this whole function
+	/* FIXME: check we are afu_directed in this whole function */
 	if (alloc_spa(afu))
 		return -ENOMEM;
 
