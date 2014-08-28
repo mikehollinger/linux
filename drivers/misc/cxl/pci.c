@@ -330,6 +330,7 @@ static int _alloc_hwirqs(struct pci_dev *dev, int num)
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
 	int hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
+
 	if (hwirq < 0) {
 		dev_warn(&dev->dev, "Failed to find a free MSI\n");
 		return -ENOSPC;
@@ -341,6 +342,7 @@ static int _alloc_hwirqs(struct pci_dev *dev, int num)
 static int alloc_one_hwirq(struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+
 	return _alloc_hwirqs(dev, 1);
 }
 
@@ -348,12 +350,14 @@ static void _release_hwirqs(struct pci_dev *dev, int hwirq, int num)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
+
 	msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq - phb->msi_base, num);
 }
 
 static void release_one_hwirq(struct cxl_t *adapter, int hwirq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+
 	return _release_hwirqs(dev, hwirq, 1);
 }
 
@@ -401,6 +405,7 @@ fail:
 static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+
 	return _alloc_hwirq_ranges(irqs, dev, num);
 }
 
@@ -797,7 +802,7 @@ static int cxl_reset(struct cxl_t *adapter)
 	reassign_cxl_bars(pdev);
 
 	/* just do the card as the CAPP unit should still be in CXL mode */
-	if ((rc = switch_card_to_cxl(pdev))){
+	if ((rc = switch_card_to_cxl(pdev))) {
 		dev_err(&pdev->dev, "enable_cxl_protocol failed: %i\n", rc);
 		goto out;
 	}
