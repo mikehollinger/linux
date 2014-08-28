@@ -70,7 +70,7 @@
 #define   AFUD_EB_LEN(val)		EXTRACT_PPC_BITS(val, 8, 63)
 #define AFUD_READ_EB_OFF(afu)		AFUD_READ(afu, 0x48)
 
-DEFINE_PCI_DEVICE_TABLE(cxl_pci_tbl) = {
+static DEFINE_PCI_DEVICE_TABLE(cxl_pci_tbl) = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0477), },
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x044b), },
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x04cf), },
@@ -552,7 +552,7 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 
 extern int pnv_phb_to_cxl(struct pci_dev *dev);
 
-int enable_cxl_protocol(struct pci_dev *dev)
+static int enable_cxl_protocol(struct pci_dev *dev)
 {
 	int rc;
 

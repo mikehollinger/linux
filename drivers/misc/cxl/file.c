@@ -390,7 +390,7 @@ struct trcdsc
 	unsigned int addr;
 };
 
-struct trcdsc descriptors[] =
+static struct trcdsc descriptors[] =
 {
 	{ "ahctr  ", 1, 0x3, 0x0, 512 } ,
 	{ "ersptr ", 1, 0x1, 0x3, 512 } ,
@@ -581,7 +581,7 @@ out:
 
 extern struct class *cxl_class;
 
-void cxl_release(struct device *dev)
+static void cxl_release(struct device *dev)
 {
 	pr_devel("cxl release\n");
 }

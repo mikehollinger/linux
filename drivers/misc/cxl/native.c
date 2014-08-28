@@ -70,7 +70,7 @@ static int afu_disable(struct cxl_afu_t *afu)
 			   CXL_AFU_Cntl_An_ES_MASK, false);
 }
 
-int afu_reset(struct cxl_afu_t *afu)
+static int afu_reset(struct cxl_afu_t *afu)
 {
 	pr_devel("AFU reset request\n");
 
@@ -78,7 +78,6 @@ int afu_reset(struct cxl_afu_t *afu)
 			   CXL_AFU_Cntl_An_RS_Complete,
 			   CXL_AFU_Cntl_An_RS_MASK, false);
 }
-EXPORT_SYMBOL(afu_reset);
 
 static int afu_check_and_enable(struct cxl_afu_t *afu)
 {
