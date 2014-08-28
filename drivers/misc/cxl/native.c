@@ -321,7 +321,8 @@ slb_invalid(struct cxl_context_t *ctx)
 	u64 slbia;
 
 	cxl_p1_write(adapter, CXL_PSL_LBISEL,
-		      ((u64)ctx->elem->common.pid << 32) | ctx->elem->lpid);
+			((u64)be32_to_cpu(ctx->elem->common.pid) << 32) |
+			be32_to_cpu(ctx->elem->lpid));
 	cxl_p1_write(adapter, CXL_PSL_SLBIA, CXL_SLBI_IQ_LPIDPID);
 
 	while (1) {
