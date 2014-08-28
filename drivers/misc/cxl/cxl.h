@@ -16,7 +16,6 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/pid.h>
-#include <asm/byteorder.h>
 #include <asm/cputable.h>
 #include <asm/mmu.h>
 #include <asm/reg.h>
@@ -586,16 +585,8 @@ struct cxl_irq_info {
 	u64 dsisr;
 	u64 dar;
 	u64 dsr;
-#ifdef __BIG_ENDIAN
-	/* These are written as one 64bit value, but read as 32bit values */
 	u32 pid;
 	u32 tid;
-#elif defined(__LITTLE_ENDIAN)
-	u32 tid;
-	u32 pid;
-#else
-#error Unknown endian - missing byteorder.h?
-#endif
 	u64 afu_err;
 	u64 fir_r_slice;
 	u64 padding[3]; /* to match the expected retbuf size for plpar_hcall9 */
