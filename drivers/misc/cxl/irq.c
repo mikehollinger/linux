@@ -194,13 +194,13 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 	rcu_read_lock();
 	ctx = idr_find(&afu->contexts_idr, ph);
 	if (ctx) {
-               ret = cxl_irq(irq, ctx);
-	       rcu_read_unlock();
-	       return ret;
+		ret = cxl_irq(irq, ctx);
+		rcu_read_unlock();
+		return ret;
 	}
 	rcu_read_unlock();
 
-	printk("Unable to demultiplex CXL PSL IRQ\n");
+	pr_err("Unable to demultiplex CXL PSL IRQ\n");
 	BUG();
 	return IRQ_HANDLED;
 }
@@ -248,7 +248,7 @@ cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
 	/* IRQ Domain? */
 	virq = irq_create_mapping(NULL, hwirq);
 	if (!virq) {
-		pr_warning("cxl_map_irq: irq_create_mapping failed\n");
+		pr_warn("cxl_map_irq: irq_create_mapping failed\n");
 		return 0;
 	}
 
@@ -259,7 +259,7 @@ cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
 
 	result = request_irq(virq, handler, 0, "cxl", cookie);
 	if (result) {
-		pr_warning("cxl_map_irq: request_irq failed: %i\n", result);
+		pr_warn("cxl_map_irq: request_irq failed: %i\n", result);
 		return 0;
 	}
 

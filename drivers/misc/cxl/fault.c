@@ -134,7 +134,7 @@ static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data, u64 vsid_
 	else /* 256M */
 		hash = (esid_data >> SID_SHIFT) & mask;
 
-	sste = find_free_sste(ctx->sstp + (  hash         << 3), sec_hash,
+	sste = find_free_sste(ctx->sstp + (hash << 3), sec_hash,
 			      ctx->sstp + ((~hash & mask) << 3), &ctx->sst_lru);
 
 	pr_devel("CXL Populating SST[%li]: %#llx %#llx\n",
@@ -302,6 +302,7 @@ static void cxl_prefault_vma(struct cxl_context_t *ctx)
 	struct task_struct *task;
 	struct mm_struct *mm;
 	unsigned long flags;
+
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 		pr_devel("cxl_prefault_vma unable to get task %i\n", pid_nr(ctx->pid));
 		return;
@@ -335,7 +336,7 @@ out1:
 	put_task_struct(task);
 }
 
-enum pref{
+enum pref {
 	CXL_PREFAULT_NONE,
 	CXL_PREFAULT_WED,
 	CXL_PREFAULT_MAPPED,
