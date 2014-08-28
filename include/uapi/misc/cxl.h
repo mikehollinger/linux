@@ -12,14 +12,14 @@
 struct cxl_ioctl_start_work {
 	__u64 wed;
 	__u64 amr;
-	__u64 ctx_save_ptr; /* Ignored in dedicated process model */
-	__u32 ctx_save_size; /* In bytes */
+	__u64 reserved1;
+	__u32 reserved2;
 	__s16 num_interrupts; /* -1 = use value from afu descriptor */
 	__u16 process_element; /* returned from kernel */
-	__u64 reserved1;
-	__u64 reserved2;
 	__u64 reserved3;
 	__u64 reserved4;
+	__u64 reserved5;
+	__u64 reserved6;
 };
 
 /* events from read() */
