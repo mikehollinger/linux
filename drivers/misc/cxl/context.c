@@ -124,15 +124,14 @@ static void __detach_context(struct cxl_context_t *ctx)
 	 * finished and no more interrupts are possible */
 	/* FIXME: If we opened it but never started it, this will WARN */
 	/* FIXME: check this is the last context to shut down */
+	unsigned long flags;
 
-
-	rcu_read_lock();
-	if (!ctx->attached) {
-		rcu_read_unlock();
+	// FIXME: need locking on attach here
+	spin_lock_irqsave(&ctx->sst_lock, flags);
+	if (!ctx->attached)
 		return;
-	}
 	ctx->attached = false;
-	rcu_read_unlock();
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 	WARN_ON(cxl_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
 	WARN_ON(work_busy(&ctx->fault_work)); /* FIXME: maybe bogus.  hardware may not be done */
@@ -158,6 +157,9 @@ void cxl_context_detach_all(struct cxl_afu_t *afu)
 	struct cxl_context_t *ctx;
 	int tmp;
 
+	/* FIXME: not sure we need this rcu_read_lock() as this shouldn't be
+	 * called at the same time as cxl_context_free
+	 */
 	rcu_read_lock();
 	idr_for_each_entry(&afu->contexts_idr, ctx, tmp)
 		__detach_context(ctx);
@@ -169,12 +171,12 @@ void cxl_context_free(struct cxl_context_t *ctx)
 	unsigned long flags;
 
 	idr_remove(&ctx->afu->contexts_idr, ctx->ph);
+	synchronize_rcu();
+
 	spin_lock_irqsave(&ctx->sst_lock, flags);
 	free_page((u64)ctx->sstp);
 	ctx->sstp = NULL;
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 	put_pid(ctx->pid);
-	synchronize_rcu();
-
 	kfree(ctx);
 }
