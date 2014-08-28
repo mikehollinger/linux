@@ -109,7 +109,7 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
 	if (!ctx->afu->enabled)
 		return -EBUSY;
 
-	pr_devel("%s: mmio physical: %llx pe: %i master:%i\n", __FUNCTION__,
+	pr_devel("%s: mmio physical: %llx pe: %i master:%i\n", __func__,
 		 ctx->psn_phys, ctx->ph , ctx->master);
 
 	/* FIXME: Return error if virtualised AFU */

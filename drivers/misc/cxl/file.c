@@ -88,7 +88,7 @@ afu_release(struct inode *inode, struct file *file)
 	struct cxl_context_t *ctx = file->private_data;
 
 	pr_devel("%s: closing cxl file descriptor. pe: %i\n",
-		 __FUNCTION__, ctx->ph);
+		 __func__, ctx->ph);
 	cxl_context_detach(ctx);
 
 	module_put(ctx->afu->adapter->driver->module);

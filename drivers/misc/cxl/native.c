@@ -373,10 +373,10 @@ add_process_element(struct cxl_context_t *ctx)
 	int rc = 0;
 
 	mutex_lock(&ctx->afu->spa_mutex);
-	pr_devel("%s Adding pe: %i started\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Adding pe: %i started\n", __func__, ctx->ph);
 	if (!(rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_ADD, CXL_PE_SOFTWARE_STATE_V)))
 		ctx->pe_inserted = true;
-	pr_devel("%s Adding pe: %i finished\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Adding pe: %i finished\n", __func__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
@@ -392,11 +392,11 @@ terminate_process_element(struct cxl_context_t *ctx)
 		return rc;
 
 	mutex_lock(&ctx->afu->spa_mutex);
-	pr_devel("%s Terminate pe: %i started\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Terminate pe: %i started\n", __func__, ctx->ph);
 	rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_TERMINATE,
 				    CXL_PE_SOFTWARE_STATE_V | CXL_PE_SOFTWARE_STATE_T);
 	ctx->elem->software_state = 0; 	/* Remove Valid bit */
-	pr_devel("%s Terminate pe: %i finished\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Terminate pe: %i finished\n", __func__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
@@ -409,11 +409,11 @@ remove_process_element(struct cxl_context_t *ctx)
 	int rc = 0;
 
 	mutex_lock(&ctx->afu->spa_mutex);
-	pr_devel("%s Remove pe: %i started\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Remove pe: %i started\n", __func__, ctx->ph);
 	if (!(rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_REMOVE, 0)))
 		ctx->pe_inserted = false;
 	slb_invalid(ctx);
-	pr_devel("%s Remove pe: %i finished\n", __FUNCTION__, ctx->ph);
+	pr_devel("%s Remove pe: %i finished\n", __func__, ctx->ph);
 	mutex_unlock(&ctx->afu->spa_mutex);
 
 	return rc;
