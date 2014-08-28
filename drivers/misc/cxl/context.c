@@ -129,13 +129,16 @@ static void __detach_context(struct cxl_context_t *ctx)
 	/* FIXME: If we opened it but never started it, this will WARN */
 	/* FIXME: check this is the last context to shut down */
 	unsigned long flags;
+	bool attached;
 
 	// FIXME: need locking on attach here
 	spin_lock_irqsave(&ctx->sst_lock, flags);
-	if (!ctx->attached)
-		return;
+	attached = ctx->attached;
 	ctx->attached = false;
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
+	if (!attached)
+		return;
+
 	WARN_ON(cxl_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
 	WARN_ON(work_busy(&ctx->fault_work)); /* FIXME: maybe bogus.  hardware may not be done */
