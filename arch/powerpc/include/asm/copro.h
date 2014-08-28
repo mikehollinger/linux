@@ -7,10 +7,10 @@
  * 2 of the License, or (at your option) any later version.
  */
 
-#ifndef _COPRO_H
-#define _COPRO_H
+#ifndef _ASM_POWERPC_COPRO_H
+#define _ASM_POWERPC_COPRO_H
 
 int copro_handle_mm_fault(struct mm_struct *mm, unsigned long ea,
 			  unsigned long dsisr, unsigned *flt);
 
-#endif
+#endif /* _ASM_POWERPC_COPRO_H */
