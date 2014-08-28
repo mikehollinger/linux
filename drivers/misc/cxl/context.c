@@ -62,8 +62,12 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 	/* FIXME: need to make this two stage between the open and the ioctl */
 	ctx->attached = 1;
 
-	i = ida_simple_get(&ctx->afu->pe_index_ida, 0,
-			   ctx->afu->num_procs, GFP_KERNEL);
+	idr_preload(GFP_KERNEL);
+	spin_lock(&afu->contexts_lock);
+	i = idr_alloc(&ctx->afu->contexts_idr, ctx, 0,
+		      ctx->afu->num_procs, GFP_NOWAIT);
+	spin_unlock(&afu->contexts_lock);
+	idr_preload_end();
 	if (i < 0)
 		return i;
 
@@ -78,9 +82,6 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
  */
 void cxl_context_start(struct cxl_context_t *ctx)
 {
-	spin_lock(&ctx->afu->contexts_lock);
-	list_add(&ctx->list, &ctx->afu->contexts);
-	spin_unlock(&ctx->afu->contexts_lock);
 }
 
 /*
@@ -127,16 +128,14 @@ static void __detach_context(struct cxl_context_t *ctx)
 	 * finished and no more interrupts are possible */
 	/* FIXME: If we opened it but never started it, this will WARN */
 	/* FIXME: check this is the last context to shut down */
+	unsigned long flags;
 
-
-	spin_lock(&ctx->afu->contexts_lock);
-	if (!ctx->attached) {
-		spin_unlock(&ctx->afu->contexts_lock);
+	// FIXME: need locking on attach here
+	spin_lock_irqsave(&ctx->sst_lock, flags);
+	if (!ctx->attached)
 		return;
-	}
 	ctx->attached = false;
-	list_del(&ctx->list);
-	spin_unlock(&ctx->afu->contexts_lock);
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 	WARN_ON(cxl_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
 	WARN_ON(work_busy(&ctx->fault_work)); /* FIXME: maybe bogus.  hardware may not be done */
@@ -159,17 +158,25 @@ void cxl_context_detach(struct cxl_context_t *ctx)
  */
 void cxl_context_detach_all(struct cxl_afu_t *afu)
 {
-	struct cxl_context_t *ctx, *tmp;
+	struct cxl_context_t *ctx;
+	int tmp;
 
-	list_for_each_entry_safe(ctx, tmp, &afu->contexts, list)
+	/* FIXME: not sure we need this rcu_read_lock() as this shouldn't be
+	 * called at the same time as cxl_context_free
+	 */
+	rcu_read_lock();
+	idr_for_each_entry(&afu->contexts_idr, ctx, tmp)
 		__detach_context(ctx);
+	rcu_read_unlock();
 }
 
 void cxl_context_free(struct cxl_context_t *ctx)
 {
 	unsigned long flags;
 
-	ida_simple_remove(&ctx->afu->pe_index_ida, ctx->ph);
+	idr_remove(&ctx->afu->contexts_idr, ctx->ph);
+	synchronize_rcu();
+
 	spin_lock_irqsave(&ctx->sst_lock, flags);
 	free_page((u64)ctx->sstp);
 	ctx->sstp = NULL;
