@@ -68,8 +68,8 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 
 	snprintf(buf, 32, "psl%i.%i", afu->adapter->adapter_num, afu->slice);
 	dir = debugfs_create_dir(buf, cxl_debugfs);
-	if (IS_ERR(ent))
-		return PTR_ERR(ent);
+	if (IS_ERR(dir))
+		return PTR_ERR(dir);
 
 	debugfs_create_x64("fir",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
 	debugfs_create_x64("fir_recov", S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_R_FIR_SLICE_An));
