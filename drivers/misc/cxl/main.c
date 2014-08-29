@@ -396,7 +396,6 @@ static int __init init_cxl(void)
 
 void cxl_unregister_afu(struct cxl_afu_t *afu)
 {
-	unregister_cxl_calls(&cxl_calls);
 	cxl_release_psl_irq(afu);
 	del_cxl_afu_dev(afu);
 	cxl_ops->release_afu(afu);
@@ -431,6 +430,7 @@ static void exit_cxl(void)
 {
 	cxl_debugfs_exit();
 	class_destroy(cxl_class);
+	unregister_cxl_calls(&cxl_calls);
 }
 
 module_init(init_cxl);
