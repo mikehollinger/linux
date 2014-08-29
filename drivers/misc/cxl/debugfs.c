@@ -10,9 +10,8 @@ int cxl_debugfs_init(void)
 {
 	struct dentry *ent;
 	ent = debugfs_create_dir("cxl", NULL);
-	if (IS_ERR(ent)) {
+	if (IS_ERR(ent))
 		return PTR_ERR(ent);
-	}
 	cxl_debugfs = ent;
 
 	return 0;
@@ -37,6 +36,9 @@ void cxl_stop_trace(struct cxl_t *cxl)
 
 int cxl_debugfs_adapter_add(struct cxl_t *adapter)
 {
+	if (!cxl_debugfs)
+		return -ENODEV;
+
 	debugfs_create_x64("fir1",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_FIR1));
 	debugfs_create_x64("fir2",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_FIR2));
 	debugfs_create_x64("fir_cntl", S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_FIR_CNTL));
@@ -52,8 +54,13 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 	struct dentry *dir;
 	char buf[32];
 
+	if (!cxl_debugfs)
+		return -ENODEV;
+
 	snprintf(buf, 32, "psl%i.%i", afu->adapter->adapter_num, afu->slice);
 	dir = debugfs_create_dir(buf, cxl_debugfs);
+	if (IS_ERR(ent))
+		return PTR_ERR(ent);
 
 	debugfs_create_x64("fir",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
 	debugfs_create_x64("fir_recov", S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_R_FIR_SLICE_An));
