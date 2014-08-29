@@ -329,7 +329,6 @@
 #define     LPCR_PECE1	0x00002000	/* decrementer can cause exit */
 #define     LPCR_PECE2	0x00001000	/* machine check etc can cause exit */
 #define   LPCR_MER	0x00000800	/* Mediated External Exception */
-#define   LPCR_TC	0x00000200	/* Secondary Page Table Search */
 #define   LPCR_MER_SH	11
 #define   LPCR_TC      0x00000200	/* Translation control */
 #define   LPCR_LPES    0x0000000c
