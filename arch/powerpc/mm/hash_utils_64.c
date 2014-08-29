@@ -1177,7 +1177,7 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 		}
 	}
 
-	if (likely(current->mm == mm))
+	if (current->mm == mm)
 		check_paca_psize(ea, mm, psize, user_region);
 #endif /* CONFIG_PPC_64K_PAGES */
 
