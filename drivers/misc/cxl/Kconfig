@@ -8,7 +8,7 @@ config CXL_BASE
 
 config CXL
 	tristate "Support for CAIA compliant accelerators"
-	depends on PPC_POWERNV || PPC_PSERIES
+	depends on PPC_POWERNV
 	select CXL_BASE
 	default m
 	help
