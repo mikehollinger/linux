@@ -179,6 +179,8 @@ int cxl_debugfs_adapter_add(struct cxl_t *adapter)
 	debugfs_create_x64("fir_cntl", S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_FIR_CNTL));
 	debugfs_create_x64("err_ivte", S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_ErrIVTE));
 
+	debugfs_create_x64("trace", S_IRUSR | S_IWUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_TRACE));
+
 	return 0;
 }
 
@@ -200,6 +202,8 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 	debugfs_create_x64("sstp0",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP0_An));
 	debugfs_create_x64("sstp1",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP1_An));
 	debugfs_create_x64("err_stat",  S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_ErrStat_An));
+
+	debugfs_create_x64("trace", S_IRUSR | S_IWUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_SLICE_TRACE));
 
 	return 0;
 }
