@@ -77,11 +77,14 @@ static u64 dump_size(void)
 
 void cxl_stop_trace(struct cxl_t *cxl)
 {
+	int slice;
+
 	/* Stop the trace */
 	cxl_p1_write(cxl, CXL_PSL_TRACE, 0x8000000000000017LL);
 
-	/* Stop the trace slice */
-	cxl_p1n_write(&cxl->slice[0], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
+	/* Stop the slice traces */
+	for (slice = 0; slice < cxl->slices; slice++)
+		cxl_p1n_write(&cxl->slice[slice], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
 }
 
 static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
