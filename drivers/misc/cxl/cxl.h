@@ -541,7 +541,7 @@ int register_cxl_dev(void);
 void unregister_cxl_dev(void);
 int add_cxl_dev(struct cxl_t *cxl, int adapter_num);
 void del_cxl_dev(struct cxl_t *cxl);
-int add_cxl_afu_dev(struct cxl_afu_t *afu, int slice);
+int add_cxl_afu_dev(struct cxl_afu_t *afu);
 void del_cxl_afu_dev(struct cxl_afu_t *afu);
 void cxl_context_detach_all(struct cxl_afu_t *afu);
 void cxl_context_free(struct cxl_context_t *ctx);
@@ -562,6 +562,11 @@ void afu_disable_irqs(struct cxl_context_t *ctx);
 void afu_release_irqs(struct cxl_context_t *ctx);
 irqreturn_t cxl_irq_err(int irq, void *data);
 irqreturn_t cxl_slice_irq_err(int irq, void *data);
+
+int cxl_debugfs_init(void);
+void cxl_debugfs_exit(void);
+int cxl_debugfs_adapter_add(struct cxl_t *adapter);
+int cxl_debugfs_afu_add(struct cxl_afu_t *afu);
 
 void cxl_handle_fault(struct work_struct *work);
 void cxl_prefault(struct cxl_context_t *ctx, u64 wed);
