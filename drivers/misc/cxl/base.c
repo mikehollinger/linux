@@ -10,9 +10,8 @@
 #include <linux/module.h>
 #include <linux/rcupdate.h>
 #include <asm/errno.h>
+#include <misc/cxl.h>
 #include "cxl.h"
-
-static struct cxl_calls *cxl_calls;
 
 /* protected by rcu */
 static struct cxl_calls *cxl_calls;
@@ -62,3 +61,21 @@ void cxl_slbia(struct mm_struct *mm)
 	calls->cxl_slbia(mm);
 }
 EXPORT_SYMBOL(cxl_slbia);
+
+int register_cxl_calls(struct cxl_calls *calls)
+{
+	if (cxl_calls)
+		return -EBUSY;
+
+	rcu_assign_pointer(cxl_calls, calls);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(register_cxl_calls);
+
+void unregister_cxl_calls(struct cxl_calls *calls)
+{
+	BUG_ON(cxl_calls->owner != calls->owner);
+	RCU_INIT_POINTER(cxl_calls, NULL);
+	synchronize_rcu();
+}
+EXPORT_SYMBOL_GPL(unregister_cxl_calls);

@@ -24,6 +24,7 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 #include <asm/cputable.h>
+#include <misc/cxl.h>
 
 #include "cxl.h"
 
@@ -95,7 +96,7 @@ static void cxl_afu_slbia(struct cxl_afu_t *afu)
 
 /* FIXME: This is called from the PPC mm code, which will break when CXL is
  * compiled as a module */
-static inline void cxl_slbia(struct mm_struct *mm)
+static inline void cxl_slbia_core(struct mm_struct *mm)
 {
 	struct cxl_t *adapter;
 	struct cxl_afu_t *afu;
@@ -104,7 +105,7 @@ static inline void cxl_slbia(struct mm_struct *mm)
 	unsigned long flags;
 	int card = 0, slice, id;
 
-	pr_devel("cxl_slbia called\n");
+	pr_devel("%s called\n", __func__);
 
 	spin_lock(&adapter_list_lock);
 	list_for_each_entry(adapter, &adapter_list, list) {
@@ -118,14 +119,16 @@ static inline void cxl_slbia(struct mm_struct *mm)
 			rcu_read_lock();
 			idr_for_each_entry(&afu->contexts_idr, ctx, id) {
 				if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-					pr_devel("cxl_slbia unable to get task %i\n", pid_nr(ctx->pid));
+					pr_devel("%s unable to get task %i\n",
+						 __func__, pid_nr(ctx->pid));
 					continue;
 				}
 
 				if (task->mm != mm)
 					goto next;
 
-				pr_devel("cxl_slbia matched mm - card: %i afu: %i pe: %i\n", card, slice, ctx->ph);
+				pr_devel("%s matched mm - card: %i afu: %i pe: %i\n",
+					 __func__, card, slice, ctx->ph);
 
 				spin_lock_irqsave(&ctx->sst_lock, flags);
 				if (!ctx->sstp)
@@ -145,6 +148,11 @@ next:
 	}
 	spin_unlock(&adapter_list_lock);
 }
+
+struct cxl_calls cxl_calls = {
+	.cxl_slbia = cxl_slbia_core,
+	.owner = THIS_MODULE,
+};
 
 int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
@@ -378,6 +386,8 @@ static int __init init_cxl(void)
 	if (register_cxl_dev())
 		return -1;
 
+	ret = register_cxl_calls(&cxl_calls);
+
 	pr_devel("---------- init_cxl done ---------\n");
 
 	return ret;
@@ -385,6 +395,7 @@ static int __init init_cxl(void)
 
 void cxl_unregister_afu(struct cxl_afu_t *afu)
 {
+	unregister_cxl_calls(&cxl_calls);
 	cxl_release_psl_irq(afu);
 	del_cxl_afu_dev(afu);
 	cxl_ops->release_afu(afu);
@@ -419,11 +430,6 @@ static void exit_cxl(void)
 {
 	class_destroy(cxl_class);
 }
-
-struct cxl_calls cxl_calls = {
-	.cxl_slbia = cxl_slbia,
-	.owner = THIS_MODULE,
-};
 
 module_init(init_cxl);
 module_exit(exit_cxl);

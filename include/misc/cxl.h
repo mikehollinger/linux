@@ -10,6 +10,13 @@
 #ifndef _MISC_ASM_CXL_H
 #define _MISC_ASM_CXL_H
 
+struct cxl_calls {
+	void (*cxl_slbia)(struct mm_struct *mm);
+	struct module *owner;
+};
+
 extern void cxl_slbia(struct mm_struct *mm);
+extern int register_cxl_calls(struct cxl_calls *calls);
+extern void unregister_cxl_calls(struct cxl_calls *calls);
 
 #endif
