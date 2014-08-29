@@ -26,7 +26,6 @@
 #include <linux/pid.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
-#include <linux/debugfs.h>
 #include <linux/slab.h>
 #include <asm/cputable.h>
 #include <asm/current.h>
@@ -338,193 +337,6 @@ static const struct file_operations afu_master_fops = {
 	.mmap           = afu_mmap,
 };
 
-static char cxl_dbg_sep[80+2] = "\n--------------------------------------------------------------------------------\n";
-
-static int psl_err_chk_show(struct seq_file *m, void *p)
-{
-	struct cxl_t *cxl = m->private;
-	struct cxl_afu_t *a0 = &cxl->slice[0];
-
-	seq_puts(m, "************************ Checking PSL Error Registers **************************");
-
-#define show_reg(name, what) \
-	do { \
-		seq_write(m, cxl_dbg_sep, sizeof(cxl_dbg_sep)); \
-		seq_printf(m, "%s = %16llx", name, what); \
-	} while (0)
-
-	show_reg("PSL FIR1", cxl_p1_read(cxl, CXL_PSL_FIR1));
-	show_reg("PSL FIR2", cxl_p1_read(cxl, CXL_PSL_FIR2));
-	show_reg("PSL FIR CNTL", cxl_p1_read(cxl, CXL_PSL_FIR_CNTL));
-	show_reg("PSL FIR SLICE A0", cxl_p1n_read(a0, CXL_PSL_FIR_SLICE_An));
-	show_reg("PSL RECOV FIR SLICE A0", cxl_p1n_read(a0, CXL_PSL_R_FIR_SLICE_An));
-	show_reg("PSL SERR A0", cxl_p1n_read(a0, CXL_PSL_SERR_An));
-	show_reg("PSL ERRIVTE", cxl_p1_read(cxl, CXL_PSL_ErrIVTE));
-	show_reg("PSL DSISR A0", cxl_p2n_read(a0, CXL_PSL_DSISR_An));
-	show_reg("PSL SR", cxl_p1n_read(a0, CXL_PSL_SR_An));
-	show_reg("PSL SSTP0 A0", cxl_p2n_read(a0, CXL_SSTP0_An));
-	show_reg("PSL SSTP1 A0", cxl_p2n_read(a0, CXL_SSTP1_An));
-	show_reg("PSL DAR A0", cxl_p2n_read(a0, CXL_PSL_DAR_An));
-	show_reg("PSL ErrStat A0", cxl_p2n_read(a0, CXL_PSL_ErrStat_An));
-#undef showreg
-	seq_putc(m, '\n');
-
-	return 0;
-}
-
-static int psl_err_chk_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, psl_err_chk_show, inode->i_private);
-}
-
-static const struct file_operations psl_err_chk_fops = {
-	.open = psl_err_chk_open,
-	.release = seq_release,
-	.read = seq_read,
-	.llseek = seq_lseek,
-};
-
-struct trcdsc {
-	unsigned char name[8];
-	unsigned int slice;
-	unsigned int readsperline;
-	unsigned int traceid;
-	unsigned int addr;
-};
-
-static struct trcdsc descriptors[] = {
-	{ "ahctr  ", 1, 0x3, 0x0, 512 } ,
-	{ "ersptr ", 1, 0x1, 0x3, 512 } ,
-	{ "twdatr ", 1, 0x9, 0xa, 512 } ,
-	{ "crsptr ", 1, 0x1, 0x2, 512 } ,
-	{ "hartr  ", 1, 0x1, 0x1, 512 } ,
-	{ "twtr   ", 1, 0x3, 0x7, 512 } ,
-	{ "rtwtr  ", 1, 0x2, 0x8, 512 } ,
-	{ "ssprot ", 0, 0x3, 0xc, 512 } ,
-	{ "datr   ", 0, 0x6, 0xf, 4096 } ,
-	{ "r0tiftr", 1, 0x3, 0xd, 512 } ,
-	{ "b0rvalt", 1, 0x9, 0x4, 512 } ,
-	{ "b0wvalt", 1, 0x9, 0x5, 512 } ,
-	{ "rwtiftr", 0, 0x3, 0x9, 512 } ,
-	{ "rqinftr", 0, 0x4, 0x8, 512 } ,
-	{ "rqinft2", 0, 0x4, 0xa, 512 } ,
-	{ "pslcmd ", 0, 0x3, 0x3, 512 } ,
-	{ "pslsndt", 0, 0x2, 0xd, 512 } ,
-	{ "rdintr ", 0, 0x9, 0x4, 512 } ,
-	{ "wrrdy  ", 0, 0x1, 0x5, 512 } ,
-	{ "wdoutr ", 0, 0x9, 0x6, 512 } ,
-	{ "rxdcdtr", 0, 0x3, 0x0, 512 } ,
-	{ "rxsnp  ", 0, 0x2, 0x1, 512 } ,
-	{ "apcrspt", 0, 0x2, 0x2, 512 } ,
-	{ "dsisrtr", 1, 0x1, 0x6, 512 } ,
-	{ "jmcmdtr", 1, 0x2, 0xe, 512 } ,
-	{ "tbtr   ", 0, 0x3, 0xb, 512 } ,
-	{ {0x0}, 0, 0, 0, 0 },
-};
-
-static u64 dump_size(void)
-{
-	struct trcdsc *dsc = &descriptors[0];
-	u64 size = 2*8;
-
-	while (dsc->addr) {
-		size += 2*8;
-		size += 8*(dsc->addr*dsc->readsperline);
-		dsc++;
-	}
-
-	return size;
-}
-
-void cxl_stop_trace(struct cxl_t *cxl)
-{
-	/* Stop the trace */
-	cxl_p1_write(cxl, CXL_PSL_TRACE, 0x8000000000000017LL);
-
-	/* Stop the trace slice */
-	cxl_p1n_write(&cxl->slice[0], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
-}
-
-static void dump_trace(unsigned long long *buffer, struct cxl_t *cxl)
-{
-	struct trcdsc *dsc = &descriptors[0];
-
-	cxl_stop_trace(cxl);
-
-	/* Get read write machine state */
-	*buffer++ = cxl_p1_read(cxl, CXL_PSL_TRACE);
-
-	while (dsc->addr) {
-		unsigned long long namev = 0;
-		unsigned long long sv = 64-8;
-		int i, j;
-
-		/* Init trace engine */
-		if (dsc->slice)
-			cxl_p1n_write(&cxl->slice[0], CXL_PSL_SLICE_TRACE,
-				       0x8000000000000000LL |
-				       dsc->readsperline << 4 |
-				       dsc->traceid);
-		else
-			cxl_p1_write(cxl, CXL_PSL_TRACE,
-				      0x8000000000000000LL |
-				      dsc->readsperline << 4 |
-				      dsc->traceid);
-
-		/* Write descriptor record */
-		*buffer++ = 0xb0f0000000000000LL | (dsc->addr * dsc->readsperline);
-
-		for (i = 0; i < 8; i++)	{
-			namev |= (unsigned long long)(dsc->name[i]) << sv;
-			sv -= 8;
-		}
-		*buffer++ = namev;
-
-		/* Read out trace */
-		for (i = 0; i < dsc->addr; i++)
-			for (j = 0; j < dsc->readsperline; j++) {
-				*buffer++ = (dsc->slice) ?
-					cxl_p1n_read(&cxl->slice[0], CXL_PSL_SLICE_TRACE) :
-					cxl_p1_read(cxl, CXL_PSL_TRACE);
-			}
-
-		dsc++;
-	}
-
-	*buffer++ = 0xE0F0000000000000LL;
-}
-
-static unsigned long long *trace_buffer;
-
-static ssize_t read_trace(struct file *file, char __user *userbuf,
-			 size_t count, loff_t *ppos)
-{
-	u64 size = dump_size();
-	struct cxl_t *cxl = file->private_data;
-
-	if (!trace_buffer)
-		trace_buffer = kzalloc(size, GFP_KERNEL);
-
-	if (!trace_buffer)
-		return -ENOMEM;
-
-	dump_trace(trace_buffer, cxl);
-	return simple_read_from_buffer(userbuf, count, ppos, trace_buffer, size);
-}
-
-static int open_trace(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-
-	return 0;
-}
-
-/* For getting GRUB PSL traces from debugfs */
-static const struct file_operations trace_fops = {
-	.open = open_trace,
-	.read = read_trace,
-};
-
 int __init register_cxl_dev(void)
 {
 	int result;
@@ -547,34 +359,12 @@ void unregister_cxl_dev(void)
 
 int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
 {
-	int rc;
-	char tmp[32];
-
 	/* Create sysfs attributes */
 	adapter->afu_kobj = kobject_create_and_add("afu", &adapter->device.kobj);
 	if (IS_ERR(adapter->afu_kobj))
 		return PTR_ERR(adapter->afu_kobj);
 
-	if ((rc = cxl_sysfs_adapter_add(adapter)))
-		goto out;
-
-	/* Create debugfs entries */
-	/* FIXME: Drop these for upstreaming. Maybe move them somewhere more
-	 * appropriate under sysfs or debugfs for debugging - cxl%i isn't
-	 * great since it assumes 1 afu per card */
-	pr_devel("Creating CXL debugfs entries\n");
-	if (cpu_has_feature(CPU_FTR_HVMODE)) {
-		snprintf(tmp, 32, "cxl%i_trace", adapter_num);
-		adapter->trace = debugfs_create_file(tmp, 0444, NULL, adapter, &trace_fops);
-		snprintf(tmp, 32, "cxl%i_psl_err_chk", adapter_num);
-		adapter->psl_err_chk = debugfs_create_file(tmp, 0444, NULL, adapter, &psl_err_chk_fops);
-	}
 	return 0;
-
-out:
-	kobject_put(adapter->afu_kobj);
-	adapter->afu_kobj = NULL;
-	return rc;
 }
 
 extern struct class *cxl_class;
@@ -584,7 +374,7 @@ static void cxl_release(struct device *dev)
 	pr_devel("cxl release\n");
 }
 
-int add_cxl_afu_dev(struct cxl_afu_t *afu, int slice)
+int add_cxl_afu_dev(struct cxl_afu_t *afu)
 {
 	int rc;
 	unsigned int cxl_major = MAJOR(afu->adapter->device.devt);
@@ -594,15 +384,15 @@ int add_cxl_afu_dev(struct cxl_afu_t *afu, int slice)
 	/* FIXME check afu->pp_mmio to see if we need this file */
 	afu->device.parent = &afu->adapter->device;
 	afu->device.class = cxl_class;
-	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, slice);
-	afu->device.devt = MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + slice);
+	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, afu->slice);
+	afu->device.devt = MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + afu->slice);
 	afu->device.release = cxl_release;
 
 	if ((rc = device_register(&afu->device)))
 		return rc;
 
 	cdev_init(&afu->adapter->afu_cdev, &afu_fops);
-	rc = cdev_add(&afu->adapter->afu_cdev, MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + slice), afu->adapter->slices);
+	rc = cdev_add(&afu->adapter->afu_cdev, MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + afu->slice), afu->adapter->slices);
 	if (rc) {
 		pr_err("Unable to register CXL AFU character devices: %i\n", rc);
 		goto out;
@@ -611,8 +401,8 @@ int add_cxl_afu_dev(struct cxl_afu_t *afu, int slice)
 	/* Add the AFU master device */
 	afu->device_master.parent = &afu->device;
 	afu->device_master.class = cxl_class;
-	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, slice);
-	afu->device_master.devt = MKDEV(cxl_major, cxl_minor + 1 + slice);
+	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, afu->slice);
+	afu->device_master.devt = MKDEV(cxl_major, cxl_minor + 1 + afu->slice);
 	afu->device_master.release = cxl_release;
 
 	if ((rc = device_register(&afu->device_master)))
@@ -622,7 +412,7 @@ int add_cxl_afu_dev(struct cxl_afu_t *afu, int slice)
 		goto out2;
 
 	cdev_init(&afu->adapter->afu_master_cdev, &afu_master_fops);
-	rc = cdev_add(&afu->adapter->afu_master_cdev, MKDEV(cxl_major, cxl_minor + 1 + slice), afu->adapter->slices);
+	rc = cdev_add(&afu->adapter->afu_master_cdev, MKDEV(cxl_major, cxl_minor + 1 + afu->slice), afu->adapter->slices);
 	if (rc) {
 		pr_err("Unable to register CXL AFU master character devices: %i\n", rc);
 		goto out3;
@@ -649,9 +439,6 @@ out:
 
 void del_cxl_dev(struct cxl_t *adapter)
 {
-	debugfs_remove(adapter->trace);
-	debugfs_remove(adapter->psl_err_chk);
-	cxl_sysfs_adapter_remove(adapter);
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;
 	adapter->device.release = cxl_release;

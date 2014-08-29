@@ -445,7 +445,6 @@ static void cxl_release_afu(struct cxl_afu_t *afu)
 	_release_hwirqs(dev, afu->psl_hwirq, 1);
 }
 
-static int cxl_reset(struct cxl_t *adapter);
 static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.module = THIS_MODULE,
 	.init_adapter = init_implementation_adapter_regs,
@@ -457,7 +456,6 @@ static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.setup_irq = setup_cxl_msi,
 	.release_adapter = cxl_release_adapter,
 	.release_afu = cxl_release_afu,
-	.reset = cxl_reset,
 };
 
 
@@ -484,7 +482,7 @@ static void reassign_cxl_bars(struct pci_dev *dev)
 	 * CXL requires the m64 address space for BAR assignment. Our PHB code
 	 * in Linux doesn't use it yet, and Linux will have assigned BARs from
 	 * the m32 space. This code reassigns the BARs from the m64 space,
-	 * which is OK since the CAPI card can be the only thing behind the
+	 * which is OK since the CXL card can be the only thing behind the
 	 * PHB so it won't ever be assigned to anything else. Later when Linux
 	 * can assign BARs from the m64 space we can use that instead.
 	 */
@@ -767,73 +765,6 @@ err1:
 	kfree(adapter);
 err:
 	return rc;
-}
-
-bool pci_bus_read_dev_vendor_id(struct pci_bus *bus, int devfn, u32 *pl,
-				int crs_timeout);
-
-static int cxl_reset(struct cxl_t *adapter)
-{
-	struct pci_dev *pdev = to_pci_dev(adapter->device.parent);
-	int vsec;
-	int rc;
-	u32 val;
-
-	dev_info(&pdev->dev, "pci reset\n");
-
-	if (!(vsec = find_cxl_vsec(pdev))) {
-		dev_err(&pdev->dev, "cxl: WARNING: CXL VSEC not found, assuming card is already in CXL mode!\n");
-		/* return -ENODEV; */
-		return 0;
-	}
-	if ((rc = pci_read_config_dword(pdev, vsec + 0x10, &val))) {
-		dev_err(&pdev->dev, "failed to read vsec offset 10 (for image control): %i", rc);
-		return rc;
-	}
-	val |= CXL_PERST_RELOAD | CXL_USER_IMAGE;
-	if (adapter->reset_image_factory)
-		val &= ~CXL_USER_IMAGE;
-
-	if ((rc = pci_write_config_dword(pdev, vsec + 0x10, val))) {
-		dev_err(&pdev->dev, "failed to enable perst reload: %i", rc);
-		return rc;
-	}
-
-
-	pci_cfg_access_lock(pdev);
-
-	pci_set_pcie_reset_state(pdev, pcie_warm_reset);
-	msleep(10);
-	pci_set_pcie_reset_state(pdev, pcie_deassert_reset);
-	msleep(1000);
-	pci_bus_read_dev_vendor_id(pdev->bus, pdev->devfn, &val, 60*1000);
-	dev_info(&pdev->dev, "v = %08x\n", val);
-
-	/* Now lets setup the device again.. stolen from cxl_probe() */
-	dump_cxl_config_space(pdev);
-	reassign_cxl_bars(pdev);
-
-	/* just do the card as the CAPP unit should still be in CXL mode */
-	if ((rc = switch_card_to_cxl(pdev))) {
-		dev_err(&pdev->dev, "enable_cxl_protocol failed: %i\n", rc);
-		goto out;
-	}
-	dev_info(&pdev->dev, "cxl protocol enabled\n");
-
-/*	if ((rc = pci_enable_device(dev))) {
-		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
-		return rc;
-	}
-*/
-/*	if ((rc = init_cxl_pci(dev))) {
-		dev_err(&dev->dev, "init_cxl_pci failed: %i\n", rc);
-		return rc;
-	}
-*/
-out:
-	pci_cfg_access_unlock(pdev);
-	return rc;
-
 }
 
 static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)

@@ -14,58 +14,7 @@
 #include "cxl.h"
 
 #define to_afu(d) container_of(d, struct cxl_afu_t, device)
-#define to_adapter(d) container_of(d, struct cxl_t, device)
 #define master_to_afu(d) container_of(d, struct cxl_afu_t, device_master)
-
-/*********  Adapter attributes  **********************************************/
-
-static ssize_t reset_store(struct device *device, struct device_attribute *attr,
-		   const char *buf, size_t count)
-{
-	struct cxl_t *adapter = to_adapter(device);
-	int rc;
-
-	/* TODO: support various types of reset */
-	if ((rc = adapter->driver->reset(adapter)))
-		return rc;
-	return count;
-}
-
-static ssize_t reset_image_select_store(struct device *device,
-					struct device_attribute *attr,
-					const char *buf, size_t count)
-{
-	struct cxl_t *adapter = to_adapter(device);
-	int ret;
-
-	ret = strncmp(buf, "factory", 7);
-	if (ret == 0) {
-		adapter->reset_image_factory = true;
-		return count;
-	}
-	ret = strncmp(buf, "user", 4);
-	if (ret == 0) {
-		adapter->reset_image_factory = false;
-		return count;
-	}
-	return -EINVAL;
-}
-
-static ssize_t reset_image_select_show(struct device *device,
-				       struct device_attribute *attr,
-				       char *buf)
-{
-	struct cxl_t *adapter = to_adapter(device);
-
-	if (adapter->reset_image_factory)
-		return scnprintf(buf, PAGE_SIZE, "factory\n");
-	return scnprintf(buf, PAGE_SIZE, "user\n");
-}
-
-static struct device_attribute adapter_attrs[] = {
-	__ATTR_WO(reset),
-	__ATTR_RW(reset_image_select),
-};
 
 
 /*********  AFU master specific attributes  **********************************/
@@ -183,30 +132,6 @@ static struct device_attribute afu_attrs[] = {
 	__ATTR_RW(mode),
 	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),
 };
-
-
-
-int cxl_sysfs_adapter_add(struct cxl_t *adapter)
-{
-	int i, rc;
-
-	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++) {
-		if ((rc = device_create_file(&adapter->device, &adapter_attrs[i])))
-			goto err;
-	}
-	return 0;
-err:
-	for (i--; i >= 0; i--)
-		device_remove_file(&adapter->device, &adapter_attrs[i]);
-	return rc;
-}
-void cxl_sysfs_adapter_remove(struct cxl_t *adapter)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++)
-		device_remove_file(&adapter->device, &adapter_attrs[i]);
-}
 
 int cxl_sysfs_afu_add(struct cxl_afu_t *afu)
 {

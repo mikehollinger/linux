@@ -308,6 +308,8 @@ int cxl_init_adapter(struct cxl_t *adapter,
 	for (slice = 0; slice < slices; slice++)
 		afu_t_init(adapter, slice);
 
+	cxl_debugfs_adapter_add(adapter);
+
 	spin_lock(&adapter_list_lock);
 	list_add_tail(&(adapter)->list, &adapter_list);
 	spin_unlock(&adapter_list_lock);
@@ -342,10 +344,12 @@ int cxl_init_afu(struct cxl_afu_t *afu, u64 handle, irq_hw_number_t err_irq)
 		goto err;
 
 	/* Add afu character devices */
-	if ((rc = add_cxl_afu_dev(afu, afu->slice))) {
+	if ((rc = add_cxl_afu_dev(afu))) {
 		/* FIXME: init_afu may have allocated an error interrupt */
 		goto err;
 	}
+
+	cxl_debugfs_afu_add(afu);
 
 	return 0;
 
@@ -369,8 +373,6 @@ static int __init init_cxl(void)
 {
 	int ret = 0;
 
-	pr_devel("---------- init_cxl called ---------\n");
-
 	if (!cpu_has_feature(CPU_FTR_HVMODE))
 		return -1;
 
@@ -381,14 +383,13 @@ static int __init init_cxl(void)
 	}
 	cxl_class->devnode = cxl_devnode;
 
-	init_cxl_native();
-
 	if (register_cxl_dev())
 		return -1;
 
-	ret = register_cxl_calls(&cxl_calls);
+	cxl_debugfs_init();
+	init_cxl_native();
 
-	pr_devel("---------- init_cxl done ---------\n");
+	ret = register_cxl_calls(&cxl_calls);
 
 	return ret;
 }
@@ -428,6 +429,7 @@ EXPORT_SYMBOL(cxl_unregister_adapter);
 
 static void exit_cxl(void)
 {
+	cxl_debugfs_exit();
 	class_destroy(cxl_class);
 }
 
