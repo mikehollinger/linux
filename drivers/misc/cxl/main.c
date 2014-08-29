@@ -198,7 +198,10 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 		       | SLB_VSID_C | SLB_VSID_TA | SLB_VSID_LP)) << 50;
 
 	size = (((u64)ctx->sst_size >> 8) - 1) << CXL_SSTP0_An_SegTableSize_SHIFT;
-	BUG_ON(size & ~CXL_SSTP0_An_SegTableSize_MASK);
+	if (unlikely(size & ~CXL_SSTP0_An_SegTableSize_MASK)) {
+		WARN(1, "Impossible segment table size\n");
+		return -EINVAL;
+	}
 	*sstp0 |= size;
 
 	if (ssize == MMU_SEGSIZE_256M)

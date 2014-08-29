@@ -709,6 +709,19 @@ int init_cxl_pci(struct pci_dev *dev)
 	afu_desc_off *= 64 * 1024;
 	afu_desc_size *= 64 * 1024;
 
+	if (!nAFUs) {
+		/* Once we support dynamic reprogramming we can use the card if
+		 * it supports loadable AFUs */
+		dev_warn(&dev->dev, "Can't use this - device has no AFUs\n");
+		rc = -ENODEV;
+		goto err3;
+	}
+	if (!afu_desc_off || !afu_desc_size) {
+		dev_warn(&dev->dev, "Can't use this - VSEC shows no AFU descriptors\n");
+		rc = -ENODEV;
+		goto err3;
+	}
+
 	if (ps_size > p2_size - ps_off) {
 		dev_warn(&dev->dev, "WARNING: Problem state size larger than available in BAR2: 0x%x > 0x%llx\n",
 			 ps_size, p2_size - ps_off);
@@ -731,7 +744,6 @@ int init_cxl_pci(struct pci_dev *dev)
 		goto err4;
 	}
 
-	BUG_ON(!afu_desc_off || !afu_desc_size);
 	for (slice = 0; slice < nAFUs; slice++)
 		if ((rc = init_slice(adapter, p1_base, p2_base, ps_off, ps_size, afu_desc_off, afu_desc_size, slice, dev)))
 			goto err5;

@@ -229,7 +229,6 @@ static int alloc_spa(struct cxl_afu_t *afu)
 	}
 	pr_devel("spa pages: %i afu->spa_max_procs: %i   afu->num_procs: %i\n",
 		 1<<afu->spa_order, afu->spa_max_procs, afu->num_procs);
-	BUG_ON(afu->spa_max_procs < afu->num_procs);
 
 	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->spa_max_procs + 3) * 128));
 
@@ -340,7 +339,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 {
 	u64 state;
 
-	BUG_ON(!ctx->afu->enabled);
+	WARN_ON(!ctx->afu->enabled);
 
 	ctx->elem->software_state = cpu_to_be32(pe_state);
 	smp_wmb();

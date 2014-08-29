@@ -232,9 +232,9 @@ void cxl_handle_fault(struct work_struct *fault_work)
 	struct task_struct *task;
 	struct mm_struct *mm;
 
-	BUG_ON(cxl_p2n_read(ctx->afu, CXL_PSL_DSISR_An) != dsisr);
-	BUG_ON(cxl_p2n_read(ctx->afu, CXL_PSL_DAR_An) != dar);
-	BUG_ON(cxl_p2n_read(ctx->afu, CXL_PSL_PEHandle_An) != ctx->ph);
+	WARN_ON(cxl_p2n_read(ctx->afu, CXL_PSL_DSISR_An) != dsisr);
+	WARN_ON(cxl_p2n_read(ctx->afu, CXL_PSL_DAR_An) != dar);
+	WARN_ON(cxl_p2n_read(ctx->afu, CXL_PSL_PEHandle_An) != ctx->ph);
 
 	pr_devel("CXL BOTTOM HALF handling fault for afu pe: %i. "
 		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
@@ -255,7 +255,7 @@ void cxl_handle_fault(struct work_struct *fault_work)
 	else if (dsisr & CXL_PSL_DSISR_An_DM)
 		cxl_handle_page_fault(ctx, mm, dsisr, dar);
 	else
-		BUG();
+		WARN(1, "cxl_handle_fault has nothing to handle\n");
 
 	mmput(mm);
 out:

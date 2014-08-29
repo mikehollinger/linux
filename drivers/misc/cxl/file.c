@@ -306,7 +306,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		spin_unlock_irqrestore(&ctx->lock, flags);
 		return -EIO;
 	} else
-		BUG();
+		WARN(1, "afu_read must be buggy\n");
 
 	spin_unlock_irqrestore(&ctx->lock, flags);
 

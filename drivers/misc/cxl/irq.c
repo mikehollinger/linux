@@ -66,8 +66,6 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data)
 
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
 
-	BUG(); /* we never recover, so let's just die */
-
 	return IRQ_HANDLED;
 }
 
@@ -94,8 +92,6 @@ irqreturn_t cxl_irq_err(int irq, void *data)
 		pr_warn("SLICE %i\n", slice);
 		cxl_slice_irq_err(0, &adapter->slice[slice]);
 	}
-
-	BUG(); /* we never recover, so let's just die */
 
 	return IRQ_HANDLED;
 }
@@ -200,8 +196,7 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 	}
 	rcu_read_unlock();
 
-	pr_err("Unable to demultiplex CXL PSL IRQ\n");
-	BUG();
+	WARN(1, "Unable to demultiplex CXL PSL IRQ\n");
 	return IRQ_HANDLED;
 }
 
@@ -222,12 +217,19 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 		}
 		afu_irq += range;
 	}
-	BUG_ON(r >= CXL_IRQ_RANGES);
+	if (unlikely(r >= CXL_IRQ_RANGES)) {
+		WARN(1, "Recieved AFU IRQ out of range for pe %i (virq %i hwirq %lx)\n",
+		     ctx->ph, irq, hwirq);
+		return IRQ_HANDLED;
+	}
 
 	pr_devel("Received AFU interrupt %i for pe: %i (virq %i hwirq %lx)\n",
 	       afu_irq, ctx->ph, irq, hwirq);
 
-	BUG_ON(!ctx->irq_bitmap);
+	if (unlikely(!ctx->irq_bitmap)) {
+		WARN(1, "Recieved AFU IRQ for context with no IRQ bitmap\n");
+		return IRQ_HANDLED;
+	}
 	spin_lock(&ctx->lock);
 	set_bit(afu_irq - 1, ctx->irq_bitmap);
 	ctx->pending_irq = true;
