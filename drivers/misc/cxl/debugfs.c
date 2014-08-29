@@ -23,53 +23,6 @@ void cxl_debugfs_exit(void)
 	debugfs_remove_recursive(cxl_debugfs);
 }
 
-
-static char cxl_dbg_sep[80+2] = "\n--------------------------------------------------------------------------------\n";
-
-static int psl_err_chk_show(struct seq_file *m, void *p)
-{
-	struct cxl_t *cxl = m->private;
-	struct cxl_afu_t *a0 = &cxl->slice[0];
-
-	seq_puts(m, "************************ Checking PSL Error Registers **************************");
-
-#define show_reg(name, what) \
-	do { \
-		seq_write(m, cxl_dbg_sep, sizeof(cxl_dbg_sep)); \
-		seq_printf(m, "%s = %16llx", name, what); \
-	} while (0)
-
-	show_reg("PSL FIR1", cxl_p1_read(cxl, CXL_PSL_FIR1));
-	show_reg("PSL FIR2", cxl_p1_read(cxl, CXL_PSL_FIR2));
-	show_reg("PSL FIR CNTL", cxl_p1_read(cxl, CXL_PSL_FIR_CNTL));
-	show_reg("PSL FIR SLICE A0", cxl_p1n_read(a0, CXL_PSL_FIR_SLICE_An));
-	show_reg("PSL RECOV FIR SLICE A0", cxl_p1n_read(a0, CXL_PSL_R_FIR_SLICE_An));
-	show_reg("PSL SERR A0", cxl_p1n_read(a0, CXL_PSL_SERR_An));
-	show_reg("PSL ERRIVTE", cxl_p1_read(cxl, CXL_PSL_ErrIVTE));
-	show_reg("PSL DSISR A0", cxl_p2n_read(a0, CXL_PSL_DSISR_An));
-	show_reg("PSL SR", cxl_p1n_read(a0, CXL_PSL_SR_An));
-	show_reg("PSL SSTP0 A0", cxl_p2n_read(a0, CXL_SSTP0_An));
-	show_reg("PSL SSTP1 A0", cxl_p2n_read(a0, CXL_SSTP1_An));
-	show_reg("PSL DAR A0", cxl_p2n_read(a0, CXL_PSL_DAR_An));
-	show_reg("PSL ErrStat A0", cxl_p2n_read(a0, CXL_PSL_ErrStat_An));
-#undef showreg
-	seq_putc(m, '\n');
-
-	return 0;
-}
-
-static int psl_err_chk_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, psl_err_chk_show, inode->i_private);
-}
-
-static const struct file_operations psl_err_chk_fops = {
-	.open = psl_err_chk_open,
-	.release = seq_release,
-	.read = seq_read,
-	.llseek = seq_lseek,
-};
-
 struct trcdsc {
 	unsigned char name[8];
 	unsigned int slice;
@@ -214,19 +167,39 @@ static const struct file_operations trace_fops = {
 
 int cxl_debugfs_adapter_add(struct cxl_t *adapter)
 {
-	char tmp[32];
+	char buf[32];
 
 	/* FIXME: This assumes AFU 0 */
 	pr_devel("Creating CXL debugfs entries\n");
-	snprintf(tmp, 32, "psl%i_trace", adapter->adapter_num);
-	adapter->trace = debugfs_create_file(tmp, 0444, cxl_debugfs, adapter, &trace_fops);
-	snprintf(tmp, 32, "psl%i_err_chk", adapter->adapter_num);
-	adapter->psl_err_chk = debugfs_create_file(tmp, 0444, cxl_debugfs, adapter, &psl_err_chk_fops);
+	snprintf(buf, 32, "psl%i_trace", adapter->adapter_num);
+	adapter->trace = debugfs_create_file(buf, 0444, cxl_debugfs, adapter, &trace_fops);
+
+	debugfs_create_x64("fir1",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_FIR1));
+	debugfs_create_x64("fir2",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_FIR2));
+	debugfs_create_x64("fir_cntl", S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_FIR_CNTL));
+	debugfs_create_x64("err_ivte", S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_ErrIVTE));
 
 	return 0;
 }
 
 int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 {
+	struct dentry *dir;
+	char buf[32];
+
+	snprintf(buf, 32, "psl%i.%i", afu->adapter->adapter_num, afu->slice);
+	dir = debugfs_create_dir(buf, cxl_debugfs);
+
+	debugfs_create_x64("fir",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
+	debugfs_create_x64("fir_recov", S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_R_FIR_SLICE_An));
+	debugfs_create_x64("serr",      S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SERR_An));
+	debugfs_create_x64("sr",        S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SR_An));
+
+	debugfs_create_x64("dsisr",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DSISR_An));
+	debugfs_create_x64("dar",       S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DAR_An));
+	debugfs_create_x64("sstp0",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP0_An));
+	debugfs_create_x64("sstp1",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP1_An));
+	debugfs_create_x64("err_stat",  S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_ErrStat_An));
+
 	return 0;
 }
