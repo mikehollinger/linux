@@ -286,10 +286,6 @@ init_afu_native(struct cxl_afu_t *afu, u64 handle)
 static void release_afu_native(struct cxl_afu_t *afu)
 {
 	release_spa(afu);
-	iounmap(afu->p1n_mmio);
-	iounmap(afu->p2n_mmio);
-	iounmap(afu->psn_mmio);
-
 	cxl_unmap_irq(afu->err_virq, afu);
 	if (afu->adapter->driver && afu->adapter->driver->release_afu)
 		afu->adapter->driver->release_afu(afu);
