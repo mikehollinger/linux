@@ -174,10 +174,10 @@ int cxl_debugfs_adapter_add(struct cxl_t *adapter)
 	snprintf(buf, 32, "psl%i_trace", adapter->adapter_num);
 	adapter->trace = debugfs_create_file(buf, 0444, cxl_debugfs, adapter, &trace_fops);
 
-	debugfs_create_x64("fir1",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_FIR1));
-	debugfs_create_x64("fir2",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_FIR2));
-	debugfs_create_x64("fir_cntl", S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_FIR_CNTL));
-	debugfs_create_x64("err_ivte", S_IRUSR, cxl_debugfs, _cxl_p1_addr(afu, CXL_PSL_ErrIVTE));
+	debugfs_create_x64("fir1",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_FIR1));
+	debugfs_create_x64("fir2",     S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_FIR2));
+	debugfs_create_x64("fir_cntl", S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_FIR_CNTL));
+	debugfs_create_x64("err_ivte", S_IRUSR, cxl_debugfs, _cxl_p1_addr(adapter, CXL_PSL_ErrIVTE));
 
 	return 0;
 }
