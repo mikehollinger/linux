@@ -636,4 +636,9 @@ static inline u64 slbfee(u64 ea)
 	return rt;
 }
 
+struct cxl_calls {
+	void (*cxl_slbia)(struct mm_struct *mm);
+	struct module *owner;
+};
+
 #endif

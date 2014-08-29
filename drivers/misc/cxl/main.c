@@ -95,7 +95,7 @@ static void cxl_afu_slbia(struct cxl_afu_t *afu)
 
 /* FIXME: This is called from the PPC mm code, which will break when CXL is
  * compiled as a module */
-void cxl_slbia(struct mm_struct *mm)
+static inline void cxl_slbia(struct mm_struct *mm)
 {
 	struct cxl_t *adapter;
 	struct cxl_afu_t *afu;
@@ -419,6 +419,11 @@ static void exit_cxl(void)
 {
 	class_destroy(cxl_class);
 }
+
+struct cxl_calls cxl_calls = {
+	.cxl_slbia = cxl_slbia,
+	.owner = THIS_MODULE,
+};
 
 module_init(init_cxl);
 module_exit(exit_cxl);

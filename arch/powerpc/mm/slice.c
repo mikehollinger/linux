@@ -30,6 +30,7 @@
 #include <linux/err.h>
 #include <linux/spinlock.h>
 #include <linux/export.h>
+#include <misc/cxl.h>
 #include <asm/mman.h>
 #include <asm/mmu.h>
 #include <asm/spu.h>
@@ -37,12 +38,6 @@
 /* some sanity checks */
 #if (PGTABLE_RANGE >> 43) > SLICE_MASK_SIZE
 #error PGTABLE_RANGE exceeds slice_mask high_slices size
-#endif
-
-#ifdef CONFIG_CXL
-/* FIXME: Clean this up and make it not break when CONFIG_CXL=m! */
-extern void cxl_slbie(unsigned long addr);
-extern void cxl_slbia(struct mm_struct *mm);
 #endif
 
 static DEFINE_SPINLOCK(slice_convert_lock);
@@ -241,8 +236,8 @@ static void slice_convert(struct mm_struct *mm, struct slice_mask mask, int psiz
 #ifdef CONFIG_SPU_BASE
 	spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL /* FIXME: Work when CXL is a module */
-	cxl_slbia(mm); /* XXX: Can we use cxl_slbie instead (assuming it's faster) */
+#ifdef CONFIG_CXL_BASE
+	cxl_slbia(mm);
 #endif
 }
 
@@ -683,8 +678,7 @@ void slice_set_psize(struct mm_struct *mm, unsigned long address,
 #ifdef CONFIG_SPU_BASE
 	spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL /* FIXME: Work when CXL is a module */
-	//cxl_slbie(address);
+#ifdef CONFIG_CXL_BASE
 	cxl_slbia(mm);
 #endif
 }

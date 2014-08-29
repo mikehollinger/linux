@@ -34,6 +34,7 @@
 #include <linux/signal.h>
 #include <linux/memblock.h>
 #include <linux/context_tracking.h>
+#include <misc/cxl.h>
 
 #include <asm/processor.h>
 #include <asm/pgtable.h>
@@ -85,12 +86,6 @@
  *   to print debug info.
  *
  */
-
-#ifdef CONFIG_CXL
-/* FIXME: Clean this up and make it not break when CONFIG_CXL=m! */
-extern void cxl_slbie(unsigned long addr);
-extern void cxl_slbia(struct mm_struct *mm);
-#endif
 
 #ifdef CONFIG_U3_DART
 extern unsigned long dart_tablebase;
@@ -927,8 +922,7 @@ void demote_segment_4k(struct mm_struct *mm, unsigned long addr)
 #ifdef CONFIG_SPU_BASE
 	spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL /* FIXME: Work when CXL is a module */
-	//cxl_slbie(addr);
+#ifdef CONFIG_CXL_BASE
 	cxl_slbia(mm);
 #endif
 	if (get_paca_psize(addr) != MMU_PAGE_4K) {
@@ -1170,8 +1164,7 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 #ifdef CONFIG_SPU_BASE
 			spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL /* FIXME: Work when CXL is a module */
-			//cxl_slbie(ea);
+#ifdef CONFIG_CXL_BASE
 			cxl_slbia(mm);
 #endif
 		}
