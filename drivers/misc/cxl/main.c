@@ -409,6 +409,9 @@ void cxl_unregister_adapter(struct cxl_t *adapter)
 	/* Unregister CXL adapter device */
 
 	spin_lock(&adapter_list_lock);
+	list_del(&adapter->list);
+	spin_unlock(&adapter_list_lock);
+
 	for (slice = 0; slice < adapter->slices; slice++)
 		cxl_unregister_afu(&adapter->slice[slice]);
 	del_cxl_dev(adapter);
@@ -416,9 +419,6 @@ void cxl_unregister_adapter(struct cxl_t *adapter)
 	/* CXL-HV/Native adapter release */
 	if (cxl_ops->release_adapter)
 		cxl_ops->release_adapter(adapter);
-
-	list_del(&adapter->list);
-	spin_unlock(&adapter_list_lock);
 
 	unregister_cxl_dev();
 
