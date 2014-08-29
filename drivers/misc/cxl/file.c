@@ -547,16 +547,12 @@ void unregister_cxl_dev(void)
 
 int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
 {
-	int rc;
 	char tmp[32];
 
 	/* Create sysfs attributes */
 	adapter->afu_kobj = kobject_create_and_add("afu", &adapter->device.kobj);
 	if (IS_ERR(adapter->afu_kobj))
 		return PTR_ERR(adapter->afu_kobj);
-
-	if ((rc = cxl_sysfs_adapter_add(adapter)))
-		goto out;
 
 	/* Create debugfs entries */
 	/* FIXME: Drop these for upstreaming. Maybe move them somewhere more
@@ -570,11 +566,6 @@ int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
 		adapter->psl_err_chk = debugfs_create_file(tmp, 0444, NULL, adapter, &psl_err_chk_fops);
 	}
 	return 0;
-
-out:
-	kobject_put(adapter->afu_kobj);
-	adapter->afu_kobj = NULL;
-	return rc;
 }
 
 extern struct class *cxl_class;
@@ -651,7 +642,6 @@ void del_cxl_dev(struct cxl_t *adapter)
 {
 	debugfs_remove(adapter->trace);
 	debugfs_remove(adapter->psl_err_chk);
-	cxl_sysfs_adapter_remove(adapter);
 	kobject_put(adapter->afu_kobj);
 	adapter->afu_kobj = NULL;
 	adapter->device.release = cxl_release;
