@@ -119,15 +119,7 @@ static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data, u64 vsid_
 
 	WARN_ON_SMP(!spin_is_locked(&ctx->sst_lock));
 
-	if (cpu_has_feature(CPU_FTR_HVMODE))
-		sec_hash = !!(cxl_p1n_read(ctx->afu, CXL_PSL_SR_An) & CXL_PSL_SR_An_SC);
-	/* else {
-	 *	It's the inverse of the high bit of the second non-length byte
-	 *	in the sixth optional vector passed in ibm_architecture_vec to
-	 *	ibm,client-architecture-support, which is a 0, so sec_hash = 1;
-	 *
-	 *	What? You got a problem with my coding style?
-	 * } */
+	sec_hash = !!(cxl_p1n_read(ctx->afu, CXL_PSL_SR_An) & CXL_PSL_SR_An_SC);
 
 	if (vsid_data & SLB_VSID_B_1T)
 		hash = (esid_data >> SID_SHIFT_1T) & mask;
