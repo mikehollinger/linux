@@ -447,7 +447,6 @@ struct cxl_driver_ops {
 	int (*setup_irq)(struct cxl_t *adapter, unsigned int hwirq, unsigned int virq);
 	void (*release_adapter)(struct cxl_t *adapter);
 	void (*release_afu)(struct cxl_afu_t *afu);
-	int (*reset)(struct cxl_t *adapter);
 };
 
 /* common == phyp + powernv */
