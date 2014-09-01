@@ -101,7 +101,7 @@ static const cxl_p1n_reg_t CXL_PSL_IVTE_Offset_An = {0xB0};
 static const cxl_p1n_reg_t CXL_PSL_IVTE_Limit_An  = {0xB8};
 /* 0xC0:FF Implementation Dependent Area */
 static const cxl_p1n_reg_t CXL_PSL_FIR_SLICE_An   = {0xC0};
-static const cxl_p1n_reg_t CXL_PSL_R_FIR_SLICE_An = {0xC8};
+static const cxl_p1n_reg_t CXL_AFU_DEBUG_An       = {0xC8};
 static const cxl_p1n_reg_t CXL_PSL_APCALLOC_A     = {0xD0};
 static const cxl_p1n_reg_t CXL_PSL_COALLOC_A      = {0xD8};
 static const cxl_p1n_reg_t CXL_PSL_RXCTL_A        = {0xE0};
@@ -126,7 +126,7 @@ static const cxl_p2n_reg_t CXL_PSL_DAR_An     = {0x068};
 static const cxl_p2n_reg_t CXL_PSL_DSR_An     = {0x070};
 static const cxl_p2n_reg_t CXL_PSL_TFC_An     = {0x078};
 static const cxl_p2n_reg_t CXL_PSL_PEHandle_An = {0x080};
-static const cxl_p2n_reg_t CXL_PSL_ErrStat_An = {0x088}; /* TODO: Print out this register on PSL error */
+static const cxl_p2n_reg_t CXL_PSL_ErrStat_An = {0x088};
 /* AFU Registers */
 static const cxl_p2n_reg_t CXL_AFU_Cntl_An    = {0x090};
 static const cxl_p2n_reg_t CXL_AFU_ERR_An     = {0x098};
@@ -258,11 +258,6 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_PSL_DSISR_An_A  (1ull << (63-37)) /* AFU lock access to write through or cache inhibited storage */
 #define CXL_PSL_DSISR_An_S  DSISR_ISSTORE     /* Access was afu_wr or afu_zero */
 #define CXL_PSL_DSISR_An_K  DSISR_KEYFAULT    /* Access not permitted by virtual page class key protection */
-
-/****** CXL_PSL_R_FIR_SLICE_An (XXX: PSL IMPLEMENTATION SPECIFIC REGISTER ***/
-#define CXL_PSL_R_FIR_AFUTO  (1ull << (63-0)) /* AFU did not respond to MMIO */
-#define CXL_PSL_R_FIR_AFUDIS (1ull << (63-1)) /* MMIO to disabled AFU */
-#define CXL_PSL_R_FIR_AFUOV  (1ull << (63-2)) /* AFU issued > 64 outstanding commands */
 
 /****** CXL_PSL_TFC_An ******************************************************/
 #define CXL_PSL_TFC_An_A  (1ull << (63-28)) /* Acknowledge non-translation fault */
@@ -590,7 +585,7 @@ struct cxl_irq_info {
 	u32 pid;
 	u32 tid;
 	u64 afu_err;
-	u64 fir_r_slice;
+	u64 errstat;
 	u64 padding[3]; /* to match the expected retbuf size for plpar_hcall9 */
 };
 
