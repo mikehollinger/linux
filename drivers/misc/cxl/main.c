@@ -204,7 +204,7 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	rt = mk_vsid_data(ctx->sstp, mmu_kernel_ssize,
 			  SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp);
 
-	ssize = (rt & SLB_VSID_B) >> SLB_VSID_SSIZE_SHIFT;
+	ssize = mmu_kernel_ssize;
 	/* FIXME: Did I need to handle 1TB segments? I have a vague
 	 * recollection that the answer was no - I'll need to recheck */
 	vsid  = (rt & SLB_VSID_MASK) >> SLB_VSID_SHIFT;
