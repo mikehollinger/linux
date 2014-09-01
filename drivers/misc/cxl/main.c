@@ -201,7 +201,7 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	 * always copy them into SSTP0 like I do below anyway.
 	 */
 
-	rt = mk_vsid_data(ctx->sstp, mmu_kernel_ssize,
+	rt = mk_vsid_data((u64)ctx->sstp, mmu_kernel_ssize,
 			  SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp);
 
 	ssize = mmu_kernel_ssize;
