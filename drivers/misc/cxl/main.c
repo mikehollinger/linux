@@ -163,7 +163,6 @@ static inline unsigned long mk_vsid_data(unsigned long ea, int ssize,
 
 int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
-	u64 rt = 0;
 	unsigned long vsid, flags;
 	u64 ssize;
 	u64 ea_mask;
@@ -188,21 +187,6 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 		pr_err("cxl_alloc_sst: Unable to allocate segment table\n");
 		return -ENOMEM;
 	}
-
-	/*
-	 * Some of the bits in the SSTP are from the segment that CONTAINS the
-	 * segment table, so look that up and copy the bits in.
-	 *
-	 * TODO: Check if any of the functions already defined in mmu.h etc.
-	 * are suitable to simplify any of this. In particular, htp_va may be
-	 * useful (would require shifting the VSID by slb_vsid_shift(ssize)
-	 * instead of what I do below). My main question with that is what
-	 * happens to the top 14 bits of the VSID - are they always 0? I can
-	 * always copy them into SSTP0 like I do below anyway.
-	 */
-
-	rt = mk_vsid_data((u64)ctx->sstp, mmu_kernel_ssize,
-			  SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp);
 
 	ssize = mmu_kernel_ssize;
 	/* FIXME: Did I need to handle 1TB segments? I have a vague
@@ -236,8 +220,8 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	*sstp1 |= (u64)ctx->sstp & ea_mask;
 	*sstp1 |= CXL_SSTP1_An_V;
 
-	pr_devel("Looked up %#llx: slbfee. %#llx: %#llx (ssize: %#llx, vsid: %#lx), copied to SSTP0: %#llx, SSTP1: %#llx\n",
-			(u64)ctx->sstp, (u64)ctx->sstp & ESID_MASK, rt, ssize, vsid, *sstp0, *sstp1);
+	pr_devel("Looked up %#llx: slbfee. %#llx (ssize: %#llx, vsid: %#lx), copied to SSTP0: %#llx, SSTP1: %#llx\n",
+			(u64)ctx->sstp, (u64)ctx->sstp & ESID_MASK, ssize, vsid, *sstp0, *sstp1);
 
 	return 0;
 }

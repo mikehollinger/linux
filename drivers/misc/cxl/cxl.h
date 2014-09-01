@@ -623,19 +623,4 @@ struct cxl_native_data {
 /* XXX: LAB DEBUGGING */
 void cxl_stop_trace(struct cxl_t *cxl);
 
-/* XXX: Wrong place for this */
-static inline u64 slbfee(u64 ea)
-{
-	u64 rb = ea & ESID_MASK;
-	u64 rt = 0;
-
-	/* asm volatile("slbfee. %0,%1" : "=r"(rt) : "r"(rb) : ); */
-	asm volatile(".long ( 31 << (31 -  5)"
-			" |  %0 << (31 - 10)"
-			" |  %1 << (31 - 20)"
-			" | 979 << (31 - 30)"
-			" | 1)" : "=r"(rt) : "r"(rb) : );
-	return rt;
-}
-
 #endif
