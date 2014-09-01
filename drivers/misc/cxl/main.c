@@ -207,11 +207,11 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	ssize = mmu_kernel_ssize;
 	/* FIXME: Did I need to handle 1TB segments? I have a vague
 	 * recollection that the answer was no - I'll need to recheck */
-	vsid  = get_kernel_vsid((u64)ctx->sstp, mmu_kernel_ssize) >> 12;
+	vsid  = get_kernel_vsid((u64)ctx->sstp, mmu_kernel_ssize) << 12;
 
 	*sstp0 |= ssize << CXL_SSTP0_An_B_SHIFT;
-	*sstp0 |= (rt & (SLB_VSID_KS | SLB_VSID_KP | SLB_VSID_N | SLB_VSID_L
-		       | SLB_VSID_C | SLB_VSID_TA | SLB_VSID_LP)) << 50;
+	*sstp0 |= (SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp) << 50;
+
 
 	size = (((u64)ctx->sst_size >> 8) - 1) << CXL_SSTP0_An_SegTableSize_SHIFT;
 	if (unlikely(size & ~CXL_SSTP0_An_SegTableSize_MASK)) {
