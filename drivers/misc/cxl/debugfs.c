@@ -71,16 +71,16 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 	if (IS_ERR(dir))
 		return PTR_ERR(dir);
 
-	debugfs_create_x64("fir",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
-	debugfs_create_x64("fir_recov", S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_R_FIR_SLICE_An));
-	debugfs_create_x64("serr",      S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SERR_An));
-	debugfs_create_x64("sr",        S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SR_An));
+	debugfs_create_x64("fir",        S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
+	debugfs_create_x64("serr",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SERR_An));
+	debugfs_create_x64("afu_debug",  S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_AFU_DEBUG_An));
+	debugfs_create_x64("sr",         S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SR_An));
 
-	debugfs_create_x64("dsisr",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DSISR_An));
-	debugfs_create_x64("dar",       S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DAR_An));
-	debugfs_create_x64("sstp0",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP0_An));
-	debugfs_create_x64("sstp1",     S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP1_An));
-	debugfs_create_x64("err_stat",  S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_ErrStat_An));
+	debugfs_create_x64("dsisr",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DSISR_An));
+	debugfs_create_x64("dar",        S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DAR_An));
+	debugfs_create_x64("sstp0",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP0_An));
+	debugfs_create_x64("sstp1",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP1_An));
+	debugfs_create_x64("err_status", S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_ErrStat_An));
 
 	debugfs_create_x64("trace", S_IRUSR | S_IWUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SLICE_TRACE));
 

@@ -620,23 +620,23 @@ static int get_irq_native(struct cxl_context_t *ctx, struct cxl_irq_info *info)
 	info->pid = pidtid >> 32;
 	info->tid = pidtid & 0xffffffff;
 	info->afu_err = cxl_p2n_read(ctx->afu, CXL_AFU_ERR_An);
-	info->fir_r_slice = cxl_p1n_read(ctx->afu, CXL_PSL_R_FIR_SLICE_An);
+	info->errstat = cxl_p2n_read(ctx->afu, CXL_PSL_ErrStat_An);
 
 	return 0;
 }
 
-static void recover_psl_err(struct cxl_afu_t *afu, u64 recov)
+static void recover_psl_err(struct cxl_afu_t *afu, u64 errstat)
 {
 	u64 dsisr;
 
-	pr_devel("RECOVERING FROM PSL ERROR... (0x%.16llx)\n", recov);
+	pr_devel("RECOVERING FROM PSL ERROR... (0x%.16llx)\n", errstat);
 
 	/* Clear PSL_DSISR[PE] */
 	dsisr = cxl_p2n_read(afu, CXL_PSL_DSISR_An);
 	cxl_p2n_write(afu, CXL_PSL_DSISR_An, dsisr & ~CXL_PSL_DSISR_An_PE);
 
-	/* Write 1s to clear FIR bits */
-	cxl_p1n_write(afu, CXL_PSL_R_FIR_SLICE_An, recov);
+	/* Write 1s to clear error status bits */
+	cxl_p2n_write(afu, CXL_PSL_ErrStat_An, errstat);
 }
 
 static int ack_irq_native(struct cxl_context_t *ctx, u64 tfc, u64 psl_reset_mask)

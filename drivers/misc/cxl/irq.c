@@ -24,45 +24,44 @@
 #include "cxl.h"
 
 /* XXX: This is implementation specific */
-static irqreturn_t handle_psl_slice_error(struct cxl_context_t *ctx, u64 dsisr, u64 fir_recov_slice)
+static irqreturn_t handle_psl_slice_error(struct cxl_context_t *ctx, u64 dsisr, u64 errstat)
 {
-	u64 fir1, fir2, fir_slice;
+	u64 fir1, fir2, fir_slice, serr, afu_debug;
 
-	pr_devel("CXL interrupt: PSL Error (implementation specific, recoverable: %#.16llx)\n", fir_recov_slice);
+	fir1 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR1);
+	fir2 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR2);
+	fir_slice = cxl_p1n_read(ctx->afu, CXL_PSL_FIR_SLICE_An);
+	serr = cxl_p1n_read(ctx->afu, CXL_PSL_SERR_An);
+	afu_debug = cxl_p1n_read(ctx->afu, CXL_AFU_DEBUG_An);
 
-	if (fir_recov_slice)
-		return cxl_ops->ack_irq(ctx, 0, fir_recov_slice);
+	pr_crit("PSL ERROR STATUS: 0x%.16llx\n", errstat);
+	pr_crit("PSL_FIR1: 0x%.16llx\n", fir1);
+	pr_crit("PSL_FIR2: 0x%.16llx\n", fir2);
+	pr_crit("PSL_SERR_An: 0x%.16llx\n", serr);
+	pr_crit("PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
+	pr_crit("CXL_PSL_AFU_DEBUG_An: 0x%.16llx\n", afu_debug);
 
-	if (cpu_has_feature(CPU_FTR_HVMODE)) { /* TODO: Refactor */
-		pr_crit("STOPPING CXL TRACE\n");
-		cxl_stop_trace(ctx->afu->adapter);
+	pr_crit("STOPPING CXL TRACE\n");
+	cxl_stop_trace(ctx->afu->adapter);
 
-		fir1 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR1);
-		fir2 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR2);
-		fir_slice = cxl_p1n_read(ctx->afu, CXL_PSL_FIR_SLICE_An);
-
-		pr_warn("PSL_FIR1: 0x%.16llx\nPSL_FIR2: 0x%.16llx\nPSL_FIR_SLICE_An: 0x%.16llx\nPSL_FIR_RECOV_SLICE_An: 0x%.16llx\n",
-				fir1, fir2, fir_slice, fir_recov_slice);
-		return IRQ_HANDLED;
-	}
-
-	pr_warn("PSL_FIR_RECOV_SLICE_An: 0x%.16llx\n", fir_recov_slice);
-	return IRQ_HANDLED;
+	return cxl_ops->ack_irq(ctx, 0, errstat);
 }
 
 irqreturn_t cxl_slice_irq_err(int irq, void *data)
 {
 	struct cxl_afu_t *afu = data;
-	u64 fir_slice, fir_recov_slice, serr;
+	u64 fir_slice, errstat, serr, afu_debug;
 
 	WARN(irq, "CXL SLICE ERROR interrupt %i\n", irq);
 
 	serr = cxl_p1n_read(afu, CXL_PSL_SERR_An);
 	fir_slice = cxl_p1n_read(afu, CXL_PSL_FIR_SLICE_An);
-	fir_recov_slice = cxl_p1n_read(afu, CXL_PSL_R_FIR_SLICE_An);
+	errstat = cxl_p2n_read(afu, CXL_PSL_ErrStat_An);
+	afu_debug = cxl_p1n_read(afu, CXL_AFU_DEBUG_An);
 	pr_crit("PSL_SERR_An: 0x%.16llx\n", serr);
 	pr_crit("PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
-	pr_crit("PSL_FIR_RECOV_SLICE_An: 0x%.16llx\n", fir_recov_slice);
+	pr_crit("CXL_PSL_ErrStat_An: 0x%.16llx\n", errstat);
+	pr_crit("CXL_PSL_AFU_DEBUG_An: 0x%.16llx\n", afu_debug);
 
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
 
@@ -157,7 +156,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 	if (dsisr & CXL_PSL_DSISR_An_UR)
 		pr_devel("CXL interrupt: AURP PTE not found\n");
 	if (dsisr & CXL_PSL_DSISR_An_PE)
-		return handle_psl_slice_error(ctx, dsisr, irq_info.fir_r_slice);
+		return handle_psl_slice_error(ctx, dsisr, irq_info.errstat);
 	if (dsisr & CXL_PSL_DSISR_An_AE) {
 		pr_devel("CXL interrupt: AFU Error\n");
 
