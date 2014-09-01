@@ -154,6 +154,13 @@ struct cxl_calls cxl_calls = {
 	.owner = THIS_MODULE,
 };
 
+static inline unsigned long mk_vsid_data(unsigned long ea, int ssize,
+					 unsigned long flags)
+{
+	return (get_kernel_vsid(ea, ssize) << slb_vsid_shift(ssize)) | flags |
+		((unsigned long) ssize << SLB_VSID_SSIZE_SHIFT);
+}
+
 int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
 	u64 rt = 0;
@@ -194,7 +201,8 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	 * always copy them into SSTP0 like I do below anyway.
 	 */
 
-	rt = slbfee((u64)ctx->sstp);
+	rt = mk_vsid_data(ctx->sstp, mmu_kernel_ssize,
+			  SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp);
 
 	ssize = (rt & SLB_VSID_B) >> SLB_VSID_SSIZE_SHIFT;
 	/* FIXME: Did I need to handle 1TB segments? I have a vague
