@@ -154,17 +154,9 @@ struct cxl_calls cxl_calls = {
 	.owner = THIS_MODULE,
 };
 
-static inline unsigned long mk_vsid_data(unsigned long ea, int ssize,
-					 unsigned long flags)
-{
-	return (get_kernel_vsid(ea, ssize) << slb_vsid_shift(ssize)) | flags |
-		((unsigned long) ssize << SLB_VSID_SSIZE_SHIFT);
-}
-
 int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
 	unsigned long vsid, flags;
-	u64 ssize;
 	u64 ea_mask;
 	u64 size;
 
@@ -188,14 +180,12 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 		return -ENOMEM;
 	}
 
-	ssize = mmu_kernel_ssize;
 	/* FIXME: Did I need to handle 1TB segments? I have a vague
 	 * recollection that the answer was no - I'll need to recheck */
 	vsid  = get_kernel_vsid((u64)ctx->sstp, mmu_kernel_ssize) << 12;
 
-	*sstp0 |= ssize << CXL_SSTP0_An_B_SHIFT;
+	*sstp0 |= (u64)mmu_kernel_ssize << CXL_SSTP0_An_B_SHIFT;
 	*sstp0 |= (SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp) << 50;
-
 
 	size = (((u64)ctx->sst_size >> 8) - 1) << CXL_SSTP0_An_SegTableSize_SHIFT;
 	if (unlikely(size & ~CXL_SSTP0_An_SegTableSize_MASK)) {
@@ -204,24 +194,18 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	}
 	*sstp0 |= size;
 
-	if (ssize == MMU_SEGSIZE_256M)
-		ea_mask =    0xfffff00;
-	else if (ssize == MMU_SEGSIZE_1T)
+	if (mmu_kernel_ssize == MMU_SEGSIZE_256M)
+		ea_mask = 0xfffff00ULL;
+	else
 		ea_mask = 0xffffffff00ULL;
-	else {
-		WARN(1, "CXL: Unsupported segment size\n");
-		free_page((u64)ctx->sstp);
-		ctx->sstp = NULL;
-		return -EINVAL;
-	}
 
 	*sstp0 |=  vsid >>     (50-14);  /*   Top 14 bits of VSID */
 	*sstp1 |= (vsid << (64-(50-14))) & ~ea_mask;
 	*sstp1 |= (u64)ctx->sstp & ea_mask;
 	*sstp1 |= CXL_SSTP1_An_V;
 
-	pr_devel("Looked up %#llx: slbfee. %#llx (ssize: %#llx, vsid: %#lx), copied to SSTP0: %#llx, SSTP1: %#llx\n",
-			(u64)ctx->sstp, (u64)ctx->sstp & ESID_MASK, ssize, vsid, *sstp0, *sstp1);
+	pr_devel("Looked up %#llx: slbfee. %#llx (ssize: %x, vsid: %#lx), copied to SSTP0: %#llx, SSTP1: %#llx\n",
+			(u64)ctx->sstp, (u64)ctx->sstp & ESID_MASK, mmu_kernel_ssize, vsid, *sstp0, *sstp1);
 
 	return 0;
 }
