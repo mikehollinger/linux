@@ -299,19 +299,6 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter)
 	return 0;
 }
 
-static int init_implementation_afu_regs(struct cxl_afu_t *afu)
-{
-	cxl_p1n_write(afu, CXL_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL); /* read/write masks for this slice */
-	cxl_p1n_write(afu, CXL_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL); /* APC read/write masks for this slice */
-
-	/* changes recommended per JT and Yoanna 11/15/2013 */
-	cxl_p1n_write(afu, CXL_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
-
-	cxl_p1n_write(afu, CXL_PSL_RXCTL_A, 0xF000000000000000ULL);
-
-	return 0;
-}
-
 /* Defined in powernv pci-ioda.c */
 extern int pnv_cxl_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 		unsigned int hwirq, unsigned int virq);
@@ -448,7 +435,6 @@ static void cxl_release_afu(struct cxl_afu_t *afu)
 static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.module = THIS_MODULE,
 	.init_adapter = init_implementation_adapter_regs,
-	.init_afu = init_implementation_afu_regs,
 	.alloc_one_irq = alloc_one_hwirq,
 	.release_one_irq = release_one_hwirq,
 	.alloc_irq_ranges = alloc_hwirq_ranges,

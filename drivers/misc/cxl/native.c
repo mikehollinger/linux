@@ -260,10 +260,13 @@ init_afu_native(struct cxl_afu_t *afu, u64 handle)
 		cxl_p1n_write(afu, CXL_PSL_SERR_An, val);
 	}
 
-	if (afu->adapter->driver && afu->adapter->driver->init_afu) {
-		if ((rc = afu->adapter->driver->init_afu(afu)))
-			return rc;
-	}
+	cxl_p1n_write(afu, CXL_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL); /* read/write masks for this slice */
+	cxl_p1n_write(afu, CXL_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL); /* APC read/write masks for this slice */
+
+	/* changes recommended per JT and Yoanna 11/15/2013 */
+	cxl_p1n_write(afu, CXL_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
+
+	cxl_p1n_write(afu, CXL_PSL_RXCTL_A, 0xF000000000000000ULL);
 
 	/* FIXME: check we are afu_directed in this whole function */
 	if (alloc_spa(afu))

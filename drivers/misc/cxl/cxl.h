@@ -434,7 +434,6 @@ struct cxl_t {
 struct cxl_driver_ops {
 	struct module *module;
 	int (*init_adapter)(struct cxl_t *adapter);
-	int (*init_afu)(struct cxl_afu_t *afu);
 	int (*alloc_one_irq)(struct cxl_t *adapter);
 	void (*release_one_irq)(struct cxl_t *adapter, int hwirq);
 	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
