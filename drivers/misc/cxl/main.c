@@ -283,10 +283,9 @@ int cxl_init_afu(struct cxl_afu_t *afu, u64 handle, irq_hw_number_t err_irq)
 		goto err;
 
 	/* Add afu character devices */
-	if ((rc = add_cxl_afu_dev(afu))) {
+	if ((rc = add_cxl_afu_dev(afu)))
 		/* FIXME: init_afu may have allocated an error interrupt */
 		goto err;
-	}
 
 	cxl_debugfs_afu_add(afu);
 
