@@ -53,39 +53,6 @@ static void cxl_adapter_wide_slbie(struct cxl_t *adapter, unsigned long addr, in
 		cpu_relax();
 }
 
-/* FIXME: This is called from the PPC mm code, which will break when CXL is
- * compiled as a module */
-void cxl_slbie(unsigned long addr)
-{
-	struct cxl_t *adapter;
-	int ssize;
-
-	/* Potential optimisation - may be able to use slbfee instruction to
-	 * get SLB from current CPU and grab B, C and TA fields from it */
-	switch (REGION_ID(addr)) {
-	case USER_REGION_ID:
-		ssize = user_segment_size(addr);
-		break;
-	case VMALLOC_REGION_ID:
-	case KERNEL_REGION_ID:
-		ssize = mmu_kernel_ssize;
-		break;
-	default:
-		WARN(1, "cxl_slbie: Unsupported region\n");
-		return;
-	}
-
-	spin_lock(&adapter_list_lock);
-	list_for_each_entry(adapter, &adapter_list, list) {
-		/* FIXME: Will need to use the per slice version of PSL_SLBIE
-		 * when under a HV (if we have access to the p2 regs), or ask
-		 * the HV to do this for us */
-		cxl_adapter_wide_slbie(adapter, addr, ssize);
-	}
-	spin_unlock(&adapter_list_lock);
-}
-EXPORT_SYMBOL(cxl_slbie);
-
 static void cxl_afu_slbia(struct cxl_afu_t *afu)
 {
 	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
