@@ -515,6 +515,13 @@ static inline void __iomem *_cxl_afu_ps_addr(struct cxl_afu_t *afu, int reg)
 #define cxl_afu_ps_read(afu, reg) \
 	_cxl_reg_read(_cxl_afu_ps_addr(afu, reg))
 
+struct cxl_calls {
+	void (*cxl_slbia)(struct mm_struct *mm);
+	struct module *owner;
+};
+int register_cxl_calls(struct cxl_calls *calls);
+void unregister_cxl_calls(struct cxl_calls *calls);
+
 /* TODO: Clean up the alloc/init process */
 int cxl_init_adapter(struct cxl_t *adapter,
 		      struct cxl_driver_ops *driver,

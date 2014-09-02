@@ -12,14 +12,7 @@
 
 #ifdef CONFIG_CXL_BASE
 
-struct cxl_calls {
-	void (*cxl_slbia)(struct mm_struct *mm);
-	struct module *owner;
-};
-
 void cxl_slbia(struct mm_struct *mm);
-int register_cxl_calls(struct cxl_calls *calls);
-void unregister_cxl_calls(struct cxl_calls *calls);
 
 #else /* CONFIG_CXL_BASE */
 
