@@ -307,8 +307,7 @@ static void cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
 	cxl_p2n_write(afu, CXL_SSTP1_An, sstp1);
 }
 
-static void
-slb_invalid(struct cxl_context_t *ctx)
+static void slb_invalid(struct cxl_context_t *ctx)
 {
 	/* FIXME use per slice version of SLBIA? */
 	struct cxl_t *adapter = ctx->afu->adapter;
