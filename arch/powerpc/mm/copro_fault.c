@@ -99,7 +99,7 @@ int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 
 	switch (REGION_ID(ea)) {
 	case USER_REGION_ID:
-		pr_devel("slbfee_mm: 0x%llx -- USER_REGION_ID\n", ea);
+		pr_devel("copro_data_segment: 0x%llx -- USER_REGION_ID\n", ea);
 #ifdef CONFIG_PPC_MM_SLICES
 		psize = get_slice_psize(mm, ea);
 #else
@@ -111,7 +111,7 @@ int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 			| (ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
 		break;
 	case VMALLOC_REGION_ID:
-		pr_devel("slbfee_mm: 0x%llx -- VMALLOC_REGION_ID\n", ea);
+		pr_devel("copro_data_segment: 0x%llx -- VMALLOC_REGION_ID\n", ea);
 		if (ea < VMALLOC_END)
 			psize = mmu_vmalloc_psize;
 		else
@@ -121,7 +121,7 @@ int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 			| (mmu_kernel_ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
 		break;
 	case KERNEL_REGION_ID:
-		pr_devel("slbfee_mm: 0x%llx -- KERNEL_REGION_ID\n", ea);
+		pr_devel("copro_data_segment: 0x%llx -- KERNEL_REGION_ID\n", ea);
 		psize = mmu_linear_psize;
 		*vsid = (get_kernel_vsid(ea, mmu_kernel_ssize)
 			<< SLB_VSID_SHIFT) | SLB_VSID_KERNEL
