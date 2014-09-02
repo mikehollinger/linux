@@ -134,8 +134,7 @@ static int psl_purge(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int
-init_adapter_native(struct cxl_t *adapter, void *backend_data)
+static int init_adapter_native(struct cxl_t *adapter, void *backend_data)
 {
 	struct cxl_native_data *data = backend_data;
 	int rc;
@@ -246,8 +245,7 @@ static void release_spa(struct cxl_afu_t *afu)
 	free_pages((unsigned long) afu->spa, afu->spa_order);
 }
 
-static int
-init_afu_native(struct cxl_afu_t *afu, u64 handle)
+static int init_afu_native(struct cxl_afu_t *afu, u64 handle)
 {
 	u64 val;
 	int rc = 0;
@@ -379,8 +377,7 @@ add_process_element(struct cxl_context_t *ctx)
 }
 
 /* TODO: merge this with add_process_element */
-static int
-terminate_process_element(struct cxl_context_t *ctx)
+static int terminate_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
 
@@ -400,8 +397,7 @@ terminate_process_element(struct cxl_context_t *ctx)
 
 /* TODO: Make sure all operations on the linked list are serialised to prevent
  * races on SPA->sw_command_status */
-static int
-remove_process_element(struct cxl_context_t *ctx)
+static int remove_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
 
@@ -430,8 +426,8 @@ static void assign_psn_space(struct cxl_context_t *ctx)
 }
 
 
-static int
-init_afu_directed_process(struct cxl_context_t *ctx, u64 wed, u64 amr)
+static int init_afu_directed_process(struct cxl_context_t *ctx,
+				     u64 wed, u64 amr)
 {
 
 	u64 sr, sstp0, sstp1;
@@ -500,8 +496,8 @@ init_afu_directed_process(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	return 0;
 }
 
-static int
-init_dedicated_process_native(struct cxl_context_t *ctx, u64 wed, u64 amr)
+static int init_dedicated_process_native(struct cxl_context_t *ctx,
+					 u64 wed, u64 amr)
 {
 	struct cxl_afu_t *afu = ctx->afu;
 	u64 sr, sstp0, sstp1;
@@ -582,9 +578,8 @@ init_dedicated_process_native(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	return 0;
 }
 
-static int
-init_process_native(struct cxl_context_t *ctx, bool kernel, u64 wed,
-		  u64 amr)
+static int init_process_native(struct cxl_context_t *ctx, bool kernel,
+			       u64 wed, u64 amr)
 {
 	ctx->kernel = kernel;
 	if (ctx->afu->afu_directed_mode)
@@ -641,7 +636,8 @@ static void recover_psl_err(struct cxl_afu_t *afu, u64 errstat)
 	cxl_p2n_write(afu, CXL_PSL_ErrStat_An, errstat);
 }
 
-static int ack_irq_native(struct cxl_context_t *ctx, u64 tfc, u64 psl_reset_mask)
+static int ack_irq_native(struct cxl_context_t *ctx, u64 tfc,
+			  u64 psl_reset_mask)
 {
 	if (tfc)
 		cxl_p2n_write(ctx->afu, CXL_PSL_TFC_An, tfc);
