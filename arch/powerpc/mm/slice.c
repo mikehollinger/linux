@@ -236,9 +236,7 @@ static void slice_convert(struct mm_struct *mm, struct slice_mask mask, int psiz
 #ifdef CONFIG_SPU_BASE
 	spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL_BASE
 	cxl_slbia(mm);
-#endif
 }
 
 /*
@@ -678,9 +676,7 @@ void slice_set_psize(struct mm_struct *mm, unsigned long address,
 #ifdef CONFIG_SPU_BASE
 	spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL_BASE
 	cxl_slbia(mm);
-#endif
 }
 
 void slice_set_range_psize(struct mm_struct *mm, unsigned long start,

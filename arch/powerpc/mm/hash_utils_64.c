@@ -919,9 +919,7 @@ void demote_segment_4k(struct mm_struct *mm, unsigned long addr)
 #ifdef CONFIG_SPU_BASE
 	spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL_BASE
 	cxl_slbia(mm);
-#endif
 	if (get_paca_psize(addr) != MMU_PAGE_4K) {
 		get_paca()->context = mm->context;
 		slb_flush_and_rebolt();
@@ -1161,9 +1159,7 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 #ifdef CONFIG_SPU_BASE
 			spu_flush_all_slbs(mm);
 #endif
-#ifdef CONFIG_CXL_BASE
 			cxl_slbia(mm);
-#endif
 		}
 	}
 
