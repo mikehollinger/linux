@@ -99,19 +99,14 @@ unsigned long htab_size_bytes;
 unsigned long htab_hash_mask;
 EXPORT_SYMBOL_GPL(htab_hash_mask);
 int mmu_linear_psize = MMU_PAGE_4K;
-EXPORT_SYMBOL_GPL(mmu_linear_psize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 int mmu_virtual_psize = MMU_PAGE_4K;
 int mmu_vmalloc_psize = MMU_PAGE_4K;
-EXPORT_SYMBOL_GPL(mmu_vmalloc_psize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 #ifdef CONFIG_SPARSEMEM_VMEMMAP
 int mmu_vmemmap_psize = MMU_PAGE_4K;
 #endif
 int mmu_io_psize = MMU_PAGE_4K;
-EXPORT_SYMBOL_GPL(mmu_io_psize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 int mmu_kernel_ssize = MMU_SEGSIZE_256M;
-EXPORT_SYMBOL_GPL(mmu_kernel_ssize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 int mmu_highuser_ssize = MMU_SEGSIZE_256M;
-EXPORT_SYMBOL_GPL(mmu_highuser_ssize); /* FIXME: For CXL/CELL slbfee_mm - restructure! */
 u16 mmu_slb_size = 64;
 EXPORT_SYMBOL_GPL(mmu_slb_size);
 #ifdef CONFIG_PPC_64K_PAGES
@@ -1295,7 +1290,6 @@ void hash_preload(struct mm_struct *mm, unsigned long ea,
 out_exit:
 	local_irq_restore(flags);
 }
-EXPORT_SYMBOL_GPL(hash_preload); /* XXX: For CXL */
 
 /* WARNING: This is called from hash_low_64.S, if you change this prototype,
  *          do not forget to update the assembly call site !
