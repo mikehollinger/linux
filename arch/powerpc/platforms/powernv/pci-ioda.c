@@ -1,15 +1,4 @@
 /*
- * -- CXL TODO --
- * On switchover:
- * - OPAL call to switch PBH to cxl mode
- * - Disable EEH
- * - Set PE (partition endpoint) for all MSIs to 0
- * - Run the marked code block to set the IRQ chip
- * - Use/wrap existing msi bitmap to allocate hwirq numbers
- * - Make sure pci_controller->private_data points to a valid struct pnv_phb for virtual PHBs
- */
-
-/*
  * Support PCI/PCIe on PowerNV platforms
  *
  * Copyright 2011 Benjamin Herrenschmidt, IBM Corp.
@@ -1032,7 +1021,6 @@ static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 	if (pdn && pdn->force_32bit_msi)
 		is_64 = 0;
 
-/* CXL TODO: Set all PEs to 0 on switch */
 	/* Assign XIVE to PE */
 	rc = opal_pci_set_xive_pe(phb->opal_id, pe->pe_number, xive_num);
 	if (rc) {
