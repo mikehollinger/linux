@@ -38,21 +38,6 @@ EXPORT_SYMBOL(cxl_ops);
 struct class *cxl_class;
 EXPORT_SYMBOL(cxl_class);
 
-static void cxl_adapter_wide_slbie(struct cxl_t *adapter, unsigned long addr, int ssize)
-{
-	u64 val = (addr & ESID_MASK) | (ssize << CXL_SLBIE_SS_SHIFT);
-
-	/* FIXME: If we start using Class and Tags Active, we need to set the
-	 * corresponding bits here to match the segment we are invalidating */
-
-	/* TODO: Use Locking to ensure we can never have > Max_SLBIEs
-	 * outstanding. For the moment we are only ever called with
-	 * adapter_list_lock held, so there can only be one at a time */
-	cxl_p1_write(adapter, CXL_PSL_SLBIE, val);
-	while (cxl_p1_read(adapter, CXL_PSL_SLBIE) & CXL_SLBIE_PENDING)
-		cpu_relax();
-}
-
 static void cxl_afu_slbia(struct cxl_afu_t *afu)
 {
 	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
