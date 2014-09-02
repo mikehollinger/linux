@@ -167,45 +167,12 @@ static inline void spu_load_slb(struct spu *spu, int slbe, struct spu_slb *slb)
 
 static int __spu_trap_data_seg(struct spu *spu, unsigned long ea)
 {
-	struct mm_struct *mm = spu->mm;
 	struct spu_slb slb;
-	int psize;
+	int ret;
 
-	pr_debug("%s\n", __func__);
-
-	slb.esid = (ea & ESID_MASK) | SLB_ESID_V;
-
-	switch(REGION_ID(ea)) {
-	case USER_REGION_ID:
-#ifdef CONFIG_PPC_MM_SLICES
-		psize = get_slice_psize(mm, ea);
-#else
-		psize = mm->context.user_psize;
-#endif
-		slb.vsid = (get_vsid(mm->context.id, ea, MMU_SEGSIZE_256M)
-				<< SLB_VSID_SHIFT) | SLB_VSID_USER;
-		break;
-	case VMALLOC_REGION_ID:
-		if (ea < VMALLOC_END)
-			psize = mmu_vmalloc_psize;
-		else
-			psize = mmu_io_psize;
-		slb.vsid = (get_kernel_vsid(ea, MMU_SEGSIZE_256M)
-				<< SLB_VSID_SHIFT) | SLB_VSID_KERNEL;
-		break;
-	case KERNEL_REGION_ID:
-		psize = mmu_linear_psize;
-		slb.vsid = (get_kernel_vsid(ea, MMU_SEGSIZE_256M)
-				<< SLB_VSID_SHIFT) | SLB_VSID_KERNEL;
-		break;
-	default:
-		/* Future: support kernel segments so that drivers
-		 * can use SPUs.
-		 */
-		pr_debug("invalid region access at %016lx\n", ea);
-		return 1;
-	}
-	slb.vsid |= mmu_psize_defs[psize].sllp;
+	ret = copro_data_segment(spu->mm, ea, &slb.esid, &slb.vsid);
+	if (ret)
+		return ret;
 
 	spu_load_slb(spu, spu->slb_replace, &slb);
 

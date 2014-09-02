@@ -13,4 +13,6 @@
 int copro_handle_mm_fault(struct mm_struct *mm, unsigned long ea,
 			  unsigned long dsisr, unsigned *flt);
 
+int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid);
+
 #endif /* _ASM_POWERPC_COPRO_H */

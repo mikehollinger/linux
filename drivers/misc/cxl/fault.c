@@ -29,56 +29,6 @@
 
 bool cxl_fault_debug = false;
 
-/* FIXME: This shares a lot of code in common with Cell's __spu_trap_data_seg,
- * split it out into a shared copro file. Also, remove the various symbol
- * exports for variables this mentions */
-static int slbfee_mm(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
-{
-	int psize, ssize;
-
-	*esid = (ea & ESID_MASK) | SLB_ESID_V;
-
-	switch (REGION_ID(ea)) {
-	case USER_REGION_ID:
-		pr_devel("slbfee_mm: 0x%llx -- USER_REGION_ID\n", ea);
-#ifdef CONFIG_PPC_MM_SLICES
-		psize = get_slice_psize(mm, ea);
-#else
-		psize = mm->context.user_psize;
-#endif
-		ssize = user_segment_size(ea);
-		*vsid = (get_vsid(mm->context.id, ea, ssize)
-			<< slb_vsid_shift(ssize)) | SLB_VSID_USER
-			| (ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
-		break;
-	case VMALLOC_REGION_ID:
-		pr_devel("slbfee_mm: 0x%llx -- VMALLOC_REGION_ID\n", ea);
-		if (ea < VMALLOC_END)
-			psize = mmu_vmalloc_psize;
-		else
-			psize = mmu_io_psize;
-		*vsid = (get_kernel_vsid(ea, mmu_kernel_ssize)
-			<< SLB_VSID_SHIFT) | SLB_VSID_KERNEL
-			| (mmu_kernel_ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
-		break;
-	case KERNEL_REGION_ID:
-		pr_devel("slbfee_mm: 0x%llx -- KERNEL_REGION_ID\n", ea);
-		psize = mmu_linear_psize;
-		*vsid = (get_kernel_vsid(ea, mmu_kernel_ssize)
-			<< SLB_VSID_SHIFT) | SLB_VSID_KERNEL
-			| (mmu_kernel_ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
-		break;
-	default:
-		/* Future: support kernel segments so that drivers can use the
-		 * CoProcessors */
-		pr_debug("invalid region access at %016llx\n", ea);
-		return 1;
-	}
-	*vsid |= mmu_psize_defs[psize].sllp;
-
-	return 0;
-}
-
 static struct cxl_sste*
 find_free_sste(struct cxl_sste *primary_group, bool sec_hash,
 	       struct cxl_sste *secondary_group, unsigned int *lru)
@@ -143,7 +93,7 @@ static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm, u6
 	int rc;
 
 	spin_lock_irqsave(&ctx->sst_lock, flags);
-	if (!(rc = slbfee_mm(mm, ea, &esid_data, &vsid_data))) {
+	if (!(rc = copro_data_segment(mm, ea, &esid_data, &vsid_data))) {
 		/* TODO: Don't load if already present */
 		cxl_load_segment(ctx, esid_data, vsid_data);
 	}
@@ -309,7 +259,7 @@ static void cxl_prefault_vma(struct cxl_context_t *ctx)
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		for (ea = vma->vm_start; ea < vma->vm_end;
 				ea = next_segment(ea, vsid_data)) {
-			rc = slbfee_mm(mm, ea, &esid_data, &vsid_data);
+			rc = copro_data_segment(mm, ea, &esid_data, &vsid_data);
 			if (rc)
 				continue;
 

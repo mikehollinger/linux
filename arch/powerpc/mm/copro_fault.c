@@ -90,3 +90,51 @@ out_unlock:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(copro_handle_mm_fault);
+
+int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
+{
+	int psize, ssize;
+
+	*esid = (ea & ESID_MASK) | SLB_ESID_V;
+
+	switch (REGION_ID(ea)) {
+	case USER_REGION_ID:
+		pr_devel("slbfee_mm: 0x%llx -- USER_REGION_ID\n", ea);
+#ifdef CONFIG_PPC_MM_SLICES
+		psize = get_slice_psize(mm, ea);
+#else
+		psize = mm->context.user_psize;
+#endif
+		ssize = user_segment_size(ea);
+		*vsid = (get_vsid(mm->context.id, ea, ssize)
+			<< slb_vsid_shift(ssize)) | SLB_VSID_USER
+			| (ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
+		break;
+	case VMALLOC_REGION_ID:
+		pr_devel("slbfee_mm: 0x%llx -- VMALLOC_REGION_ID\n", ea);
+		if (ea < VMALLOC_END)
+			psize = mmu_vmalloc_psize;
+		else
+			psize = mmu_io_psize;
+		*vsid = (get_kernel_vsid(ea, mmu_kernel_ssize)
+			<< SLB_VSID_SHIFT) | SLB_VSID_KERNEL
+			| (mmu_kernel_ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
+		break;
+	case KERNEL_REGION_ID:
+		pr_devel("slbfee_mm: 0x%llx -- KERNEL_REGION_ID\n", ea);
+		psize = mmu_linear_psize;
+		*vsid = (get_kernel_vsid(ea, mmu_kernel_ssize)
+			<< SLB_VSID_SHIFT) | SLB_VSID_KERNEL
+			| (mmu_kernel_ssize == MMU_SEGSIZE_1T ? SLB_VSID_B_1T : 0);
+		break;
+	default:
+		/* Future: support kernel segments so that drivers can use the
+		 * CoProcessors */
+		pr_debug("invalid region access at %016llx\n", ea);
+		return 1;
+	}
+	*vsid |= mmu_psize_defs[psize].sllp;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(copro_data_segment);
