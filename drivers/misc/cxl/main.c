@@ -61,8 +61,6 @@ static void cxl_afu_slbia(struct cxl_afu_t *afu)
 		cpu_relax();
 }
 
-/* FIXME: This is called from the PPC mm code, which will break when CXL is
- * compiled as a module */
 static inline void cxl_slbia_core(struct mm_struct *mm)
 {
 	struct cxl_t *adapter;
