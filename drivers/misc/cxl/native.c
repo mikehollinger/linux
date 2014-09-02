@@ -266,9 +266,9 @@ static int init_afu_native(struct cxl_afu_t *afu, u64 handle)
 
 	cxl_p1n_write(afu, CXL_PSL_RXCTL_A, 0xF000000000000000ULL);
 
-	/* FIXME: check we are afu_directed in this whole function */
-	if (alloc_spa(afu))
-		return -ENOMEM;
+	if (afu->afu_directed_mode)
+		if (alloc_spa(afu))
+			return -ENOMEM;
 
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_AFU);
 	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
