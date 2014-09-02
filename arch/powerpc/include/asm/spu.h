@@ -599,11 +599,11 @@ struct spu_priv1 {
 #define MFC_ACCR_LS_ACCESS_PUT		(1 << 4)
 	u8  pad_0x608_0x610[0x8];				/* 0x608 */
 	u64 mfc_dsisr_RW;					/* 0x610 */
-#define MFC_DSISR_PTE_NOT_FOUND		(1 << 30) /* DSISR_NOHPTE */
-#define MFC_DSISR_ACCESS_DENIED		(1 << 27) /* DSISR_PROTFAULT */
+#define MFC_DSISR_PTE_NOT_FOUND		(1 << 30)
+#define MFC_DSISR_ACCESS_DENIED		(1 << 27)
 #define MFC_DSISR_ATOMIC		(1 << 26)
-#define MFC_DSISR_ACCESS_PUT		(1 << 25) /* DSISR_ISSTORE */
-#define MFC_DSISR_ADDR_MATCH		(1 << 22) /* DSISR_DABRMATCH */
+#define MFC_DSISR_ACCESS_PUT		(1 << 25)
+#define MFC_DSISR_ADDR_MATCH		(1 << 22)
 #define MFC_DSISR_LS			(1 << 17)
 #define MFC_DSISR_L			(1 << 16)
 #define MFC_DSISR_ADDRESS_OVERFLOW	(1 << 0)
