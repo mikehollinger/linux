@@ -448,7 +448,9 @@ static int init_afu_directed_process(struct cxl_context_t *ctx,
 		sr |= CXL_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
 		sr |= CXL_PSL_SR_An_TC;
-	/* GA1: HV=0, PR=1, R=1 */
+	/* HV=0, PR=1, R=1 for userspace
+	 * For kernel contexts: this would need to change
+	 */
 	sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
 	sr &= ~(CXL_PSL_SR_An_HV);
 	if (!test_tsk_thread_flag(current, TIF_32BIT))
