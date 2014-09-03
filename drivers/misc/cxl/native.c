@@ -304,7 +304,7 @@ static void cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
 	cxl_p2n_write(afu, CXL_SSTP1_An, sstp1);
 }
 
-/* Using per slice version here may improve performance here? (ie. SLBIA_An) */
+/* Using per slice version may improve performance here. (ie. SLBIA_An) */
 static void slb_invalid(struct cxl_context_t *ctx)
 {
 	struct cxl_t *adapter = ctx->afu->adapter;
