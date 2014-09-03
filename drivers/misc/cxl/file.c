@@ -151,7 +151,6 @@ static long
 afu_ioctl_check_error(struct cxl_context_t *ctx)
 {
 	if (!ctx->attached)
-		/* FIXME: What should we do here? */
 		return -EIO;
 
 	if (cxl_ops->check_error && cxl_ops->check_error(ctx->afu)) {
