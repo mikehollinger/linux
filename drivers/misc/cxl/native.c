@@ -304,9 +304,9 @@ static void cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
 	cxl_p2n_write(afu, CXL_SSTP1_An, sstp1);
 }
 
+/* Using per slice version here may improve performance here? (ie. SLBIA_An) */
 static void slb_invalid(struct cxl_context_t *ctx)
 {
-	/* FIXME use per slice version of SLBIA? */
 	struct cxl_t *adapter = ctx->afu->adapter;
 	u64 slbia;
 
@@ -323,7 +323,6 @@ static void slb_invalid(struct cxl_context_t *ctx)
 			break;
 		cpu_relax();
 	}
-	/* TODO: assume TLB is already invalidated via broadcast tlbie */
 }
 
 static int do_process_element_cmd(struct cxl_context_t *ctx,
