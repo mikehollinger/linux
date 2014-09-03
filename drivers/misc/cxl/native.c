@@ -346,9 +346,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 		if ((state & (CXL_SPA_SW_CMD_MASK | CXL_SPA_SW_STATE_MASK  | CXL_SPA_SW_LINK_MASK)) ==
 		    (cmd | (cmd >> 16) | ctx->ph))
 			break;
-		/* FIXME: maybe look for a while before schedule if this
-		 * becomes a performance bottleneck
-		 */
+		/* Tuning possiblity: we could wait for a while before sched */
 		schedule();
 
 	}
