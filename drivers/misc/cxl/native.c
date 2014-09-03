@@ -448,18 +448,12 @@ static int init_afu_directed_process(struct cxl_context_t *ctx,
 		sr |= CXL_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
 		sr |= CXL_PSL_SR_An_TC;
-	if (!ctx->kernel) {
-		/* GA1: HV=0, PR=1, R=1 */
-		sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
-		sr &= ~(CXL_PSL_SR_An_HV);
-		if (!test_tsk_thread_flag(current, TIF_32BIT))
-			sr |= CXL_PSL_SR_An_SF;
-		ctx->elem->common.pid = cpu_to_be32(current->pid);
-	} else { /* Initialise for kernel */
-		WARN_ONCE(1, "CXL initialised for kernel, this won't work on GA1 hardware!\n");
-		sr |= (mfmsr() & MSR_SF) | CXL_PSL_SR_An_HV;
-		ctx->elem->common.pid = 0;
-	}
+	/* GA1: HV=0, PR=1, R=1 */
+	sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
+	sr &= ~(CXL_PSL_SR_An_HV);
+	if (!test_tsk_thread_flag(current, TIF_32BIT))
+		sr |= CXL_PSL_SR_An_SF;
+	ctx->elem->common.pid = cpu_to_be32(current->pid);
 	ctx->elem->common.tid = 0;
 	ctx->elem->sr = cpu_to_be64(sr);
 
