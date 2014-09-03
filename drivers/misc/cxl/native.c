@@ -430,12 +430,6 @@ static int init_afu_directed_process(struct cxl_context_t *ctx,
 	u64 sr, sstp0, sstp1;
 	int r, result;
 
-	/* FIXME:
-	 * - Add to existing SPA list if one already exists
-	 * - Reject if already enabled in different mode, max processes
-	 *   exceeded, etc
-	 */
-
 	assign_psn_space(ctx);
 
 	ctx->elem->ctxtime = 0; /* disable */
