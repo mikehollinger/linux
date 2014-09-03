@@ -450,8 +450,8 @@ static int init_afu_directed_process(struct cxl_context_t *ctx,
 		sr |= CXL_PSL_SR_An_TC;
 	if (!ctx->kernel) {
 		/* GA1: HV=0, PR=1, R=1 */
-		/* FIXME: Set HV properly */
-		sr |= CXL_PSL_SR_An_HV | CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
+		sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
+		sr &= ~(CXL_PSL_SR_An_HV);
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
 			sr |= CXL_PSL_SR_An_SF;
 		ctx->elem->common.pid = cpu_to_be32(current->pid);
