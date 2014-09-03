@@ -274,10 +274,6 @@ static int init_afu_native(struct cxl_afu_t *afu, u64 handle)
 	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
 	cxl_p1n_write(afu, CXL_PSL_ID_An, CXL_PSL_ID_An_F | CXL_PSL_ID_An_L);
 
-	afu_disable(afu); /* FIXME: remove this */
-	if ((rc = psl_purge(afu))) /* FIXME: remove this */
-		return rc;
-
 	if ((rc = afu_reset(afu)))
 		return rc;
 
