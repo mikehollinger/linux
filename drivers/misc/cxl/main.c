@@ -188,12 +188,10 @@ static void afu_t_init(struct cxl_t *adapter, int slice)
 
 static atomic_t nr_adapters;
 
-/* FIXME: The calling convention here is a mess and needs to be cleaned up.
- * Maybe better to have the caller fill in the struct and call us? */
 int cxl_init_adapter(struct cxl_t *adapter,
-		      struct cxl_driver_ops *driver,
-		      struct device *parent,
-		      int slices, void *backend_data)
+		     struct cxl_driver_ops *driver,
+		     struct device *parent,
+		     int slices, void *backend_data)
 {
 	int slice, rc = 0;
 
