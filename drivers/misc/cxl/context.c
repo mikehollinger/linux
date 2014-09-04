@@ -164,9 +164,6 @@ void cxl_context_detach_all(struct cxl_afu_t *afu)
 	struct cxl_context_t *ctx;
 	int tmp;
 
-	/* FIXME: not sure we need this rcu_read_lock() as this shouldn't be
-	 * called at the same time as cxl_context_free
-	 */
 	rcu_read_lock();
 	idr_for_each_entry(&afu->contexts_idr, ctx, tmp)
 		__detach_context(ctx);
