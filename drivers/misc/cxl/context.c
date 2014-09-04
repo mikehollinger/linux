@@ -115,9 +115,9 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
 }
 
 /*
- * Detach a context from the hardware. This disables interrupts and doesn't return until
- * all outstanding interrupts for this context have completed. The hardware should no longer
- * access *ctx after this has returned.
+ * Detach a context from the hardware. This disables interrupts and doesn't
+ * return until all outstanding interrupts for this context have completed. The
+ * hardware should no longer access *ctx after this has returned.
  */
 static void __detach_context(struct cxl_context_t *ctx)
 {
