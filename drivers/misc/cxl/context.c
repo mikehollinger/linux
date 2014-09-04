@@ -123,7 +123,6 @@ static void __detach_context(struct cxl_context_t *ctx)
 {
 	/* FIXME: Shut down AFU, ensure that any running interrupts are
 	 * finished and no more interrupts are possible */
-	/* FIXME: If we opened it but never started it, this will WARN */
 	unsigned long flags;
 	enum cxl_context_status status;
 
