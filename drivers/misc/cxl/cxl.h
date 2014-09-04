@@ -299,6 +299,12 @@ extern struct bus_type cxl_bus_type;
 #define CXL_NUM_MINORS 256 /* Total to reserve */
 #define CXL_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/slave) */
 
+enum cxl_context_status {
+	CLOSED,
+	OPENED,
+	STARTED
+};
+
 struct cxl_sste {
 	__be64 esid_data;
 	__be64 vsid_data;
@@ -391,7 +397,7 @@ struct cxl_context_t {
 	u64 fault_addr;
 	u64 afu_err;
 	bool pending_afu_err;
-	bool attached;
+	enum cxl_context_status status;
 
 	u32 irq_count;
 

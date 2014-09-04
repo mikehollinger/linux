@@ -59,8 +59,7 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 	ctx->pending_fault = false;
 	ctx->pending_afu_err = false;
 
-	/* FIXME: need to make this two stage between the open and the ioctl */
-	ctx->attached = 1;
+	ctx->status = OPENED;
 
 	idr_preload(GFP_KERNEL);
 	spin_lock(&afu->contexts_lock);
@@ -129,14 +128,13 @@ static void __detach_context(struct cxl_context_t *ctx)
 	/* FIXME: If we opened it but never started it, this will WARN */
 	/* FIXME: check this is the last context to shut down */
 	unsigned long flags;
-	bool attached;
+	enum cxl_context_status status;
 
-	/* FIXME: need locking on attach here */
 	spin_lock_irqsave(&ctx->sst_lock, flags);
-	attached = ctx->attached;
-	ctx->attached = false;
+	status = ctx->status;
+	ctx->status = CLOSED;
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
-	if (!attached)
+	if (status != STARTED)
 		return;
 
 	WARN_ON(cxl_ops->detach_process(ctx));

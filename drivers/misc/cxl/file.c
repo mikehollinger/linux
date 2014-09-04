@@ -145,13 +145,15 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 	if ((rc = cxl_ops->init_process(ctx, false, work.wed, amr)))
 		return rc;
 
+	ctx->status = STARTED;
+
 	return 0;
 }
 
 static long
 afu_ioctl_check_error(struct cxl_context_t *ctx)
 {
-	if (!ctx->attached)
+	if (ctx->status != STARTED)
 		return -EIO;
 
 	if (cxl_ops->check_error && cxl_ops->check_error(ctx->afu)) {
@@ -168,7 +170,7 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct cxl_context_t *ctx = file->private_data;
 
-	if (!ctx->attached)
+	if (ctx->status == CLOSED)
 		return -EIO;
 
 #if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
@@ -201,7 +203,8 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
 	struct cxl_context_t *ctx = file->private_data;
 
-	if (!ctx->attached)
+	/* AFU must be started before we can MMIO */
+	if (ctx->status != STARTED)
 		return -EIO;
 
 	return cxl_context_iomap(ctx, vm);
@@ -214,8 +217,6 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 	int mask = 0;
 	unsigned long flags;
 
-	if (!ctx->attached)
-		return -EIO;
 
 	poll_wait(file, &ctx->wq, poll);
 
@@ -223,8 +224,12 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	if (ctx->pending_irq || ctx->pending_fault ||
-	    ctx->pending_afu_err || !ctx->attached)
+	    ctx->pending_afu_err)
 		mask |= POLLIN | POLLRDNORM;
+	else if (ctx->status == CLOSED)
+		/* Only error on closed when there are no futher events pending
+		 */
+		mask |= POLLERR;
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
 	pr_devel("afu_poll pe: %i returning %#x\n", ctx->ph, mask);
@@ -247,7 +252,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 	while (1) {
 		spin_lock_irqsave(&ctx->lock, flags);
 		if (ctx->pending_irq || ctx->pending_fault ||
-		    ctx->pending_afu_err || !ctx->attached)
+		    ctx->pending_afu_err || (ctx->status == CLOSED))
 			break;
 		spin_unlock_irqrestore(&ctx->lock, flags);
 
@@ -256,7 +261,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 
 		prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
 		if (!(ctx->pending_irq || ctx->pending_fault ||
-		      ctx->pending_afu_err || !ctx->attached)) {
+		      ctx->pending_afu_err || (ctx->status == CLOSED))) {
 			pr_devel("afu_read going to sleep...\n");
 			schedule();
 			pr_devel("afu_read woken up\n");
@@ -299,7 +304,7 @@ afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 		/* Only clear the fault if we can send the whole event: */
 		if (count >= event.header.size)
 			ctx->pending_afu_err = false;
-	} else if (!ctx->attached) {
+	} else if (ctx->status == CLOSED) {
 		pr_warn("afu_read fatal error\n");
 		spin_unlock_irqrestore(&ctx->lock, flags);
 		return -EIO;
