@@ -154,10 +154,9 @@ afu_ioctl_check_error(struct cxl_context_t *ctx)
 		return -EIO;
 
 	if (cxl_ops->check_error && cxl_ops->check_error(ctx->afu)) {
-		/* FIXME: This reset isn't sufficient to recover from the
-		 * condition I tested - this will basically need a hotplug or
-		 * PERST. May need several tests for different severities and
-		 * appropriate actions for each. */
+		/* This may not be enough for some errors.  May need to PERST
+		 * the card in some cases if it's very broken.
+		 */
 		return cxl_ops->afu_reset(ctx->afu);
 	}
 	return -EPERM;
