@@ -584,8 +584,6 @@ static int init_slice(struct cxl_t *adapter,
 
 	pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
 
-	/* FIXME: mask the MMIO timeout for
-	   now.  need to * fix this long term */
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
 	cxl_ops->afu_reset(afu);
 	dump_afu_descriptor(dev, afu);
