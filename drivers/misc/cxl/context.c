@@ -133,7 +133,7 @@ static void __detach_context(struct cxl_context_t *ctx)
 
 	WARN_ON(cxl_ops->detach_process(ctx));
 	afu_release_irqs(ctx);
-	WARN_ON(work_busy(&ctx->fault_work)); /* FIXME: maybe bogus.  hardware may not be done */
+	WARN_ON(work_busy(&ctx->fault_work));
 	wake_up_all(&ctx->wq);
 }
 
