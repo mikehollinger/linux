@@ -59,7 +59,8 @@ find_free_sste(struct cxl_sste *primary_group, bool sec_hash,
 /*
  * XXX: check for existing segment? in a wrapper? for prefault?
  */
-static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data, u64 vsid_data)
+static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data,
+			     u64 vsid_data)
 {
 	/* mask is the group index, we search primary and secondary here. */
 	unsigned int mask = (ctx->sst_size >> 7)-1; /* SSTP0[SegTableSize] */
@@ -86,7 +87,8 @@ static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data, u64 vsid_
 	sste->esid_data = cpu_to_be64(esid_data);
 }
 
-static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm, u64 ea)
+static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm,
+			     u64 ea)
 {
 	u64 vsid_data = 0, esid_data = 0;
 	unsigned long flags;
@@ -116,7 +118,8 @@ static void cxl_ack_ae(struct cxl_context_t *ctx)
 	wake_up_all(&ctx->wq);
 }
 
-static int cxl_handle_segment_miss(struct cxl_context_t *ctx, struct mm_struct *mm, u64 ea)
+static int cxl_handle_segment_miss(struct cxl_context_t *ctx,
+				   struct mm_struct *mm, u64 ea)
 {
 	int rc;
 
@@ -134,7 +137,8 @@ static int cxl_handle_segment_miss(struct cxl_context_t *ctx, struct mm_struct *
 	return IRQ_HANDLED;
 }
 
-static void cxl_handle_page_fault(struct cxl_context_t *ctx, struct mm_struct *mm, u64 dsisr, u64 dar)
+static void cxl_handle_page_fault(struct cxl_context_t *ctx,
+				  struct mm_struct *mm, u64 dsisr, u64 dar)
 {
 	unsigned flt = 0;
 	int result;
@@ -168,7 +172,8 @@ static void cxl_handle_page_fault(struct cxl_context_t *ctx, struct mm_struct *m
 
 void cxl_handle_fault(struct work_struct *fault_work)
 {
-	struct cxl_context_t *ctx = container_of(fault_work, struct cxl_context_t, fault_work);
+	struct cxl_context_t *ctx =
+		container_of(fault_work, struct cxl_context_t, fault_work);
 	u64 dsisr = ctx->dsisr;
 	u64 dar = ctx->dar;
 	struct task_struct *task;
@@ -182,12 +187,14 @@ void cxl_handle_fault(struct work_struct *fault_work)
 		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("cxl_handle_fault unable to get task %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_handle_fault unable to get task %i\n",
+			 pid_nr(ctx->pid));
 		cxl_ack_ae(ctx);
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("cxl_handle_fault unable to get mm %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_handle_fault unable to get mm %i\n",
+			 pid_nr(ctx->pid));
 		cxl_ack_ae(ctx);
 		goto out;
 	}
@@ -211,11 +218,13 @@ static void cxl_prefault_one(struct cxl_context_t *ctx, u64 ea)
 	struct mm_struct *mm;
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("cxl_prefault_one unable to get task %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_one unable to get task %i\n",
+			 pid_nr(ctx->pid));
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("cxl_prefault_one unable to get mm %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_one unable to get mm %i\n",
+			 pid_nr(ctx->pid));
 		put_task_struct(task);
 		return;
 	}
@@ -246,11 +255,13 @@ static void cxl_prefault_vma(struct cxl_context_t *ctx)
 	unsigned long flags;
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-		pr_devel("cxl_prefault_vma unable to get task %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_vma unable to get task %i\n",
+			 pid_nr(ctx->pid));
 		return;
 	}
 	if (!(mm = get_task_mm(task))) {
-		pr_devel("cxl_prefault_vm unable to get mm %i\n", pid_nr(ctx->pid));
+		pr_devel("cxl_prefault_vm unable to get mm %i\n",
+			 pid_nr(ctx->pid));
 		goto out1;
 	}
 
