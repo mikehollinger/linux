@@ -103,8 +103,7 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
 		return -EINVAL;
 	}
 
-	/* Can't mmap until the AFU is enabled
-	   FIXME: check on teardown */
+	/* Can't mmap until the AFU is enabled */
 	if (!ctx->afu->enabled)
 		return -EBUSY;
 
