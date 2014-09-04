@@ -121,8 +121,6 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
  */
 static void __detach_context(struct cxl_context_t *ctx)
 {
-	/* FIXME: Shut down AFU, ensure that any running interrupts are
-	 * finished and no more interrupts are possible */
 	unsigned long flags;
 	enum cxl_context_status status;
 
