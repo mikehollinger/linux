@@ -226,7 +226,7 @@ static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, struct cxl_a
 
 	val = AFUD_READ_PPPSA(afu);
 	show_reg("PerProcessPSA_control", (val >> (63-7)) & 0xff);
-	show_reg("PerProcessPSA_control", AFUD_PPPSA_LEN(val));
+	show_reg("PerProcessPSA Length", AFUD_PPPSA_LEN(val));
 
 	val = AFUD_READ_PPPSA_OFF(afu);
 	show_reg("PerProcessPSA_offset", val);
