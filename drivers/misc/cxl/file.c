@@ -35,7 +35,8 @@
 
 dev_t cxl_dev;
 
-extern struct class *cxl_class;
+struct class *cxl_class;
+EXPORT_SYMBOL(cxl_class);
 
 static int
 __afu_open(struct inode *inode, struct file *file, bool master)

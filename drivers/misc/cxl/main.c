@@ -34,9 +34,7 @@ static LIST_HEAD(adapter_list);
 const struct cxl_backend_ops *cxl_ops;
 EXPORT_SYMBOL(cxl_ops);
 
-/* FIXME: Move this to file.c */
-struct class *cxl_class;
-EXPORT_SYMBOL(cxl_class);
+extern struct class *cxl_class;
 
 static void cxl_afu_slbia(struct cxl_afu_t *afu)
 {
