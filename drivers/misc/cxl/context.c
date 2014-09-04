@@ -110,7 +110,6 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
 	pr_devel("%s: mmio physical: %llx pe: %i master:%i\n", __func__,
 		 ctx->psn_phys, ctx->ph , ctx->master);
 
-	/* FIXME: Return error if virtualised AFU */
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 	return vm_iomap_memory(vma, ctx->psn_phys, len);
 }
