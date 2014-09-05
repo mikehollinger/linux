@@ -310,7 +310,6 @@ struct cxl_sste {
 	__be64 vsid_data;
 };
 
-/* TODO: Pack structure */
 struct cxl_afu_t {
 	union {
 		struct { /* hv */
@@ -321,42 +320,42 @@ struct cxl_afu_t {
 		u64 handle;
 	};
 	irq_hw_number_t psl_hwirq; /* Shared by all contexts on this AFU */
-	unsigned int psl_virq;
 
 	void __iomem *p2n_mmio;
 	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
 	u64 psn_size;
-	int pp_irqs;
-	int num_procs;
 	u64 pp_offset;
 	u64 pp_size;
 	void __iomem *afu_desc_mmio;
 	u64 afu_desc_size;
-	int slice;
 	struct cxl_t *adapter;
 	struct device device, device_master;
-	bool afu_directed_mode;
-	bool afu_dedicated_mode;
-	bool mmio;
-	bool pp_mmio;
-
-	bool enabled;
+	struct idr contexts_idr;
+	spinlock_t contexts_lock;
+	struct mutex spa_mutex;
+	spinlock_t afu_cntl_lock;
 
 	/* Only the first part of the SPA is used for the process element
 	 * linked list. The only other part that software needs to worry about
 	 * is sw_command_status, which we store a separate pointer to.
 	 * Everything else in the SPA is only used by hardware */
 	struct cxl_process_element *spa;
-	int spa_order;
-	unsigned int spa_size;
-	int spa_max_procs;
 	__be64 *sw_command_status;
+	unsigned int spa_size;
+	int spa_order;
+	int spa_max_procs;
+	unsigned int psl_virq;
 
-	struct idr contexts_idr;
-	spinlock_t contexts_lock;
-	struct mutex spa_mutex;
-	spinlock_t afu_cntl_lock;
+	int pp_irqs;
+	int num_procs;
+	int slice;
+	bool afu_directed_mode;
+	bool afu_dedicated_mode;
+	bool mmio;
+	bool pp_mmio;
+	bool enabled;
+
 };
 
 struct cxl_irq_ranges {
@@ -369,12 +368,6 @@ struct cxl_irq_ranges {
  * of these per AFU.  If in AFU directed there can be lots of these. */
 struct cxl_context_t {
 	struct cxl_afu_t *afu;
-
-	bool master;
-	bool kernel;
-
-	int ph; /* process handle/process element index */
-	bool pe_inserted;
 
 	/* Problem state MMIO */
 	phys_addr_t psn_phys;
@@ -390,16 +383,12 @@ struct cxl_context_t {
 	/* Only used in PR mode */
 	u64 process_token;
 
-	bool pending_irq;
 	unsigned long *irq_bitmap; /* Accessed from IRQ context */
 	struct cxl_irq_ranges irqs;
-	bool pending_fault;
 	u64 fault_addr;
 	u64 afu_err;
-	bool pending_afu_err;
 	enum cxl_context_status status;
 
-	u32 irq_count;
 
 	/* XXX: Is it possible to need multiple work items at once? */
 	struct work_struct fault_work;
@@ -407,6 +396,15 @@ struct cxl_context_t {
 	u64 dar;
 
 	struct cxl_process_element *elem;
+
+	int ph; /* process handle/process element index */
+	u32 irq_count;
+	bool pe_inserted;
+	bool master;
+	bool kernel;
+	bool pending_irq;
+	bool pending_fault;
+	bool pending_afu_err;
 };
 
 struct cxl_driver_ops;
@@ -426,13 +424,13 @@ struct cxl_t {
 	struct cdev afu_cdev;
 	struct cdev afu_master_cdev;
 	struct device device;
-	int adapter_num;
-	int slices;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
 	struct list_head list;
 	struct bin_attribute cxl_attr;
 	struct kobject *afu_kobj;
+	int adapter_num;
+	int slices;
 	bool reset_image_factory;
 };
 
