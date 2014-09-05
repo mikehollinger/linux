@@ -137,9 +137,6 @@ int cxl_sysfs_afu_add(struct cxl_afu_t *afu)
 {
 	int afu_attr, mstr_attr, rc = 0;
 
-	/* FIXME: If the AFU descriptor is missing, don't create attributes
-	 * that come from it */
-
 	for (afu_attr = 0; afu_attr < ARRAY_SIZE(afu_attrs); afu_attr++) {
 		if ((rc = device_create_file(&afu->device, &afu_attrs[afu_attr])))
 			goto err;
