@@ -144,8 +144,6 @@ static void cxl_handle_page_fault(struct cxl_context_t *ctx,
 	int result;
 	unsigned long access, flags;
 
-	/* FIXME: This may sleep, make sure it's handled OK if the application
-	 * is terminated (do I need to inc mm->mm_count?) */
 	if ((result = copro_handle_mm_fault(mm, dar, dsisr, &flt))) {
 		pr_devel("copro_handle_mm_fault failed: %#x\n", result);
 		return cxl_ack_ae(ctx);
