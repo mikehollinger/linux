@@ -158,16 +158,25 @@ static irqreturn_t cxl_irq(int irq, void *data)
 	if (dsisr & CXL_PSL_DSISR_An_PE)
 		return handle_psl_slice_error(ctx, dsisr, irq_info.errstat);
 	if (dsisr & CXL_PSL_DSISR_An_AE) {
-		pr_devel("CXL interrupt: AFU Error\n");
+		pr_devel("CXL interrupt: AFU Error %.llx\n", irq_info.afu_err);
 
-		spin_lock(&ctx->lock);
-		WARN(ctx->pending_afu_err,
-		     "FIXME: Potentially clobbering undelivered AFU interrupt\n");
-		ctx->afu_err = irq_info.afu_err;
-		ctx->pending_afu_err = 1;
-		spin_unlock(&ctx->lock);
+		if (ctx->pending_afu_err) {
+			/* This shouldn't happen - the PSL treats these errors
+			 * as fatal and will have reset the AFU, so there's not
+			 * much point buffering multiple AFU errors.
+			 * OTOH if we DO ever see a storm of these come in it's
+			 * probably best that we log them somewhere: */
+			pr_err_ratelimited("CXL AFU Error undelivered to pe %i: %.llx\n",
+					ctx->ph, irq_info.afu_err);
+		} else {
+			spin_lock(&ctx->lock);
+			ctx->afu_err = irq_info.afu_err;
+			ctx->pending_afu_err = 1;
+			spin_unlock(&ctx->lock);
 
-		wake_up_all(&ctx->wq);
+			wake_up_all(&ctx->wq);
+		}
+
 		cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_A, 0);
 	}
 	if (dsisr & CXL_PSL_DSISR_An_OC)
