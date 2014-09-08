@@ -160,8 +160,6 @@ static void cxl_handle_page_fault(struct cxl_context_t *ctx,
 
 	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
 	cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
-
-	/* TODO: Accounting */
 }
 
 void cxl_handle_fault(struct work_struct *fault_work)
