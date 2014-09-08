@@ -125,9 +125,9 @@ static ssize_t supported_models_show(struct device *device,
 	struct cxl_afu_t *afu = to_afu(device);
 	char *p = buf, *end = buf + PAGE_SIZE;
 
-	if (afu->afu_dedicated_model)
+	if (afu->supported_models & CXL_MODEL_DEDICATED)
 		p += scnprintf(p, end - p, "dedicated_process\n");
-	if (afu->afu_directed_model)
+	if (afu->supported_models & CXL_MODEL_DIRECTED)
 		p += scnprintf(p, end - p, "afu_directed\n");
 	return (p - buf);
 }
@@ -138,9 +138,9 @@ static ssize_t model_show(struct device *device,
 {
 	struct cxl_afu_t *afu = to_afu(device);
 
-	if (afu->afu_dedicated_model)
+	if (afu->current_model == CXL_MODEL_DEDICATED)
 		return scnprintf(buf, PAGE_SIZE, "dedicated_process\n");
-	if (afu->afu_directed_model)
+	if (afu->current_model == CXL_MODEL_DIRECTED)
 		return scnprintf(buf, PAGE_SIZE, "afu_directed\n");
 	return -EINVAL;
 }

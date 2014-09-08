@@ -293,6 +293,11 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_IRQ_RANGES 4
 #define MAX_AFU_MMIO_REGS 3
 
+#define CXL_MODEL_DEDICATED   0x1
+#define CXL_MODEL_DIRECTED    0x2
+#define CXL_MODEL_TIME_SLICED 0x4
+#define CXL_SUPPORTED_MODELS (CXL_MODEL_DEDICATED | CXL_MODEL_DIRECTED)
+
 /* CXL character device info */
 extern dev_t cxl_dev;
 extern struct bus_type cxl_bus_type;
@@ -352,8 +357,8 @@ struct cxl_afu_t {
 	int irqs_max;
 	int num_procs;
 	int slice;
-	bool afu_directed_model;
-	bool afu_dedicated_model;
+	int supported_models;
+	int current_model;
 	bool mmio;
 	bool pp_mmio;
 	bool enabled;

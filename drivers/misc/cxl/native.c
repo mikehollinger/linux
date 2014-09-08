@@ -267,7 +267,7 @@ static int init_afu_native(struct cxl_afu_t *afu, u64 handle)
 
 	cxl_p1n_write(afu, CXL_PSL_RXCTL_A, 0xF000000000000000ULL);
 
-	if (afu->afu_directed_model)
+	if (afu->current_model == CXL_MODEL_DIRECTED)
 		if (alloc_spa(afu))
 			return -ENOMEM;
 
@@ -572,14 +572,18 @@ static int init_process_native(struct cxl_context_t *ctx, bool kernel,
 			       u64 wed, u64 amr)
 {
 	ctx->kernel = kernel;
-	if (ctx->afu->afu_directed_model)
+	if (ctx->afu->current_model == CXL_MODEL_DIRECTED)
 		return init_afu_directed_process(ctx, wed, amr);
-	return init_dedicated_process_native(ctx, wed, amr);
+
+	if (ctx->afu->current_model == CXL_MODEL_DEDICATED)
+		return init_dedicated_process_native(ctx, wed, amr);
+
+	return -EINVAL;
 }
 
 static int detach_process_native(struct cxl_context_t *ctx)
 {
-	if (!ctx->afu->afu_directed_model) {
+	if (ctx->afu->current_model == CXL_MODEL_DEDICATED) {
 		afu_reset(ctx->afu);
 		afu_disable(ctx->afu);
 		psl_purge(ctx->afu);
