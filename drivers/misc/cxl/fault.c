@@ -56,9 +56,6 @@ find_free_sste(struct cxl_sste *primary_group, bool sec_hash,
 	return sste;
 }
 
-/*
- * XXX: check for existing segment? in a wrapper? for prefault?
- */
 static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data,
 			     u64 vsid_data)
 {
@@ -96,7 +93,6 @@ static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm,
 
 	spin_lock_irqsave(&ctx->sst_lock, flags);
 	if (!(rc = copro_data_segment(mm, ea, &esid_data, &vsid_data))) {
-		/* TODO: Don't load if already present */
 		cxl_load_segment(ctx, esid_data, vsid_data);
 	}
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
