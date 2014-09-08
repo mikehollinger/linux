@@ -508,16 +508,6 @@ static inline void __iomem *_cxl_p2n_addr(struct cxl_afu_t *afu, cxl_p2n_reg_t r
 #define cxl_p2n_read(afu, reg) \
 	_cxl_reg_read(_cxl_p2n_addr(afu, reg))
 
-/* TODO: Move PS out of kernel */
-static inline void __iomem *_cxl_afu_ps_addr(struct cxl_afu_t *afu, int reg)
-{
-	return afu->psn_mmio + reg;
-}
-#define cxl_afu_ps_write(afu, reg, val) \
-	_cxl_reg_write(_cxl_afu_ps_addr(afu, reg), val)
-#define cxl_afu_ps_read(afu, reg) \
-	_cxl_reg_read(_cxl_afu_ps_addr(afu, reg))
-
 struct cxl_calls {
 	void (*cxl_slbia)(struct mm_struct *mm);
 	struct module *owner;
