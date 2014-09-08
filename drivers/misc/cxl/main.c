@@ -36,14 +36,6 @@ EXPORT_SYMBOL(cxl_ops);
 
 extern struct class *cxl_class;
 
-static void cxl_afu_slbia(struct cxl_afu_t *afu)
-{
-	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
-	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_SLBI_IQ_ALL);
-	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_SLBIA_P)
-		cpu_relax();
-}
-
 static inline void cxl_slbia_core(struct mm_struct *mm)
 {
 	struct cxl_t *adapter;
@@ -81,7 +73,7 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 					goto next_unlock;
 				memset(ctx->sstp, 0, ctx->sst_size);
 				mb();
-				cxl_afu_slbia(afu);
+				cxl_ops->slbia(afu);
 
 next_unlock:
 				spin_unlock_irqrestore(&ctx->sst_lock, flags);
@@ -118,7 +110,7 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 		pr_devel("Zeroing and reusing SSTP already allocated at 0x%p\n", ctx->sstp);
 		spin_lock_irqsave(&ctx->sst_lock, flags);
 		memset(ctx->sstp, 0, PAGE_SIZE);
-		cxl_afu_slbia(ctx->afu);
+		cxl_ops->slbia(ctx->afu);
 		spin_unlock_irqrestore(&ctx->sst_lock, flags);
 	}
 	if (!ctx->sstp) {
