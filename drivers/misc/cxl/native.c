@@ -379,7 +379,6 @@ static int add_process_element(struct cxl_context_t *ctx)
 	return rc;
 }
 
-/* TODO: merge this with add_process_element */
 static int terminate_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
@@ -398,8 +397,6 @@ static int terminate_process_element(struct cxl_context_t *ctx)
 	return rc;
 }
 
-/* TODO: Make sure all operations on the linked list are serialised to prevent
- * races on SPA->sw_command_status */
 static int remove_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
