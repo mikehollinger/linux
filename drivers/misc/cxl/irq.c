@@ -193,8 +193,6 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
 	int ret;
 
-	/* TODO: Use IPR to associate the PH with the context for fast lookup */
-
 	rcu_read_lock();
 	ctx = idr_find(&afu->contexts_idr, ph);
 	if (ctx) {
