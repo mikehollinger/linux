@@ -13,9 +13,6 @@
 #undef DEBUG
 #endif
 
-/* TODO: Split this out into a separate module now that we have some CXL
- * devices that won't want to use this generic userspace interface */
-
 #include <linux/spinlock.h>
 #include <linux/module.h>
 #include <linux/export.h>
