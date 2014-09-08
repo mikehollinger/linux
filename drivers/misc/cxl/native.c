@@ -221,15 +221,16 @@ static int alloc_spa(struct cxl_afu_t *afu)
 
 	WARN_ON(afu->spa_size > 0x100000); /* Max size supported by the hardware */
 
-	/* TODO: Fall back to less pages if allocation is not possible. */
-	if (!(afu->spa = (struct cxl_process_element *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, afu->spa_order))) {
+	if (!(afu->spa = (struct cxl_process_element *)
+	      __get_free_pages(GFP_KERNEL | __GFP_ZERO, afu->spa_order))) {
 		pr_err("cxl_alloc_spa: Unable to allocate scheduled process area\n");
 		return -ENOMEM;
 	}
 	pr_devel("spa pages: %i afu->spa_max_procs: %i   afu->num_procs: %i\n",
 		 1<<afu->spa_order, afu->spa_max_procs, afu->num_procs);
 
-	afu->sw_command_status = (__be64 *)((char *)afu->spa + ((afu->spa_max_procs + 3) * 128));
+	afu->sw_command_status = (__be64 *)((char *)afu->spa +
+					    ((afu->spa_max_procs + 3) * 128));
 
 	spap = virt_to_phys(afu->spa) & CXL_PSL_SPAP_Addr;
 	spap |= ((afu->spa_size >> (12 - CXL_PSL_SPAP_Size_Shift)) - 1) & CXL_PSL_SPAP_Size;
@@ -288,14 +289,21 @@ static void release_afu_native(struct cxl_afu_t *afu)
 		afu->adapter->driver->release_afu(afu);
 }
 
+static void afu_slbia_native(struct cxl_afu_t *afu)
+{
+	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
+	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_SLBI_IQ_ALL);
+	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_SLBIA_P)
+		cpu_relax();
+}
+
 static void cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
 {
 	/* 1. Disable SSTP by writing 0 to SSTP1[V] */
 	cxl_p2n_write(afu, CXL_SSTP1_An, 0);
 
 	/* 2. Invalidate all SLB entries */
-	cxl_p2n_write(afu, CXL_SLBIA_An, 0);
-	/* TODO: Poll for completion */
+	afu_slbia_native(afu);
 
 	/* 3. Set SSTP0_An */
 	cxl_p2n_write(afu, CXL_SSTP0_An, sstp0);
@@ -349,6 +357,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 
 		/* The command won't finish in the hardware if there are
 		 * outstanding DSIs.  Hence we need to yield here in case there
+
 		 * are outstanding DSIs that we need to service.
 		 * Tuning possiblity: we could wait for a while before sched */
 		schedule();
@@ -357,10 +366,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 	return 0;
 }
 
-/* TODO: Make sure all operations on the linked list are serialised to prevent
- * races on SPA->sw_command_status */
-static int
-add_process_element(struct cxl_context_t *ctx)
+static int add_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
 
@@ -373,7 +379,6 @@ add_process_element(struct cxl_context_t *ctx)
 	return rc;
 }
 
-/* TODO: merge this with add_process_element */
 static int terminate_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
@@ -392,8 +397,6 @@ static int terminate_process_element(struct cxl_context_t *ctx)
 	return rc;
 }
 
-/* TODO: Make sure all operations on the linked list are serialised to prevent
- * races on SPA->sw_command_status */
 static int remove_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
@@ -701,6 +704,7 @@ static const struct cxl_backend_ops cxl_native_ops = {
 	.release_adapter = release_adapter_native,
 	.release_afu = release_afu_native,
 	.check_error = check_error,
+	.slbia = afu_slbia_native,
 	.afu_reset = afu_reset,
 };
 
