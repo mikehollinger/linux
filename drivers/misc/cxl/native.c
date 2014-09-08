@@ -357,6 +357,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 
 		/* The command won't finish in the hardware if there are
 		 * outstanding DSIs.  Hence we need to yield here in case there
+
 		 * are outstanding DSIs that we need to service.
 		 * Tuning possiblity: we could wait for a while before sched */
 		schedule();
@@ -365,8 +366,6 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 	return 0;
 }
 
-/* TODO: Make sure all operations on the linked list are serialised to prevent
- * races on SPA->sw_command_status */
 static int
 add_process_element(struct cxl_context_t *ctx)
 {
