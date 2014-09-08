@@ -87,6 +87,37 @@ static ssize_t irqs_min_show(struct device *device,
 	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->pp_irqs);
 }
 
+static ssize_t irqs_max_show(struct device *device,
+				  struct device_attribute *attr,
+				  char *buf)
+{
+	struct cxl_afu_t *afu = to_afu(device);
+
+	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->irqs_max);
+}
+
+static ssize_t irqs_max_store(struct device *device,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	struct cxl_afu_t *afu = to_afu(device);
+	ssize_t ret;
+	int irqs_max;
+
+	ret = sscanf(buf, "%i", &irqs_max);
+	if (ret != 1)
+		return -EINVAL;
+
+	if (irqs_max < afu->pp_irqs)
+		return -EINVAL;
+
+	if (irqs_max > afu->user_irqs)
+		return -EINVAL;
+
+	afu->irqs_max = irqs_max;
+	return count;
+}
+
 static ssize_t supported_modes_show(struct device *device,
 				    struct device_attribute *attr,
 				    char *buf)
@@ -128,6 +159,7 @@ static ssize_t mode_store(struct device *device,
 static struct device_attribute afu_attrs[] = {
 	__ATTR_RO(mmio_size),
 	__ATTR_RO(irqs_min),
+	__ATTR_RW(irqs_max),
 	__ATTR_RO(supported_modes),
 	__ATTR_RW(mode),
 	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),

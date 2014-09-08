@@ -560,11 +560,13 @@ static int init_slice(struct cxl_t *adapter,
 		      u64 afu_desc_off, u64 afu_desc_size,
 		      int slice, struct pci_dev *dev)
 {
-	int rc;
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+        struct pnv_phb *phb = hose->private_data;
 	struct cxl_afu_t *afu = &(adapter->slice[slice]);
 	u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
-	int err_hwirq;
 	u64 val;
+	int rc;
+	int err_hwirq;
 
 	const u64 p1n_size = 0x100;
 	const u64 p2n_size = 0x1000;
@@ -588,6 +590,8 @@ static int init_slice(struct cxl_t *adapter,
 	cxl_ops->afu_reset(afu);
 	dump_afu_descriptor(dev, afu);
 
+	afu->user_irqs = phb->msi_bmp.irq_count - 1 - 2*adapter->slices;
+	afu->irqs_max = afu->user_irqs;
 	val = AFUD_READ_INFO(afu);
 	afu->pp_irqs = AFUD_NUM_INTS_PER_PROC(val);
 	afu->num_procs = AFUD_NUM_PROCS(val);

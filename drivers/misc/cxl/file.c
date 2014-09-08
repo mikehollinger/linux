@@ -114,18 +114,10 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 	    work.reserved4 || work.reserved5 || work.reserved6)
 		return -EINVAL;
 
-	/*
-	 * Possible TODO: Have an administrative way to limit
-	 * the max interrupts per process? This wouldn't be
-	 * useful for most AFUs given how domain specific they
-	 * tend to be, but may be useful for generic
-	 * accelerators used transparently by common libraries
-	 * (e.g. zlib accelerator). OTOH it might not help so
-	 * much if an evil user can just keep opening new contexts
-	 */
 	if (work.num_interrupts == -1)
 		work.num_interrupts = ctx->afu->pp_irqs;
-	else if (work.num_interrupts < ctx->afu->pp_irqs)
+	else if ((work.num_interrupts < ctx->afu->pp_irqs) ||
+		 (work.num_interrupts > ctx->afu->irqs_max))
 		return -EINVAL;
 	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
 		return rc;

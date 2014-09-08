@@ -348,6 +348,8 @@ struct cxl_afu_t {
 	unsigned int psl_virq;
 
 	int pp_irqs;
+	int user_irqs;
+	int irqs_max;
 	int num_procs;
 	int slice;
 	bool afu_directed_mode;
