@@ -366,8 +366,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 	return 0;
 }
 
-static int
-add_process_element(struct cxl_context_t *ctx)
+static int add_process_element(struct cxl_context_t *ctx)
 {
 	int rc = 0;
 
