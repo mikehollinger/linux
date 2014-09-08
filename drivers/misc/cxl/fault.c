@@ -281,26 +281,17 @@ out1:
 	put_task_struct(task);
 }
 
-enum pref {
-	CXL_PREFAULT_NONE,
-	CXL_PREFAULT_WED,
-	CXL_PREFAULT_MAPPED,
-};
-static int prefault_how = CXL_PREFAULT_NONE;
-module_param(prefault_how, int, 0644);
-MODULE_PARM_DESC(prefault_how, "How much to prefault on afu start: "
-    "0 = none 1 = wed 2 = all currently mapped"
-    /* "all wed segments cached (grub afu), all possible ea current slice" */);
-
 void cxl_prefault(struct cxl_context_t *ctx, u64 wed)
 {
-	switch (prefault_how) {
+	switch (ctx->afu->prefault_mode) {
 	case CXL_PREFAULT_WED:
 		/* TODO: need to check to check wed is a valid ea */
 		cxl_prefault_one(ctx, wed);
 		break;
-	case CXL_PREFAULT_MAPPED:
+	case CXL_PREFAULT_ALL:
 		cxl_prefault_vma(ctx);
+		break;
+	default:
 		break;
 	}
 }

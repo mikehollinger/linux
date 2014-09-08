@@ -310,6 +310,12 @@ enum cxl_context_status {
 	STARTED
 };
 
+enum prefault_modes {
+	CXL_PREFAULT_NONE,
+	CXL_PREFAULT_WED,
+	CXL_PREFAULT_ALL,
+};
+
 struct cxl_sste {
 	__be64 esid_data;
 	__be64 vsid_data;
@@ -359,6 +365,7 @@ struct cxl_afu_t {
 	int slice;
 	int supported_models;
 	int current_model;
+	enum prefault_modes prefault_mode;
 	bool mmio;
 	bool pp_mmio;
 	bool enabled;

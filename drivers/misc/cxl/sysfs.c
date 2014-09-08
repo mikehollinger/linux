@@ -132,6 +132,43 @@ static ssize_t supported_models_show(struct device *device,
 	return (p - buf);
 }
 
+static ssize_t prefault_mode_show(struct device *device,
+				  struct device_attribute *attr,
+				  char *buf)
+{
+	struct cxl_afu_t *afu = to_afu(device);
+
+	switch (afu->prefault_mode) {
+	case CXL_PREFAULT_WED:
+		return scnprintf(buf, PAGE_SIZE, "wed\n");
+	case CXL_PREFAULT_ALL:
+		return scnprintf(buf, PAGE_SIZE, "all\n");
+	default:
+		return scnprintf(buf, PAGE_SIZE, "none\n");
+	}
+}
+
+static ssize_t prefault_mode_store(struct device *device,
+			  struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	struct cxl_afu_t *afu = to_afu(device);
+	enum prefault_modes mode = -1;
+
+	if (!strncmp(buf, "wed", 3))
+		mode = CXL_PREFAULT_WED;
+	if (!strncmp(buf, "all", 3))
+		mode = CXL_PREFAULT_ALL;
+	if (!strncmp(buf, "none", 4))
+		mode = CXL_PREFAULT_NONE;
+
+	if (mode == -1)
+		return -EINVAL;
+
+	afu->prefault_mode = mode;
+	return count;
+}
+
 static ssize_t model_show(struct device *device,
 			 struct device_attribute *attr,
 			 char *buf)
@@ -162,6 +199,7 @@ static struct device_attribute afu_attrs[] = {
 	__ATTR_RW(irqs_max),
 	__ATTR_RO(supported_models),
 	__ATTR_RW(model),
+	__ATTR_RW(prefault_mode),
 	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),
 };
 

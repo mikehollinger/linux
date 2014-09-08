@@ -590,6 +590,7 @@ static int init_slice(struct cxl_t *adapter,
 	cxl_ops->afu_reset(afu);
 	dump_afu_descriptor(dev, afu);
 
+	afu->prefault_mode = CXL_PREFAULT_NONE;
 	afu->user_irqs = phb->msi_bmp.irq_count - 1 - 2*adapter->slices;
 	afu->irqs_max = afu->user_irqs;
 	val = AFUD_READ_INFO(afu);
