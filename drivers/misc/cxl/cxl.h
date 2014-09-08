@@ -85,8 +85,8 @@ static const cxl_p1n_reg_t CXL_PSL_SR_An          = {0x00};
 static const cxl_p1n_reg_t CXL_PSL_LPID_An        = {0x08};
 static const cxl_p1n_reg_t CXL_PSL_AMBAR_An       = {0x10};
 static const cxl_p1n_reg_t CXL_PSL_SPOffset_An    = {0x18};
-static const cxl_p1n_reg_t CXL_PSL_ID_An	    = {0x20};
-static const cxl_p1n_reg_t CXL_PSL_SERR_An	    = {0x28};
+static const cxl_p1n_reg_t CXL_PSL_ID_An          = {0x20};
+static const cxl_p1n_reg_t CXL_PSL_SERR_An        = {0x28};
 /* Memory Management and Lookaside Buffer Management */
 static const cxl_p1n_reg_t CXL_PSL_SDR_An         = {0x30};
 static const cxl_p1n_reg_t CXL_PSL_AMOR_An        = {0x38};
@@ -174,7 +174,7 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 
 /****** CXL_PSL_SCNTL_An ****************************************************/
 #define CXL_PSL_SCNTL_An_CR          (0x1ull << (63-15))
-/* Programming Mode: */
+/* Programming Models: */
 #define CXL_PSL_SCNTL_An_PM_MASK     (0xffffull << (63-31))
 #define CXL_PSL_SCNTL_An_PM_Shared   (0x0000ull << (63-31))
 #define CXL_PSL_SCNTL_An_PM_OS       (0x0001ull << (63-31))
@@ -352,8 +352,8 @@ struct cxl_afu_t {
 	int irqs_max;
 	int num_procs;
 	int slice;
-	bool afu_directed_mode;
-	bool afu_dedicated_mode;
+	bool afu_directed_model;
+	bool afu_dedicated_model;
 	bool mmio;
 	bool pp_mmio;
 	bool enabled;
@@ -366,7 +366,7 @@ struct cxl_irq_ranges {
 };
 
 
-/* This is a cxl context.  If the PSL is in dedicated mode, there will be one
+/* This is a cxl context.  If the PSL is in dedicated model, there will be one
  * of these per AFU.  If in AFU directed there can be lots of these. */
 struct cxl_context_t {
 	struct cxl_afu_t *afu;

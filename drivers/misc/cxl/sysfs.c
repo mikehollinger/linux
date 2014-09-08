@@ -118,41 +118,41 @@ static ssize_t irqs_max_store(struct device *device,
 	return count;
 }
 
-static ssize_t supported_modes_show(struct device *device,
+static ssize_t supported_models_show(struct device *device,
 				    struct device_attribute *attr,
 				    char *buf)
 {
 	struct cxl_afu_t *afu = to_afu(device);
 	char *p = buf, *end = buf + PAGE_SIZE;
 
-	if (afu->afu_dedicated_mode)
+	if (afu->afu_dedicated_model)
 		p += scnprintf(p, end - p, "dedicated_process\n");
-	if (afu->afu_directed_mode)
+	if (afu->afu_directed_model)
 		p += scnprintf(p, end - p, "afu_directed\n");
 	return (p - buf);
 }
 
-static ssize_t mode_show(struct device *device,
+static ssize_t model_show(struct device *device,
 			 struct device_attribute *attr,
 			 char *buf)
 {
 	struct cxl_afu_t *afu = to_afu(device);
 
-	if (afu->afu_dedicated_mode)
+	if (afu->afu_dedicated_model)
 		return scnprintf(buf, PAGE_SIZE, "dedicated_process\n");
-	if (afu->afu_directed_mode)
+	if (afu->afu_directed_model)
 		return scnprintf(buf, PAGE_SIZE, "afu_directed\n");
 	return -EINVAL;
 }
 
-static ssize_t mode_store(struct device *device,
+static ssize_t model_store(struct device *device,
 			  struct device_attribute *attr,
 			  const char *buf, size_t count)
 {
 	if (!strncmp(buf, "dedicated_process", 17))
-		pr_warn("cxl: switching to dedicated mode live not implemented yet\n");
+		pr_warn("cxl: switching to dedicated model live not implemented yet\n");
 	if (!strncmp(buf, "afu_directed", 12))
-		pr_warn("cxl: switching to directed mode live not implemented yet\n");
+		pr_warn("cxl: switching to directed model live not implemented yet\n");
 	return -EINVAL;
 }
 
@@ -160,8 +160,8 @@ static struct device_attribute afu_attrs[] = {
 	__ATTR_RO(mmio_size),
 	__ATTR_RO(irqs_min),
 	__ATTR_RW(irqs_max),
-	__ATTR_RO(supported_modes),
-	__ATTR_RW(mode),
+	__ATTR_RO(supported_models),
+	__ATTR_RW(model),
 	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),
 };
 

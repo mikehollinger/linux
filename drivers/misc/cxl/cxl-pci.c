@@ -53,7 +53,7 @@
 #define   AFUD_NUM_INTS_PER_PROC(val)	EXTRACT_PPC_BITS(val,  0, 15)
 #define   AFUD_NUM_PROCS(val)		EXTRACT_PPC_BITS(val, 16, 31)
 #define   AFUD_NUM_CRS(val)		EXTRACT_PPC_BITS(val, 32, 47)
-#define   AFUD_MULTIMODE(val)		EXTRACT_PPC_BIT(val, 48)
+#define   AFUD_MULTIMODEL(val)		EXTRACT_PPC_BIT(val, 48)
 #define   AFUD_PUSH_BLOCK_TRANSFER(val)	EXTRACT_PPC_BIT(val, 55)
 #define   AFUD_DEDICATED_PROCESS(val)	EXTRACT_PPC_BIT(val, 59)
 #define   AFUD_AFU_DIRECTED(val)	EXTRACT_PPC_BIT(val, 61)
@@ -595,12 +595,12 @@ static int init_slice(struct cxl_t *adapter,
 	val = AFUD_READ_INFO(afu);
 	afu->pp_irqs = AFUD_NUM_INTS_PER_PROC(val);
 	afu->num_procs = AFUD_NUM_PROCS(val);
-	afu->afu_directed_mode = AFUD_AFU_DIRECTED(val);
-	afu->afu_dedicated_mode = AFUD_DEDICATED_PROCESS(val);
-	if (afu->afu_directed_mode)
-		pr_devel("AFU in directed mode\n");
-	else if (afu->afu_dedicated_mode)
-		pr_devel("AFU in dedicated mode\n");
+	afu->afu_directed_model = AFUD_AFU_DIRECTED(val);
+	afu->afu_dedicated_model = AFUD_DEDICATED_PROCESS(val);
+	if (afu->afu_directed_model)
+		pr_devel("AFU in AFU directed model\n");
+	else if (afu->afu_dedicated_model)
+		pr_devel("AFU in dedicated process model\n");
 	else {
 		pr_err("No supported AFU programing models available\n");
 		rc = -ENODEV;
