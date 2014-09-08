@@ -57,9 +57,7 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 
 	spin_lock(&adapter_list_lock);
 	list_for_each_entry(adapter, &adapter_list, list) {
-		/* TODO: Link mm_struct straight to the context to skip having
-		 * to search for it (but one process/single mm can have
-		 * multiple cxl contexts) */
+		/* XXX: Make this lookup faster with link from mm to ctx */
 		for (slice = 0; slice < adapter->slices; slice++) {
 			afu = &adapter->slice[slice];
 			if (!afu->enabled)
