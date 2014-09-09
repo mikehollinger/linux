@@ -463,7 +463,6 @@ static int init_afu_directed_process(struct cxl_context_t *ctx,
 	if ((result = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
 		return result;
 
-	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
 	cxl_prefault(ctx, wed);
 
 	ctx->elem->common.sstp0 = cpu_to_be64(sstp0);
@@ -536,7 +535,6 @@ static int init_dedicated_process_native(struct cxl_context_t *ctx,
 	if ((result = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
 		return result;
 
-	/* TODO: If the wed looks like a valid EA, preload the appropriate segment */
 	cxl_prefault(ctx, wed);
 
 	cxl_write_sstp(afu, sstp0, sstp1);
