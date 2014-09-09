@@ -127,7 +127,6 @@ static int cxl_handle_segment_miss(struct cxl_context_t *ctx,
 
 		mb(); /* FIXME: Not sure if I need this */
 		cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
-		/* TODO: possibly hash_preload ea */
 	}
 
 	return IRQ_HANDLED;
