@@ -234,7 +234,7 @@ static u64 next_segment(u64 ea, u64 vsid_data)
 	else
 		ea |= (1ULL << 28) - 1;
 
-	return ea++;
+	return ea + 1;
 }
 
 static void cxl_prefault_vma(struct cxl_context_t *ctx)
