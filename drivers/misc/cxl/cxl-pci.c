@@ -814,12 +814,6 @@ static struct pci_driver cxl_pci_driver = {
 	.id_table = cxl_pci_tbl,
 	.probe = cxl_probe,
 	.remove = cxl_remove,
-
-	/* TODO:
-	 * #ifdef CONFIG_PM
-	 *	.suspend = ...,
-	 *	.resume = ...,
-	 * #endif */
 };
 
 module_driver(cxl_pci_driver, pci_register_driver, pci_unregister_driver);
