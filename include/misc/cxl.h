@@ -10,6 +10,13 @@
 #ifndef _MISC_ASM_CXL_H
 #define _MISC_ASM_CXL_H
 
+#define CXL_IRQ_RANGES 4
+
+struct cxl_irq_ranges {
+	irq_hw_number_t offset[CXL_IRQ_RANGES];
+	irq_hw_number_t range[CXL_IRQ_RANGES];
+};
+
 #ifdef CONFIG_CXL_BASE
 
 void cxl_slbia(struct mm_struct *mm);

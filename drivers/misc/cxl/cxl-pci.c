@@ -22,9 +22,19 @@
 #include <asm/opal.h>
 #include <asm/msi_bitmap.h>
 #include <asm/pci-bridge.h> /* for struct pci_controller */
-#include "../arch/powerpc/platforms/powernv/pci.h" /* FIXME - for struct pnv_phb */
 
 #include "cxl.h"
+
+extern int pnv_phb_to_cxl(struct pci_dev *dev);
+extern int pnv_cxl_ioda_msi_setup(void *phb, struct pci_dev *dev,
+				  unsigned int hwirq, unsigned int virq);
+extern int pnv_cxl_alloc_hwirqs(struct pci_dev *dev, int num);
+extern void pnv_cxl_release_hwirqs(struct pci_dev *dev, int hwirq, int num);
+extern int pnv_cxl_alloc_hwirq_ranges(struct cxl_irq_ranges *irqs,
+				      struct pci_dev *dev, int num);
+extern void pnv_cxl_release_hwirq_ranges(struct cxl_irq_ranges *irqs,
+					 struct pci_dev *dev);
+extern int pnv_cxl_get_irq_count(struct pci_dev *dev);
 
 #define CXL_PCI_VSEC_ID	0x1280
 
@@ -299,128 +309,49 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter)
 	return 0;
 }
 
-/* Defined in powernv pci-ioda.c */
-extern int pnv_cxl_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
-		unsigned int hwirq, unsigned int virq);
-
-static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq, unsigned int virq)
+static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq,
+			 unsigned int virq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-	struct pnv_phb *phb = hose->private_data;
 
-	return pnv_cxl_ioda_msi_setup(phb, dev, hwirq, virq);
-}
-
-static int _alloc_hwirqs(struct pci_dev *dev, int num)
-{
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-	struct pnv_phb *phb = hose->private_data;
-	int hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
-
-	if (hwirq < 0) {
-		dev_warn(&dev->dev, "Failed to find a free MSI\n");
-		return -ENOSPC;
-	}
-
-	return phb->msi_base + hwirq;
+	return pnv_cxl_ioda_msi_setup((void *)hose->private_data, dev, hwirq, virq);
 }
 
 static int alloc_one_hwirq(struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
-	return _alloc_hwirqs(dev, 1);
-}
-
-static void _release_hwirqs(struct pci_dev *dev, int hwirq, int num)
-{
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-	struct pnv_phb *phb = hose->private_data;
-
-	msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq - phb->msi_base, num);
+	return pnv_cxl_alloc_hwirqs(dev, 1);
 }
 
 static void release_one_hwirq(struct cxl_t *adapter, int hwirq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
-	return _release_hwirqs(dev, hwirq, 1);
-}
-
-static int _alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct pci_dev *dev, int num)
-{
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-	struct pnv_phb *phb = hose->private_data;
-	int range = 0;
-	int hwirq;
-	int try;
-
-	memset(irqs, 0, sizeof(struct cxl_irq_ranges));
-
-	for (range = 1; range < CXL_IRQ_RANGES && num; range++) {
-		try = num;
-		while (try) {
-			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, try);
-			if (hwirq >= 0)
-				break;
-			try /= 2;
-		}
-		if (!try)
-			goto fail;
-
-		irqs->offset[range] = phb->msi_base + hwirq;
-		irqs->range[range] = try;
-		dev_info(&dev->dev, "cxl alloc irq range 0x%x: offset: 0x%lx  limit: %li\n",
-			 range, irqs->offset[range], irqs->range[range]);
-		num -= try;
-	}
-	if (num)
-		goto fail;
-
-	return 0;
-fail:
-	for (range--; range >= 0; range--) {
-		hwirq = irqs->offset[range] - phb->msi_base;
-		msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
-				       irqs->range[range]);
-		irqs->range[range] = 0;
-	}
-	return -ENOSPC;
+	return pnv_cxl_release_hwirqs(dev, hwirq, 1);
 }
 
 static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
-	return _alloc_hwirq_ranges(irqs, dev, num);
+	return pnv_cxl_alloc_hwirq_ranges(irqs, dev, num);
 }
 
 static void release_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-	struct pnv_phb *phb = hose->private_data;
-	int range = 0;
-	int hwirq;
 
-	for (range = 0; range < 4; range++) {
-		hwirq = irqs->offset[range] - phb->msi_base;
-		if (irqs->range[range]) {
-			dev_info(&dev->dev, "cxl release irq range 0x%x: offset: 0x%lx  limit: %ld\n",
-				 range, irqs->offset[range],
-				 irqs->range[range]);
-			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
-					       irqs->range[range]);
-		}
-	}
+	pnv_cxl_release_hwirq_ranges(irqs, dev);
+
 }
 
 static void cxl_release_adapter(struct cxl_t *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
-	_release_hwirqs(dev, adapter->err_hwirq, 1);
+	pnv_cxl_release_hwirqs(dev, adapter->err_hwirq, 1);
 }
 
 static void cxl_release_afu(struct cxl_afu_t *afu)
@@ -428,8 +359,8 @@ static void cxl_release_afu(struct cxl_afu_t *afu)
 	struct pci_dev *dev = to_pci_dev(afu->adapter->device.parent);
 
 	cxl_unmap_slice_regs(afu);
-	_release_hwirqs(dev, afu->err_hwirq, 1);
-	_release_hwirqs(dev, afu->psl_hwirq, 1);
+	pnv_cxl_release_hwirqs(dev, afu->err_hwirq, 1);
+	pnv_cxl_release_hwirqs(dev, afu->psl_hwirq, 1);
 }
 
 static struct cxl_driver_ops cxl_pci_driver_ops = {
@@ -539,8 +470,6 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 	return 0;
 }
 
-extern int pnv_phb_to_cxl(struct pci_dev *dev);
-
 static int enable_cxl_protocol(struct pci_dev *dev)
 {
 	int rc;
@@ -560,8 +489,6 @@ static int init_slice(struct cxl_t *adapter,
 		      u64 afu_desc_off, u64 afu_desc_size,
 		      int slice, struct pci_dev *dev)
 {
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
-        struct pnv_phb *phb = hose->private_data;
 	struct cxl_afu_t *afu = &(adapter->slice[slice]);
 	u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
 	u64 val;
@@ -591,7 +518,8 @@ static int init_slice(struct cxl_t *adapter,
 	dump_afu_descriptor(dev, afu);
 
 	afu->prefault_mode = CXL_PREFAULT_NONE;
-	afu->user_irqs = phb->msi_bmp.irq_count - 1 - 2*adapter->slices;
+	/* Total - 1 PSL ERROR - #AFU*(1 slice error + 1 DSI) */
+	afu->user_irqs = pnv_cxl_get_irq_count(dev) - 1 - 2*adapter->slices;
 	afu->irqs_max = afu->user_irqs;
 	val = AFUD_READ_INFO(afu);
 	afu->pp_irqs = AFUD_NUM_INTS_PER_PROC(val);
@@ -634,7 +562,7 @@ static int init_slice(struct cxl_t *adapter,
 				 afu->pp_size*afu->num_procs));
 	WARN_ON(afu->pp_mmio && (afu->pp_size < PAGE_SIZE));
 
-	err_hwirq = _alloc_hwirqs(dev, 1);
+	err_hwirq = pnv_cxl_alloc_hwirqs(dev, 1);
 	if (err_hwirq < 0) {
 		rc = err_hwirq;
 		goto out;
@@ -648,7 +576,7 @@ static int init_slice(struct cxl_t *adapter,
 	return 0;
 
 out1:
-	_release_hwirqs(dev, err_hwirq, 1);
+	pnv_cxl_release_hwirqs(dev, err_hwirq, 1);
 out:
 	cxl_unmap_slice_regs(afu);
 	return rc;
@@ -724,7 +652,7 @@ int init_cxl_pci(struct pci_dev *dev)
 		ps_size = p2_size - ps_off;
 	}
 
-	err_hwirq = _alloc_hwirqs(dev, 1);
+	err_hwirq = pnv_cxl_alloc_hwirqs(dev, 1);
 	if (err_hwirq < 0) {
 		rc = err_hwirq;
 		goto err3;
@@ -754,7 +682,7 @@ err5:
 	 * do the right thing */
 	cxl_unregister_adapter(adapter);
 err4:
-	_release_hwirqs(dev, err_hwirq, 1);
+	pnv_cxl_release_hwirqs(dev, err_hwirq, 1);
 err3:
 	pci_release_region(dev, 0);
 err2:

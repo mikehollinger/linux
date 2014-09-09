@@ -20,6 +20,7 @@
 #include <asm/cputable.h>
 #include <asm/mmu.h>
 #include <asm/reg.h>
+#include <misc/cxl.h>
 
 #include <uapi/misc/cxl.h>
 
@@ -290,7 +291,6 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_SPA_SW_LINK_MASK        0x000000000000ffffULL
 
 #define CXL_MAX_SLICES 4
-#define CXL_IRQ_RANGES 4
 #define MAX_AFU_MMIO_REGS 3
 
 #define CXL_MODEL_DEDICATED   0x1
@@ -371,12 +371,6 @@ struct cxl_afu_t {
 	bool enabled;
 
 };
-
-struct cxl_irq_ranges {
-	irq_hw_number_t offset[CXL_IRQ_RANGES];
-	irq_hw_number_t range[CXL_IRQ_RANGES];
-};
-
 
 /* This is a cxl context.  If the PSL is in dedicated model, there will be one
  * of these per AFU.  If in AFU directed there can be lots of these. */

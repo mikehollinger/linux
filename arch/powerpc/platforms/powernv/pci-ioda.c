@@ -37,6 +37,8 @@
 #include <asm/xics.h>
 #include <asm/debug.h>
 
+#include <misc/cxl.h>
+
 #include "powernv.h"
 #include "pci.h"
 
@@ -179,6 +181,107 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(pnv_phb_to_cxl);
+
+int pnv_cxl_alloc_hwirqs(struct pci_dev *dev, int num)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, num);
+
+	if (hwirq < 0) {
+		dev_warn(&dev->dev, "Failed to find a free MSI\n");
+		return -ENOSPC;
+	}
+
+	return phb->msi_base + hwirq;
+}
+EXPORT_SYMBOL(pnv_cxl_alloc_hwirqs);
+
+void pnv_cxl_release_hwirqs(struct pci_dev *dev, int hwirq, int num)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+
+	msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq - phb->msi_base, num);
+}
+EXPORT_SYMBOL(pnv_cxl_release_hwirqs);
+
+
+int pnv_cxl_alloc_hwirq_ranges(struct cxl_irq_ranges *irqs,
+			       struct pci_dev *dev, int num)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int range = 0;
+	int hwirq;
+	int try;
+
+	memset(irqs, 0, sizeof(struct cxl_irq_ranges));
+
+	for (range = 1; range < CXL_IRQ_RANGES && num; range++) {
+		try = num;
+		while (try) {
+			hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, try);
+			if (hwirq >= 0)
+				break;
+			try /= 2;
+		}
+		if (!try)
+			goto fail;
+
+		irqs->offset[range] = phb->msi_base + hwirq;
+		irqs->range[range] = try;
+		dev_info(&dev->dev, "cxl alloc irq range 0x%x: offset: 0x%lx  limit: %li\n",
+			 range, irqs->offset[range], irqs->range[range]);
+		num -= try;
+	}
+	if (num)
+		goto fail;
+
+	return 0;
+fail:
+	for (range--; range >= 0; range--) {
+		hwirq = irqs->offset[range] - phb->msi_base;
+		msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
+				       irqs->range[range]);
+		irqs->range[range] = 0;
+	}
+	return -ENOSPC;
+}
+EXPORT_SYMBOL(pnv_cxl_alloc_hwirq_ranges);
+
+void pnv_cxl_release_hwirq_ranges(struct cxl_irq_ranges *irqs,
+				  struct pci_dev *dev)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	int range = 0;
+	int hwirq;
+
+	for (range = 0; range < 4; range++) {
+		hwirq = irqs->offset[range] - phb->msi_base;
+		if (irqs->range[range]) {
+			dev_info(&dev->dev, "cxl release irq range 0x%x: offset: 0x%lx  limit: %ld\n",
+				 range, irqs->offset[range],
+				 irqs->range[range]);
+			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
+					       irqs->range[range]);
+		}
+	}
+}
+EXPORT_SYMBOL(pnv_cxl_release_hwirq_ranges);
+
+int pnv_cxl_get_irq_count(struct pci_dev *dev)
+{
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+        struct pnv_phb *phb = hose->private_data;
+
+	return phb->msi_bmp.irq_count;
+
+
+}
+EXPORT_SYMBOL(pnv_cxl_get_irq_count);
+
 #endif /* CONFIG_PCI_MSI */
 
 static int pnv_ioda_configure_pe(struct pnv_phb *phb, struct pnv_ioda_pe *pe)
@@ -977,7 +1080,7 @@ static void set_msi_irq_chip(struct pnv_phb *phb, unsigned int virq)
 }
 
 int pnv_cxl_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
-		unsigned int hwirq, unsigned int virq)
+			   unsigned int hwirq, unsigned int virq)
 {
 	unsigned int xive_num = hwirq - phb->msi_base;
 	struct pnv_ioda_pe *pe;

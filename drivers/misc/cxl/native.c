@@ -21,6 +21,7 @@
 #include <linux/mm.h>
 #include <linux/uaccess.h>
 #include <asm/synch.h>
+#include <misc/cxl.h>
 
 #include "cxl.h"
 

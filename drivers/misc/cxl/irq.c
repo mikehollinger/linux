@@ -20,6 +20,7 @@
 #include <linux/slab.h>
 #include <linux/pid.h>
 #include <asm/cputable.h>
+#include <misc/cxl.h>
 
 #include "cxl.h"
 
