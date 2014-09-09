@@ -804,9 +804,6 @@ static void cxl_remove(struct pci_dev *dev)
 	pci_release_region(dev, 2);
 	kfree(adapter);
 	pci_disable_device(dev);
-
-	/* TODO: Implement everything from Documentation/PCI/pci.txt */
-
 }
 
 static struct pci_driver cxl_pci_driver = {
