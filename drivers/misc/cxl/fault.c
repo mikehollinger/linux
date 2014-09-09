@@ -125,7 +125,7 @@ static int cxl_handle_segment_miss(struct cxl_context_t *ctx,
 		cxl_ack_ae(ctx);
 	else {
 
-		mb(); /* FIXME: Not sure if I need this */
+		mb(); /* Order seg table write to TFC MMIO write */
 		cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
 	}
 
