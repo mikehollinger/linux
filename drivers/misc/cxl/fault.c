@@ -296,6 +296,7 @@ void cxl_prefault(struct cxl_context_t *ctx, u64 wed)
 {
 	switch (prefault_how) {
 	case CXL_PREFAULT_WED:
+		/* TODO: need to check to check wed is a valid ea */
 		cxl_prefault_one(ctx, wed);
 		break;
 	case CXL_PREFAULT_MAPPED:
