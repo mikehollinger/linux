@@ -176,12 +176,63 @@ static void afu_t_init(struct cxl_t *adapter, int slice)
 	mutex_init(&afu->spa_mutex);
 }
 
+int cxl_map_slice_regs(struct cxl_afu_t *afu,
+		  u64 p1n_base, u64 p1n_size,
+		  u64 p2n_base, u64 p2n_size,
+		  u64 psn_base, u64 psn_size,
+		  u64 afu_desc, u64 afu_desc_size)
+{
+	pr_devel("cxl_map_slice_regs: p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx, afu_desc: %#.16llx %#llx\n",
+			p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size, afu_desc, afu_desc_size);
+
+	afu->p1n_mmio = NULL;
+	afu->afu_desc_mmio = NULL;
+	if (p1n_base)
+		if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
+			goto err;
+	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
+		goto err1;
+	if (!(afu->psn_mmio = ioremap(psn_base, psn_size)))
+		goto err2;
+	if (afu_desc)
+		if (!(afu->afu_desc_mmio = ioremap(afu_desc, afu_desc_size)))
+			goto err3;
+	afu->psn_phys = psn_base;
+	afu->psn_size = psn_size;
+	afu->afu_desc_size = afu_desc_size;
+
+	return 0;
+err3:
+	iounmap(afu->psn_mmio);
+err2:
+	iounmap(afu->p2n_mmio);
+err1:
+	if (afu->p1n_mmio)
+		iounmap(afu->p1n_mmio);
+err:
+	WARN(1, "Error mapping AFU MMIO regions\n");
+	return -EFAULT;
+}
+EXPORT_SYMBOL(cxl_map_slice_regs);
+
+void cxl_unmap_slice_regs(struct cxl_afu_t *afu)
+{
+	if (afu->psn_mmio)
+		iounmap(afu->psn_mmio);
+
+	if (afu->p1n_mmio)
+		iounmap(afu->p2n_mmio);
+
+	if (afu->p1n_mmio)
+		iounmap(afu->p1n_mmio);
+}
+EXPORT_SYMBOL(cxl_unmap_slice_regs);
+
+
 static atomic_t nr_adapters;
 
 int cxl_init_adapter(struct cxl_t *adapter,
-		     struct cxl_driver_ops *driver,
-		     struct device *parent,
-		     int slices, void *backend_data)
+		     int slices)
 {
 	int slice, rc = 0;
 
@@ -193,15 +244,10 @@ int cxl_init_adapter(struct cxl_t *adapter,
 
 	adapter->adapter_num = atomic_inc_return(&nr_adapters) - 1;
 
-	adapter->driver = driver;
 	adapter->device.class = cxl_class;
-	adapter->device.parent = parent;
+	adapter->device.parent = adapter->dev;
 	adapter->slices = slices;
 	pr_devel("%i slices\n", adapter->slices);
-
-	/* Prepare the backend hardware */
-	if ((rc = cxl_ops->init_adapter(adapter, backend_data)))
-		goto out;
 
 	/* Register the adapter device */
 	dev_set_name(&adapter->device, "card%i", adapter->adapter_num);
@@ -230,7 +276,6 @@ out2:
 	device_unregister(&adapter->device);
 out1:
 	cxl_ops->release_adapter(adapter);
-out:
 	atomic_dec(&nr_adapters);
 	pr_devel("cxl_init_adapter: %i\n", rc);
 	return rc;

@@ -281,6 +281,34 @@ void cxl_unmap_irq(unsigned int virq, void *cookie)
 	irq_dispose_mapping(virq);
 }
 
+int cxl_register_psl_err_irq(struct cxl_t *adapter)
+{
+	int hwirq, virq;
+
+	if ((hwirq = adapter->driver->alloc_one_irq(adapter)) < 0)
+		return hwirq;
+
+	if (!(virq = cxl_map_irq(adapter, hwirq, cxl_irq_err, adapter)))
+		goto err;
+
+	adapter->err_hwirq = hwirq;
+	adapter->err_virq = virq;
+
+	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, adapter->err_hwirq & 0xffff);
+
+	return 0;
+
+err:
+	adapter->driver->release_one_irq(adapter, hwirq);
+	return -ENOMEM;
+}
+
+void cxl_release_psl_err_irq(struct cxl_t *adapter)
+{
+	cxl_unmap_irq(adapter->err_virq, adapter);
+	adapter->driver->release_one_irq(adapter, adapter->err_hwirq);
+}
+
 int cxl_register_psl_irq(struct cxl_afu_t *afu)
 {
 	int hwirq, virq;

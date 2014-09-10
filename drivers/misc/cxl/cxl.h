@@ -415,8 +415,6 @@ struct cxl_context_t {
 	bool pending_afu_err;
 };
 
-struct cxl_driver_ops;
-
 struct cxl_t {
 	union {
 		struct { /* hv */
@@ -437,6 +435,7 @@ struct cxl_t {
 	struct list_head list;
 	struct bin_attribute cxl_attr;
 	struct kobject *afu_kobj;
+	struct device *dev;
 	int adapter_num;
 	int slices;
 	bool reset_image_factory;
@@ -444,7 +443,6 @@ struct cxl_t {
 
 struct cxl_driver_ops {
 	struct module *module;
-	int (*init_adapter)(struct cxl_t *adapter);
 	int (*alloc_one_irq)(struct cxl_t *adapter);
 	void (*release_one_irq)(struct cxl_t *adapter, int hwirq);
 	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
@@ -523,12 +521,7 @@ struct cxl_calls {
 int register_cxl_calls(struct cxl_calls *calls);
 void unregister_cxl_calls(struct cxl_calls *calls);
 
-/* TODO: Clean up the alloc/init process */
-int cxl_init_adapter(struct cxl_t *adapter,
-		      struct cxl_driver_ops *driver,
-		      struct device *parent,
-		      int slices,
-		      void *backend_data);
+int cxl_init_adapter(struct cxl_t *adapter, int slices);
 int cxl_map_slice_regs(struct cxl_afu_t *afu,
 		  u64 p1n_base, u64 p1n_size,
 		  u64 p2n_base, u64 p2n_size,
@@ -556,13 +549,14 @@ void cxl_sysfs_afu_remove(struct cxl_afu_t *afu);
 unsigned int
 cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
 void cxl_unmap_irq(unsigned int virq, void *cookie);
+int cxl_register_psl_err_irq(struct cxl_t *adapter);
+void cxl_release_psl_err_irq(struct cxl_t *adapter);
 int cxl_register_psl_irq(struct cxl_afu_t *afu);
 void cxl_release_psl_irq(struct cxl_afu_t *afu);
 int afu_register_irqs(struct cxl_context_t *ctx, u32 count);
 void afu_enable_irqs(struct cxl_context_t *ctx);
 void afu_disable_irqs(struct cxl_context_t *ctx);
 void afu_release_irqs(struct cxl_context_t *ctx);
-irqreturn_t cxl_irq_err(int irq, void *data);
 irqreturn_t cxl_slice_irq_err(int irq, void *data);
 
 int cxl_debugfs_init(void);
@@ -597,7 +591,6 @@ struct cxl_irq_info {
 };
 
 struct cxl_backend_ops {
-	int (*init_adapter)(struct cxl_t *adapter, void *backend_data);
 	int (*init_afu)(struct cxl_afu_t *afu, u64 handle);
 
 	int (*init_process)(struct cxl_context_t *ctx, bool kernel, u64 wed,
@@ -614,14 +607,6 @@ struct cxl_backend_ops {
 	int (*afu_reset)(struct cxl_afu_t *afu);
 };
 extern const struct cxl_backend_ops *cxl_ops;
-
-struct cxl_native_data {
-	u64 p1_base;
-	u64 p1_size;
-	u64 p2_base;
-	u64 p2_size;
-	irq_hw_number_t err_hwirq;
-};
 
 /* XXX: LAB DEBUGGING */
 void cxl_stop_trace(struct cxl_t *cxl);
