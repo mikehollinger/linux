@@ -330,42 +330,18 @@ static const struct file_operations afu_master_fops = {
 	.mmap           = afu_mmap,
 };
 
-int __init register_cxl_dev(void)
-{
-	int result;
 
-	if ((result = alloc_chrdev_region(&cxl_dev, 0,
-					  CXL_NUM_MINORS, "cxl"))) {
-		pr_err("Unable to allocate CXL major number: %i\n", result);
-		return -1;
+static char *cxl_devnode(struct device *dev, umode_t *mode)
+{
+	if (MINOR(dev->devt) % CXL_DEV_MINORS == 0) {
+		/* These minor numbers will eventually be used to program the
+		 * PSL and AFUs once we have dynamic reprogramming support */
+		return NULL;
 	}
-
-	pr_devel("CXL device allocated, MAJOR %i\n", MAJOR(cxl_dev));
-
-	return 0;
-}
-
-void unregister_cxl_dev(void)
-{
-	unregister_chrdev_region(cxl_dev, CXL_NUM_MINORS);
-}
-
-int add_cxl_dev(struct cxl_t *adapter, int adapter_num)
-{
-	/* Create sysfs attributes */
-	adapter->afu_kobj = kobject_create_and_add("afu", &adapter->device.kobj);
-	if (IS_ERR(adapter->afu_kobj))
-		return PTR_ERR(adapter->afu_kobj);
-
-	return 0;
+	return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(dev));
 }
 
 extern struct class *cxl_class;
-
-static void cxl_release(struct device *dev)
-{
-	pr_devel("cxl release\n");
-}
 
 int add_cxl_afu_dev(struct cxl_afu_t *afu)
 {
@@ -379,7 +355,6 @@ int add_cxl_afu_dev(struct cxl_afu_t *afu)
 	afu->device.class = cxl_class;
 	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, afu->slice);
 	afu->device.devt = MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + afu->slice);
-	afu->device.release = cxl_release;
 
 	if ((rc = device_register(&afu->device)))
 		return rc;
@@ -396,7 +371,6 @@ int add_cxl_afu_dev(struct cxl_afu_t *afu)
 	afu->device_master.class = cxl_class;
 	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, afu->slice);
 	afu->device_master.devt = MKDEV(cxl_major, cxl_minor + 1 + afu->slice);
-	afu->device_master.release = cxl_release;
 
 	if ((rc = device_register(&afu->device_master)))
 		goto out1;
@@ -410,10 +384,6 @@ int add_cxl_afu_dev(struct cxl_afu_t *afu)
 		pr_err("Unable to register CXL AFU master character devices: %i\n", rc);
 		goto out3;
 	}
-
-	/* Create sysfs links */
-	if ((rc = sysfs_create_link(afu->adapter->afu_kobj, &afu->device.kobj, dev_name(&afu->device))))
-		goto out4;
 
 	return 0;
 
@@ -430,21 +400,55 @@ out:
 	return rc;
 }
 
-void del_cxl_dev(struct cxl_t *adapter)
-{
-	kobject_put(adapter->afu_kobj);
-	adapter->afu_kobj = NULL;
-	adapter->device.release = cxl_release;
-	device_unregister(&adapter->device);
-}
+
 
 void del_cxl_afu_dev(struct cxl_afu_t *afu)
 {
-	sysfs_remove_link(&afu->device.kobj, dev_name(&afu->device));
 	cxl_sysfs_afu_remove(afu);
 	cdev_del(&afu->adapter->afu_master_cdev);
 	device_unregister(&afu->device_master);
 	cdev_del(&afu->adapter->afu_cdev);
 	device_unregister(&afu->device);
 	cxl_context_detach_all(afu);
+}
+
+
+/* FIXME - no longer called */
+void cxl_file_adapter_remove(struct cxl_t *adapter)
+{
+	device_unregister(&adapter->device);
+}
+
+
+
+int __init cxl_file_init(void)
+{
+	int rc;
+
+	if ((rc = alloc_chrdev_region(&cxl_dev, 0, CXL_NUM_MINORS, "cxl"))) {
+		pr_err("Unable to allocate CXL major number: %i\n", rc);
+		return rc;
+	}
+
+	pr_devel("CXL device allocated, MAJOR %i\n", MAJOR(cxl_dev));
+
+	cxl_class = class_create(THIS_MODULE, "cxl");
+	if (IS_ERR(cxl_class)) {
+		pr_warn("Unable to create cxl class\n");
+		rc = PTR_ERR(cxl_class);
+		goto err;
+	}
+	cxl_class->devnode = cxl_devnode;
+
+	return 0;
+
+err:
+	unregister_chrdev_region(cxl_dev, CXL_NUM_MINORS);
+	return rc;
+}
+
+void cxl_file_exit(void)
+{
+	unregister_chrdev_region(cxl_dev, CXL_NUM_MINORS);
+	class_destroy(cxl_class);
 }

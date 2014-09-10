@@ -13,7 +13,6 @@
 
 #include "cxl.h"
 
-#define to_afu(d) container_of(d, struct cxl_afu_t, device)
 #define master_to_afu(d) container_of(d, struct cxl_afu_t, device_master)
 
 
@@ -59,7 +58,7 @@ static ssize_t mmio_size_show(struct device *device,
 			      struct device_attribute *attr,
 			      char *buf)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 
 	if (afu->pp_size)
 		return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_size);
@@ -70,7 +69,7 @@ static ssize_t reset_store_afu(struct device *device,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 	int rc;
 
 	if ((rc = cxl_ops->afu_reset(afu)))
@@ -82,7 +81,7 @@ static ssize_t irqs_min_show(struct device *device,
 			     struct device_attribute *attr,
 			     char *buf)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->pp_irqs);
 }
@@ -91,7 +90,7 @@ static ssize_t irqs_max_show(struct device *device,
 				  struct device_attribute *attr,
 				  char *buf)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->irqs_max);
 }
@@ -100,7 +99,7 @@ static ssize_t irqs_max_store(struct device *device,
 				  struct device_attribute *attr,
 				  const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 	ssize_t ret;
 	int irqs_max;
 
@@ -122,7 +121,7 @@ static ssize_t models_supported_show(struct device *device,
 				    struct device_attribute *attr,
 				    char *buf)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 	char *p = buf, *end = buf + PAGE_SIZE;
 
 	if (afu->models_supported & CXL_MODEL_DEDICATED)
@@ -136,7 +135,7 @@ static ssize_t prefault_mode_show(struct device *device,
 				  struct device_attribute *attr,
 				  char *buf)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 
 	switch (afu->prefault_mode) {
 	case CXL_PREFAULT_WED:
@@ -152,7 +151,7 @@ static ssize_t prefault_mode_store(struct device *device,
 			  struct device_attribute *attr,
 			  const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 	enum prefault_modes mode = -1;
 
 	if (!strncmp(buf, "wed", 3))
@@ -173,7 +172,7 @@ static ssize_t model_show(struct device *device,
 			 struct device_attribute *attr,
 			 char *buf)
 {
-	struct cxl_afu_t *afu = to_afu(device);
+	struct cxl_afu_t *afu = to_cxl_afu(device);
 
 	if (afu->current_model == CXL_MODEL_DEDICATED)
 		return scnprintf(buf, PAGE_SIZE, "dedicated_process\n");

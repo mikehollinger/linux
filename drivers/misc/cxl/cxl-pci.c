@@ -319,50 +319,44 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter, struct pci_de
 static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq,
 			 unsigned int virq)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->dev);
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
 	return pnv_cxl_ioda_msi_setup(dev, hwirq, virq);
 }
 
 static int alloc_one_hwirq(struct cxl_t *adapter)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->dev);
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
 	return pnv_cxl_alloc_hwirqs(dev, 1);
 }
 
 static void release_one_hwirq(struct cxl_t *adapter, int hwirq)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->dev);
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
 	return pnv_cxl_release_hwirqs(dev, hwirq, 1);
 }
 
 static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->dev);
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
 	return pnv_cxl_alloc_hwirq_ranges(irqs, dev, num);
 }
 
 static void release_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->dev);
+	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
 
 	pnv_cxl_release_hwirq_ranges(irqs, dev);
 
 }
 
-static void cxl_release_adapter(struct cxl_t *adapter)
-{
-	struct pci_dev *dev = to_pci_dev(adapter->dev);
-
-	pnv_cxl_release_hwirqs(dev, adapter->err_hwirq, 1);
-}
 
 static void cxl_release_afu(struct cxl_afu_t *afu)
 {
-	struct pci_dev *dev = to_pci_dev(afu->adapter->dev);
+	struct pci_dev *dev = to_pci_dev(afu->adapter->device.parent);
 
 	cxl_unmap_slice_regs(afu);
 	pnv_cxl_release_hwirqs(dev, afu->err_hwirq, 1);
@@ -376,7 +370,6 @@ static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.alloc_irq_ranges = alloc_hwirq_ranges,
 	.release_irq_ranges = release_hwirq_ranges,
 	.setup_irq = setup_cxl_msi,
-	.release_adapter = cxl_release_adapter,
 	.release_afu = cxl_release_afu,
 };
 
@@ -624,14 +617,6 @@ static void cxl_unmap_adapter_regs(struct cxl_t *adapter)
 		iounmap(adapter->p2_mmio);
 }
 
-struct cxl_vsec {
-	u32 afu_desc_off;
-	u32 afu_desc_size;
-	u32 ps_off;
-	u32 ps_size;
-	u8 nAFUs;
-};
-
 static int cxl_read_vsec(struct cxl_vsec *vsec, struct pci_dev *dev)
 {
 	int vsec_off;
@@ -667,12 +652,12 @@ static int cxl_vsec_looks_ok(struct cxl_vsec *vsec, struct pci_dev *dev)
 		/* Once we support dynamic reprogramming we can use the card if
 		 * it supports loadable AFUs */
 		dev_err(&dev->dev, "ABORTING: Device has no AFUs\n");
-		return -ENODEV;
+		return -EINVAL;
 	}
 
 	if (!vsec->afu_desc_off || !vsec->afu_desc_size) {
 		dev_err(&dev->dev, "ABORTING: VSEC shows no AFU descriptors\n");
-		return -ENODEV;
+		return -EINVAL;
 	}
 
 	if (vsec->ps_size > p2_size(dev) - vsec->ps_off) {
@@ -685,71 +670,101 @@ static int cxl_vsec_looks_ok(struct cxl_vsec *vsec, struct pci_dev *dev)
 	return 0;
 }
 
-int init_cxl_pci(struct pci_dev *dev)
+static void cxl_release_adapter(struct device *dev)
+{
+	struct cxl_t *adapter = to_cxl_adapter(dev);
+	struct pci_dev *pdev = adapter->device.parent;
+
+	pr_devel("cxl_release_adapter\n");
+
+	cxl_debugfs_adapter_remove(adapter);
+	cxl_release_psl_err_irq(adapter);
+	cxl_unmap_adapter_regs(adapter);
+	cxl_remove_adapter_nr(adapter);
+	kfree(adapter);
+
+	pci_disable_device(pdev);
+}
+
+static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
+{
+	if (!(adapter = kzalloc(sizeof(struct cxl_t), GFP_KERNEL)))
+		return NULL;
+
+	adapter->device.parent = &dev->dev;
+	adapter->device.release = cxl_release_adapter;
+	adapter->driver = &cxl_pci_driver_ops;
+	pci_set_drvdata(dev, adapter);
+
+	return adapter;
+}
+
+static int cxl_init_adapter(struct pci_dev *dev)
 {
 	struct cxl_t *adapter;
 	struct cxl_vsec vsec;
-	int slice;
 	int rc;
 
-	if ((rc = cxl_read_vsec(&vsec, dev)))
-		goto err;
+	if (!(adapter = cxl_alloc_adapter(dev)))
+		return -ENOMEM;
 
-	if ((rc = cxl_vsec_looks_ok(&vsec, dev)))
-		goto err;
+	if ((rc = cxl_read_vsec(&adapter->vsec, dev)))
+		goto err1;
 
-	if (!(adapter = kzalloc(sizeof(struct cxl_t), GFP_KERNEL))) {
-		rc = -ENOMEM;
-		goto err;
-	}
-
-	adapter->dev = &dev->dev;
-	adapter->driver = &cxl_pci_driver_ops;
-	pci_set_drvdata(dev, adapter);
+	if ((rc = cxl_vsec_looks_ok(&adapter->vsec, dev)))
+		goto err1;
 
 	if ((rc = cxl_map_adapter_regs(adapter, dev)))
 		goto err1;
 
 	/* TODO: cxl_ops->sanitise_adapter_regs(adapter); */
 
-	init_implementation_adapter_regs(adapter, dev);
+	if ((rc = init_implementation_adapter_regs(adapter, dev)))
+		goto err2;
 
 	if ((rc = cxl_register_psl_err_irq(adapter)))
 		goto err2;
 
-	if ((rc = cxl_init_adapter(adapter, vsec.nAFUs))) {
-		dev_err(&dev->dev, "cxl_alloc_adapter failed: %i\n", rc);
+	if ((rc = cxl_alloc_adapter_nr(adapter)))
 		goto err3;
-	}
 
-	for (slice = 0; slice < vsec.nAFUs; slice++)
-		if ((rc = init_slice(adapter, vsec.ps_off, vsec.ps_size,
-				     vsec.afu_desc_off, vsec.afu_desc_size,
-				     slice, dev)))
-			goto err4;
+	/* Don't care if this one fails: */
+	cxl_debugfs_adapter_add(adapter);
+
+	/* After we call this function we must not free the adapter! */
+	if ((rc = cxl_register_adapter(adapter, cxl_release_adapter)))
+		goto err_put1;
+
+	// if ((rc = ___cxl_init_adapter(adapter, vsec.nAFUs))) {
+	// 	dev_err(&dev->dev, "cxl_alloc_adapter failed: %i\n", rc);
+	// 	goto err9;
+	// }
+
 
 	return 0;
 
+err9:
+err_put1:
+	device_unregister(adapter->device);
+	return rc;
+
+	/* If you add more error paths before cxl_register_adapter remember:
 err4:
-	for (slice--; slice >= 0; slice--)
-		cxl_unregister_afu(&adapter->slice[slice]);
-	/* FIXME: Calling this is going to double call a bunch of crap, like
-	 * cxl_unregister_afu and _release_hwirqs - I need to take a good long
-	 * hard look at our error paths and convince myself that they actually
-	 * do the right thing */
-	cxl_unregister_adapter(adapter);
+	cxl_debugfs_adapter_remove(adapter);
+	cxl_remove_adapter_nr(adapter);
+	*/
 err3:
 	cxl_release_psl_err_irq(adapter);
 err2:
 	cxl_unmap_adapter_regs(adapter);
 err1:
 	kfree(adapter);
-err:
 	return rc;
 }
 
 static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
+	int slice;
 	int rc;
 
 	dev_info(&dev->dev, "pci probe\n");
@@ -769,9 +784,17 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		return rc;
 	}
 
-	if ((rc = init_cxl_pci(dev))) {
-		dev_err(&dev->dev, "init_cxl_pci failed: %i\n", rc);
+	if ((rc = cxl_init_adapter(dev))) {
+		dev_err(&dev->dev, "cxl_init_adapter failed: %i\n", rc);
 		return rc;
+	}
+
+	for (slice = 0; slice < vsec.nAFUs; slice++) {
+		if ((rc = init_slice(adapter, vsec.ps_off, vsec.ps_size,
+				     vsec.afu_desc_off, vsec.afu_desc_size,
+				     slice, dev))) {
+			dev_warn(&dev->dev, "AFU %i failed to initialise\n", slice);
+		}
 	}
 
 	return 0;
@@ -782,11 +805,9 @@ static void cxl_remove(struct pci_dev *dev)
 	struct cxl_t *adapter = pci_get_drvdata(dev);
 
 	dev_warn(&dev->dev, "pci remove\n");
+
+	/* FIXME: Test this!!! */
 	cxl_unregister_adapter(adapter);
-	pci_release_region(dev, 0);
-	pci_release_region(dev, 2);
-	kfree(adapter);
-	pci_disable_device(dev);
 }
 
 static struct pci_driver cxl_pci_driver = {

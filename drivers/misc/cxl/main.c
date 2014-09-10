@@ -23,68 +23,69 @@
 #include <linux/mm.h>
 #include <linux/of.h>
 #include <linux/slab.h>
+#include <linux/idr.h>
 #include <asm/cputable.h>
 #include <misc/cxl.h>
 
 #include "cxl.h"
 
-static DEFINE_SPINLOCK(adapter_list_lock);
-static LIST_HEAD(adapter_list);
+static DEFINE_SPINLOCK(adapter_idr_lock);
+static DEFINE_IDR(cxl_adapter_idr);
 
 const struct cxl_backend_ops *cxl_ops;
 EXPORT_SYMBOL(cxl_ops);
 
-extern struct class *cxl_class;
-
-static inline void cxl_slbia_core(struct mm_struct *mm)
+static int _cxl_slbia_core(int adapter_num, void *p, void *data)
 {
-	struct cxl_t *adapter;
+	struct cxl_t *adapter = p;
 	struct cxl_afu_t *afu;
 	struct cxl_context_t *ctx;
 	struct task_struct *task;
 	unsigned long flags;
-	int card = 0, slice, id;
+	int slice, id;
 
-	pr_devel("%s called\n", __func__);
-
-	spin_lock(&adapter_list_lock);
-	list_for_each_entry(adapter, &adapter_list, list) {
-		/* XXX: Make this lookup faster with link from mm to ctx */
-		for (slice = 0; slice < adapter->slices; slice++) {
-			afu = &adapter->slice[slice];
-			if (!afu->enabled)
+	/* XXX: Make this lookup faster with link from mm to ctx */
+	for (slice = 0; slice < adapter->slices; slice++) {
+		afu = &adapter->slice[slice];
+		if (!afu->enabled)
+			continue;
+		rcu_read_lock();
+		idr_for_each_entry(&afu->contexts_idr, ctx, id) {
+			if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
+				pr_devel("%s unable to get task %i\n",
+					 __func__, pid_nr(ctx->pid));
 				continue;
-			rcu_read_lock();
-			idr_for_each_entry(&afu->contexts_idr, ctx, id) {
-				if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-					pr_devel("%s unable to get task %i\n",
-						 __func__, pid_nr(ctx->pid));
-					continue;
-				}
+			}
 
-				if (task->mm != mm)
-					goto next;
+			if (task->mm != mm)
+				goto next;
 
-				pr_devel("%s matched mm - card: %i afu: %i pe: %i\n",
-					 __func__, card, slice, ctx->ph);
+			pr_devel("%s matched mm - card: %i afu: %i pe: %i\n",
+				 __func__, adapter->adapter_num, slice, ctx->ph);
 
-				spin_lock_irqsave(&ctx->sst_lock, flags);
-				if (!ctx->sstp)
-					goto next_unlock;
-				memset(ctx->sstp, 0, ctx->sst_size);
-				mb();
-				cxl_ops->slbia(afu);
+			spin_lock_irqsave(&ctx->sst_lock, flags);
+			if (!ctx->sstp)
+				goto next_unlock;
+			memset(ctx->sstp, 0, ctx->sst_size);
+			mb();
+			cxl_ops->slbia(afu);
 
 next_unlock:
-				spin_unlock_irqrestore(&ctx->sst_lock, flags);
+			spin_unlock_irqrestore(&ctx->sst_lock, flags);
 next:
-				put_task_struct(task);
-			}
-			rcu_read_unlock();
+			put_task_struct(task);
 		}
-		card++;
+		rcu_read_unlock();
 	}
-	spin_unlock(&adapter_list_lock);
+}
+
+static inline void cxl_slbia_core(struct mm_struct *mm)
+{
+	pr_devel("%s called\n", __func__);
+
+	spin_lock(&adapter_idr_lock);
+	idr_for_each(cxl_adapter_idr, _cxl_slbia_core, NULL);
+	spin_unlock(&adapter_idr_lock);
 }
 
 struct cxl_calls cxl_calls = {
@@ -149,19 +150,12 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 struct cxl_t *get_cxl_adapter(int num)
 {
 	struct cxl_t *adapter;
-	int i = 0;
-	struct cxl_t *ret = NULL;
 
-	spin_lock(&adapter_list_lock);
-	list_for_each_entry(adapter, &adapter_list, list) {
-		if (i++ == num) {
-			ret = adapter;
-			break;
-		}
-	}
-	spin_unlock(&adapter_list_lock);
+	rcu_read_lock();
+	adapter = idr_find(cxl_adapter_idr, num);
+	rcu_read_unlock();
 
-	return ret;
+	return adapter;
 }
 
 static void afu_t_init(struct cxl_t *adapter, int slice)
@@ -228,24 +222,35 @@ void cxl_unmap_slice_regs(struct cxl_afu_t *afu)
 }
 EXPORT_SYMBOL(cxl_unmap_slice_regs);
 
+int cxl_alloc_adapter_nr(struct cxl_t *adapter)
+{
+	int i;
 
-static atomic_t nr_adapters;
+	idr_preload(GFP_KERNEL);
+	spin_lock(&adapter_idr_lock);
+	i = idr_alloc(&cxl_adapter_idr, adapter, 0, 0, GFP_NOWAIT);
+	spin_unlock(&adapter_idr_lock);
+	idr_preload_end();
+	if (i < 0)
+		return i;
 
-int cxl_init_adapter(struct cxl_t *adapter,
-		     int slices)
+	adapter->adapter_num = i;
+
+	return 0;
+}
+EXPORT_SYMBOL(cxl_alloc_adapter_nr);
+
+void cxl_remove_adapter_nr(struct cxl_t *adapter)
+{
+	idr_remove(&cxl_adapter_idr, adapter->adapter_num);
+}
+EXPORT_SYMBOL(cxl_remove_adapter_nr);
+
+int cxl_init_adapter(struct cxl_t *adapter, int slices)
 {
 	int slice, rc = 0;
 
-	pr_devel("cxl_alloc_adapter");
-
-	/* There must be at least one AFU */
-	if (!slices)
-		return -EINVAL;
-
-	adapter->adapter_num = atomic_inc_return(&nr_adapters) - 1;
-
 	adapter->device.class = cxl_class;
-	adapter->device.parent = adapter->dev;
 	adapter->slices = slices;
 	pr_devel("%i slices\n", adapter->slices);
 
@@ -255,28 +260,12 @@ int cxl_init_adapter(struct cxl_t *adapter,
 	if ((rc = device_register(&adapter->device)))
 		goto out1;
 
-	/* Add adapter character device and sysfs entries */
-	if (add_cxl_dev(adapter, adapter->adapter_num)) {
-		rc = -1;
-		goto out2;
-	}
-
-	for (slice = 0; slice < slices; slice++)
-		afu_t_init(adapter, slice);
-
-	cxl_debugfs_adapter_add(adapter);
-
-	spin_lock(&adapter_list_lock);
-	list_add_tail(&(adapter)->list, &adapter_list);
-	spin_unlock(&adapter_list_lock);
 
 	return 0;
 
 out2:
 	device_unregister(&adapter->device);
 out1:
-	cxl_ops->release_adapter(adapter);
-	atomic_dec(&nr_adapters);
 	pr_devel("cxl_init_adapter: %i\n", rc);
 	return rc;
 }
@@ -313,41 +302,6 @@ err:
 }
 EXPORT_SYMBOL(cxl_init_afu);
 
-static char *cxl_devnode(struct device *dev, umode_t *mode)
-{
-	if (MINOR(dev->devt) % CXL_DEV_MINORS == 0) {
-		/* These minor numbers will eventually be used to program the
-		 * PSL and AFUs once we have dynamic reprogramming support */
-		return NULL;
-	}
-	return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(dev));
-}
-
-static int __init init_cxl(void)
-{
-	int ret = 0;
-
-	if (!cpu_has_feature(CPU_FTR_HVMODE))
-		return -1;
-
-	cxl_class = class_create(THIS_MODULE, "cxl");
-	if (IS_ERR(cxl_class)) {
-		pr_warn("Unable to create cxl class\n");
-		return PTR_ERR(cxl_class);
-	}
-	cxl_class->devnode = cxl_devnode;
-
-	if (register_cxl_dev())
-		return -1;
-
-	cxl_debugfs_init();
-	init_cxl_native();
-
-	ret = register_cxl_calls(&cxl_calls);
-
-	return ret;
-}
-
 void cxl_unregister_afu(struct cxl_afu_t *afu)
 {
 	cxl_release_psl_irq(afu);
@@ -362,28 +316,45 @@ void cxl_unregister_adapter(struct cxl_t *adapter)
 
 	/* Unregister CXL adapter device */
 
-	spin_lock(&adapter_list_lock);
+	spin_lock(&adapter_idr_lock);
 	list_del(&adapter->list);
-	spin_unlock(&adapter_list_lock);
+	spin_unlock(&adapter_idr_lock);
 
 	for (slice = 0; slice < adapter->slices; slice++)
 		cxl_unregister_afu(&adapter->slice[slice]);
 	del_cxl_dev(adapter);
-
-	/* CXL-HV/Native adapter release */
-	if (cxl_ops->release_adapter)
-		cxl_ops->release_adapter(adapter);
-
-	unregister_cxl_dev();
-
-	atomic_dec(&nr_adapters);
 }
 EXPORT_SYMBOL(cxl_unregister_adapter);
+
+static int __init init_cxl(void)
+{
+	int rc = 0;
+
+	if (!cpu_has_feature(CPU_FTR_HVMODE))
+		return -EPERM;
+
+	if ((rc = cxl_file_init()))
+		return rc;
+
+	cxl_debugfs_init();
+	init_cxl_native();
+
+	if ((rc = register_cxl_calls(&cxl_calls)))
+		goto err;
+
+	return 0;
+
+err:
+	cxl_debugfs_exit();
+	cxl_file_exit();
+
+	return rc;
+}
 
 static void exit_cxl(void)
 {
 	cxl_debugfs_exit();
-	class_destroy(cxl_class);
+	cxl_file_exit();
 	unregister_cxl_calls(&cxl_calls);
 }
 

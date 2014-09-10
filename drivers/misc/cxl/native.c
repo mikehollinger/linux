@@ -135,14 +135,6 @@ static int psl_purge(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static void release_adapter_native(struct cxl_t *adapter)
-{
-	/* FIXME: Remove this */
-	cxl_unmap_irq(adapter->err_virq, adapter);
-	if (adapter->driver && adapter->driver->release_adapter)
-		adapter->driver->release_adapter(adapter);
-}
-
 static int spa_max_procs(int spa_size)
 {
 	/* From the CAIA:
@@ -603,7 +595,6 @@ static const struct cxl_backend_ops cxl_native_ops = {
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
 	.ack_irq = ack_irq_native,
-	.release_adapter = release_adapter_native,
 	.release_afu = release_afu_native,
 	.check_error = check_error,
 	.slbia = afu_slbia_native,

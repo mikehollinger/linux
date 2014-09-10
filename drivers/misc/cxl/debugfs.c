@@ -51,6 +51,11 @@ int cxl_debugfs_adapter_add(struct cxl_t *adapter)
 	return 0;
 }
 
+void cxl_debugfs_adapter_remove(struct cxl_t *adapter)
+{
+	debugfs_remove_recursive(adapter->debugfs);
+}
+
 int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 {
 	struct dentry *dir;
