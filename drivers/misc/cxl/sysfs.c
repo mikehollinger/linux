@@ -219,7 +219,7 @@ int cxl_sysfs_afu_add(struct cxl_afu_t *afu)
 
 err1:
 	for (mstr_attr--; mstr_attr >= 0; mstr_attr--)
-		device_remove_file(&afu->device, &afu_master_attrs[mstr_attr]);
+		device_remove_file(&afu->device_master, &afu_master_attrs[mstr_attr]);
 err:
 	for (afu_attr--; afu_attr >= 0; afu_attr--)
 		device_remove_file(&afu->device, &afu_attrs[afu_attr]);
@@ -230,7 +230,7 @@ void cxl_sysfs_afu_remove(struct cxl_afu_t *afu)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(afu_master_attrs); i++)
-		device_remove_file(&afu->device, &afu_master_attrs[i]);
+		device_remove_file(&afu->device_master, &afu_master_attrs[i]);
 	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++)
 		device_remove_file(&afu->device, &afu_attrs[i]);
 }
