@@ -1079,9 +1079,11 @@ static void set_msi_irq_chip(struct pnv_phb *phb, unsigned int virq)
 	}
 }
 
-int pnv_cxl_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
-			   unsigned int hwirq, unsigned int virq)
+int pnv_cxl_ioda_msi_setup(struct pci_dev *dev, unsigned int hwirq,
+			   unsigned int virq)
 {
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
 	unsigned int xive_num = hwirq - phb->msi_base;
 	struct pnv_ioda_pe *pe;
 	int rc;

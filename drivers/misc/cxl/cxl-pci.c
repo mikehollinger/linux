@@ -26,8 +26,8 @@
 #include "cxl.h"
 
 extern int pnv_phb_to_cxl(struct pci_dev *dev);
-extern int pnv_cxl_ioda_msi_setup(void *phb, struct pci_dev *dev,
-				  unsigned int hwirq, unsigned int virq);
+extern int pnv_cxl_ioda_msi_setup(struct pci_dev *dev, unsigned int hwirq,
+				  unsigned int virq);
 extern int pnv_cxl_alloc_hwirqs(struct pci_dev *dev, int num);
 extern void pnv_cxl_release_hwirqs(struct pci_dev *dev, int hwirq, int num);
 extern int pnv_cxl_alloc_hwirq_ranges(struct cxl_irq_ranges *irqs,
@@ -313,9 +313,8 @@ static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq,
 			 unsigned int virq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
-	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 
-	return pnv_cxl_ioda_msi_setup((void *)hose->private_data, dev, hwirq, virq);
+	return pnv_cxl_ioda_msi_setup(dev, hwirq, virq);
 }
 
 static int alloc_one_hwirq(struct cxl_t *adapter)
