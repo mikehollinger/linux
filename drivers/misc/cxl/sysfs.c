@@ -232,14 +232,33 @@ static ssize_t model_show(struct device *device,
 }
 
 static ssize_t model_store(struct device *device,
-			  struct device_attribute *attr,
-			  const char *buf, size_t count)
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
 {
+	struct cxl_afu_t *afu = to_afu(device);
+	int model = -1;
+	int ret;
+
+	/* can't change this if we have a user */
+	spin_lock(&afu->contexts_lock);
+	if (!idr_is_empty(&afu->contexts_idr))
+		return -EBUSY;
+
 	if (!strncmp(buf, "dedicated_process", 17))
-		pr_warn("cxl: switching to dedicated model live not implemented yet\n");
+		afu->current_model = CXL_MODEL_DEDICATED;
 	if (!strncmp(buf, "afu_directed", 12))
-		pr_warn("cxl: switching to directed model live not implemented yet\n");
-	return -EINVAL;
+		afu->current_model = CXL_MODEL_DIRECTED;
+
+	if (model == -1) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	afu->current_model = model;
+	ret = count;
+out:
+	spin_unlock(&afu->contexts_lock);
+	return ret;
 }
 
 static struct device_attribute afu_attrs[] = {
