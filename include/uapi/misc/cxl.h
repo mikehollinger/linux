@@ -50,25 +50,6 @@ struct cxl_event_header {
 	__u64 reserved3;
 };
 
-#if 0
-/*
- * This was an old convenience structure guaranteed to be the same size as the
- * largest event, so userspace could use one of these as the buffer to receive
- * an event and then cast it into the specific event structure from
- * header->type.
- *
- * This has been deprecated in favour of using struct cxl_event with each
- * possible event type in a union.
- */
-struct cxl_event_uncast {
-	struct cxl_event_header header;
-	__u64 reserved1;
-	__u64 reserved2;
-	__u64 reserved3;
-	__u64 reserved4;
-};
-#endif
-
 struct cxl_event_afu_interrupt {
 	struct cxl_event_header header;
 	__u16 irq; /* Raised AFU interrupt number */
