@@ -432,6 +432,7 @@ struct cxl_t {
 	struct device device;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
+	struct dentry *debugfs;
 	struct list_head list;
 	struct bin_attribute cxl_attr;
 	struct kobject *afu_kobj;
