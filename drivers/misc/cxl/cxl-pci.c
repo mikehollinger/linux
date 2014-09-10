@@ -303,9 +303,6 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter)
 	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x0000FF7C00000000ULL); /* for debugging with trace arrays */
 #endif
 
-	dev_info(&dev->dev, "cxl: **** Workaround to disable PSL QuickTag to fix miscompares - PSL_SNWRALLOC - HW249157 ****\n");
-	cxl_p1_write(adapter, CXL_PSL_SNWRALLOC, 0x80000000FFFFFFFFULL); /* HW249157 */
-
 	return 0;
 }
 
