@@ -118,16 +118,16 @@ static ssize_t irqs_max_store(struct device *device,
 	return count;
 }
 
-static ssize_t supported_models_show(struct device *device,
+static ssize_t models_supported_show(struct device *device,
 				    struct device_attribute *attr,
 				    char *buf)
 {
 	struct cxl_afu_t *afu = to_afu(device);
 	char *p = buf, *end = buf + PAGE_SIZE;
 
-	if (afu->supported_models & CXL_MODEL_DEDICATED)
+	if (afu->models_supported & CXL_MODEL_DEDICATED)
 		p += scnprintf(p, end - p, "dedicated_process\n");
-	if (afu->supported_models & CXL_MODEL_DIRECTED)
+	if (afu->models_supported & CXL_MODEL_DIRECTED)
 		p += scnprintf(p, end - p, "afu_directed\n");
 	return (p - buf);
 }
@@ -197,7 +197,7 @@ static struct device_attribute afu_attrs[] = {
 	__ATTR_RO(mmio_size),
 	__ATTR_RO(irqs_min),
 	__ATTR_RW(irqs_max),
-	__ATTR_RO(supported_models),
+	__ATTR_RO(models_supported),
 	__ATTR_RW(model),
 	__ATTR_RW(prefault_mode),
 	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),
