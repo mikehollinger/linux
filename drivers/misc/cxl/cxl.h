@@ -363,7 +363,7 @@ struct cxl_afu_t {
 	int irqs_max;
 	int num_procs;
 	int slice;
-	int supported_models;
+	int models_supported;
 	int current_model;
 	enum prefault_modes prefault_mode;
 	bool mmio;

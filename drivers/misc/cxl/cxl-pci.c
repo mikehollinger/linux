@@ -524,18 +524,18 @@ static int init_slice(struct cxl_t *adapter,
 	afu->pp_irqs = AFUD_NUM_INTS_PER_PROC(val);
 	afu->num_procs = AFUD_NUM_PROCS(val);
 
-	afu->supported_models = 0;
+	afu->models_supported = 0;
 	if (AFUD_AFU_DIRECTED(val))
-		afu->supported_models |= CXL_MODEL_DIRECTED;
+		afu->models_supported |= CXL_MODEL_DIRECTED;
 	if (AFUD_DEDICATED_PROCESS(val))
-		afu->supported_models |= CXL_MODEL_DEDICATED;
+		afu->models_supported |= CXL_MODEL_DEDICATED;
 	if (AFUD_TIME_SLICED(val))
-		afu->supported_models |= CXL_MODEL_TIME_SLICED;
+		afu->models_supported |= CXL_MODEL_TIME_SLICED;
 
-	if (afu->supported_models & CXL_MODEL_DIRECTED) {
+	if (afu->models_supported & CXL_MODEL_DIRECTED) {
 		afu->current_model = CXL_MODEL_DIRECTED;
 		pr_devel("AFU in AFU directed model\n");
-	} else if (afu->supported_models & CXL_MODEL_DEDICATED) {
+	} else if (afu->models_supported & CXL_MODEL_DEDICATED) {
 		afu->current_model = CXL_MODEL_DEDICATED;
 		pr_devel("AFU in dedicated process model\n");
 	} else {
