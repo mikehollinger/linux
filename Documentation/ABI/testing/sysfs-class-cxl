@@ -1,0 +1,90 @@
+Slave contexts (eg. /sys/class/cxl/afu0.0):
+
+What:		/sys/class/cxl/<afu>/irqs_max
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read/write
+		Maximum number of interrupts that can be requested by userspace.
+		The default on probe is the maximum that hardware can support 
+		(eg.2037).  Write values will limit userspace applications to
+		that many userspace interrupts.  Must be >= irqs_min.
+
+What:		/sys/class/cxl/<afu>/irqs_min
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read_only
+		The minimum number of interrupts that userspace must request on
+		a CXL_START_WORK ioctl.  Userspace may request -1 in the IOCTL
+		to get value minimum automatically.
+
+What:		/sys/class/cxl/<afu>/mmio_size
+Date:		September 20141
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Size of the MMIO space that may be mmaped by userspace.
+
+
+What:		/sys/class/cxl/<afu>/models_supported
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		List of the models this AFU supports.
+		Valid entries are: "dedicated_process" and "afu_directed"
+
+What:		/sys/class/cxl/<afu>/model
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read/write
+		The current model the AFU is using.  Will be one of the models
+		given in models_supported.  Writing will change the model but
+		no user contexts can be attached at this point.
+
+
+What:		/sys/class/cxl/<afu>/prefault_mode
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read/write
+		Set the mode for prefaulting in segments into the segment table
+		when performing the START_WORK ioctl.  Possible values:
+			none: No prefaulting (default)
+			wed: Just prefault in the wed
+			all: all segments this process currently maps
+
+What:		/sys/class/cxl/<afu>/reset
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	write only
+		Reset the AFU.
+
+
+Master contexts (eg. /sys/class/cxl/afu0.0m)
+
+What:		/sys/class/cxl/<afu>m/mmio_size
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Size of the MMIO space that may be mmaped by userspace.  This
+		includes all slave contexts space also
+
+
+What:		/sys/class/cxl/<afu>m/pp_mmio_len
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Per Process MMIO space length.
+
+What:		/sys/class/cxl/<afu>/pp_mmio_off
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Per Process MMIO space offset.
