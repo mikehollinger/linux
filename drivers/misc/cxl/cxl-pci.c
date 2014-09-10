@@ -295,13 +295,7 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter)
 	cxl_p1_write(adapter, CXL_PSL_RESLCKTO, 0x20000000200ULL);
 	cxl_p1_write(adapter, CXL_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL); /* snoop write mask */
 	cxl_p1_write(adapter, CXL_PSL_FIR_CNTL, 0x0800000000000000ULL); /* set fir_accum */
-
-#if 0
-	cxl_p1_write(adapter, CXL_PSL_TRACERD, 0x0000F0FC00000000ULL); /* for debugging with trace arrays */
-#else
-	/* changes recommended per JT and Yoanna 11/15/2013 */
 	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x0000FF7C00000000ULL); /* for debugging with trace arrays */
-#endif
 
 	return 0;
 }
