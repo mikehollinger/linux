@@ -166,18 +166,13 @@ void cxl_handle_fault(struct work_struct *fault_work)
 	struct task_struct *task;
 	struct mm_struct *mm;
 
-	if (ctx->status == CLOSED) {
-		pr_info("cxl_handle_fault: context has been detached\n");
-		return;
-	}
-
 	if (cxl_p2n_read(ctx->afu, CXL_PSL_DSISR_An) != dsisr ||
 	    cxl_p2n_read(ctx->afu, CXL_PSL_DAR_An) != dar ||
 	    cxl_p2n_read(ctx->afu, CXL_PSL_PEHandle_An) != ctx->ph) {
 		/* Most likely explanation is harmless - a dedicated process
 		 * has detached and these were cleared by the PSL purge, but
 		 * warn about it just in case */
-		pr_warn("cxl_handle_fault: Translation fault regs changed\n");
+		pr_info("cxl_handle_fault: Translation fault regs changed\n");
 		return;
 	}
 
