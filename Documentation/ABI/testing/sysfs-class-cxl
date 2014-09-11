@@ -20,7 +20,7 @@ Description:	read_only
 		START_WORK IOCTL to get this minimum automatically.
 
 What:		/sys/class/cxl/<afu>/mmio_size
-Date:		September 20141
+Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read only
