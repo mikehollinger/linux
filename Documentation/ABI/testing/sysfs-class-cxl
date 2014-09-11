@@ -6,8 +6,8 @@ Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read/write
 		Maximum number of interrupts that can be requested by userspace.
-		The default on probe is the maximum that hardware can support 
-		(eg.2037).  Write values will limit userspace applications to
+		The default on probe is the maximum that hardware can support
+		(eg. 2037).  Write values will limit userspace applications to
 		that many userspace interrupts.  Must be >= irqs_min.
 
 What:		/sys/class/cxl/<afu>/irqs_min
@@ -15,9 +15,9 @@ Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read_only
-		The minimum number of interrupts that userspace must request on
-		a CXL_START_WORK ioctl.  Userspace may request -1 in the IOCTL
-		to get value minimum automatically.
+		The minimum number of interrupts that userspace must request
+		on a CXL_START_WORK ioctl.  Userspace may request -1 in the
+		START_WORK IOCTL to get this minimum automatically.
 
 What:		/sys/class/cxl/<afu>/mmio_size
 Date:		September 20141
@@ -72,7 +72,7 @@ Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read only
 		Size of the MMIO space that may be mmaped by userspace.  This
-		includes all slave contexts space also
+		includes all slave contexts space also.
 
 
 What:		/sys/class/cxl/<afu>m/pp_mmio_len
