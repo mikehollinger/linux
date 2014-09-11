@@ -105,6 +105,9 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 
 	pr_devel("afu_ioctl: pe: %i CXL_START_WORK\n", ctx->ph);
 
+	if (ctx->status != OPENED)
+		return -EIO;
+
 	if (copy_from_user(&work, uwork,
 			   sizeof(struct cxl_ioctl_start_work)))
 		return -EFAULT;
