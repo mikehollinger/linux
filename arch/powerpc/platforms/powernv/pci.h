@@ -131,6 +131,9 @@ struct pnv_phb {
 	int (*init_m64)(struct pnv_phb *phb);
 	void (*alloc_m64_pe)(struct pnv_phb *phb);
 	int (*pick_m64_pe)(struct pnv_phb *phb, struct pci_bus *bus, int all);
+	int (*get_pe_state)(struct pnv_phb *phb, int pe_no);
+	void (*freeze_pe)(struct pnv_phb *phb, int pe_no);
+	int (*unfreeze_pe)(struct pnv_phb *phb, int pe_no, int opt);
 
 	union {
 		struct {
@@ -221,7 +224,7 @@ int pnv_pci_cfg_write(struct device_node *dn,
 		      int where, int size, u32 val);
 extern void pnv_pci_setup_iommu_table(struct iommu_table *tbl,
 				      void *tce_mem, u64 tce_size,
-				      u64 dma_offset);
+				      u64 dma_offset, unsigned page_shift);
 extern void pnv_pci_init_p5ioc2_hub(struct device_node *np);
 extern void pnv_pci_init_ioda_hub(struct device_node *np);
 extern void pnv_pci_init_ioda2_phb(struct device_node *np);
