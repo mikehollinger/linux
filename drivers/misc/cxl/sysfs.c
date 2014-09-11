@@ -262,6 +262,7 @@ int cxl_sysfs_adapter_add(struct cxl_t *adapter)
 		if ((rc = device_create_file(&adapter->device, &adapter_attrs[i])))
 			goto err;
 	}
+	adapter->sysfs_init = true;
 	return 0;
 err:
 	for (i--; i >= 0; i--)
@@ -272,6 +273,9 @@ EXPORT_SYMBOL(cxl_sysfs_adapter_add);
 void cxl_sysfs_adapter_remove(struct cxl_t *adapter)
 {
 	int i;
+
+	if (!adapter->sysfs_init)
+		return;
 
 	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++)
 		device_remove_file(&adapter->device, &adapter_attrs[i]);

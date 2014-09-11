@@ -447,6 +447,7 @@ struct cxl_t {
 	bool user_image_loaded;
 	bool perst_loads_image;
 	bool perst_select_user;
+	bool sysfs_init;
 };
 
 struct cxl_driver_ops {
