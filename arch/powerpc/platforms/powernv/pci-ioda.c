@@ -156,14 +156,13 @@ int pnv_phb_to_cxl(struct pci_dev *dev)
 	u64 phb_id;
 	int rc;
 
-	dev_info(&dev->dev, "switch phb to cxl\n");
+	dev_info(&dev->dev, "switch PHB to CXL\n");
 
 	if (!(np = pnv_pci_to_phb_node(dev)))
 		return -ENODEV;
 
 	prop64 = of_get_property(np, "ibm,opal-phbid", NULL);
 
-	dev_info(&dev->dev, "device tree name: %s\n", np->name);
 	phb_id = be64_to_cpup(prop64);
 	dev_info(&dev->dev, "PHB-ID  : 0x%016llx\n", phb_id);
 
@@ -173,8 +172,8 @@ int pnv_phb_to_cxl(struct pci_dev *dev)
 	}
 	dev_info(&dev->dev, "     pe : %i\n", pe->pe_number);
 
-	rc = opal_pci_set_phb_cxl_mode(phb_id, 1, pe->pe_number);
-	dev_info(&dev->dev, "opal_pci_set_phb_cxl_mode: %i", rc);
+	if ((rc = opal_pci_set_phb_cxl_mode(phb_id, 1, pe->pe_number)))
+		dev_err(&dev->dev, "opal_pci_set_phb_cxl_mode failed: %i\n", rc);
 
 out:
 	of_node_put(np);

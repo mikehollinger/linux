@@ -7,7 +7,7 @@
  * 2 of the License, or (at your option) any later version.
  */
 
-#define DEBUG
+#undef DEBUG
 
 #include <linux/pci_regs.h>
 #include <linux/pci_ids.h>
@@ -128,6 +128,7 @@ static int find_cxl_vsec(struct pci_dev *dev)
 
 }
 
+#ifdef DEBUG
 static void dump_cxl_config_space(struct pci_dev *dev)
 {
 	int vsec;
@@ -231,7 +232,7 @@ static void dump_cxl_config_space(struct pci_dev *dev)
 #undef show_reg
 }
 
-static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
+static void dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
 {
 	u64 val;
 
@@ -274,6 +275,10 @@ static void __maybe_unused dump_afu_descriptor(struct pci_dev *dev, struct cxl_a
 
 #undef show_reg
 }
+#else /* DEBUG */
+#define dump_cxl_config_space(...) do { } while (0)
+#define dump_afu_descriptor(...) do { } while (0)
+#endif /* DEBUG */
 
 static int cmpbar(const void *p1, const void *p2)
 {
@@ -376,7 +381,7 @@ static struct cxl_driver_ops cxl_pci_driver_ops = {
 
 
 
-static void reassign_cxl_bars(struct pci_dev *dev)
+static int reassign_cxl_bars(struct pci_dev *dev)
 {
 	const __be32 *window_prop;
 	LIST_HEAD(head);
@@ -390,8 +395,8 @@ static void reassign_cxl_bars(struct pci_dev *dev)
 	dev_warn(&dev->dev, "Reassign CXL BARs\n");
 
 	if (!(np = pnv_pci_to_phb_node(dev))) {
-		dev_warn(&dev->dev, "WARNING: Unable to get cxl phb node, using BAR assignment from Linux\n");
-		return;
+		dev_err(&dev->dev, "Unable to get CXL PHB node\n");
+		return -ENODEV;
 	}
 
 	/*
@@ -402,37 +407,60 @@ static void reassign_cxl_bars(struct pci_dev *dev)
 	 * PHB so it won't ever be assigned to anything else. Later when Linux
 	 * can assign BARs from the m64 space we can use that instead.
 	 */
-	window_prop = of_get_property(np, "ibm,opal-m64-window", NULL);
-	if (!window_prop) {
-		dev_warn(&dev->dev, "WARNING: Using BAR assignment from Linux, this probably will break MMIO access.\n");
-	} else {
-		window = of_read_number(window_prop, 2);
-		size = of_read_number(&window_prop[4], 2);
-		off = window;
-
-		bars[0] = &dev->resource[0];
-		bars[1] = &dev->resource[2];
-		sort(bars, 2, sizeof(struct resource *), cmpbar, NULL);
-
-		for (i = 1; i >= 0; i--) {
-			bar = bars[i] - &dev->resource[0];
-			len = bars[i]->end - bars[i]->start + 1;
-			addr = off;
-
-			dev_warn(&dev->dev, "Reassigning resource %i to %#.16llx %#llx\n", bar, addr, len);
-			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*bar, addr & 0xffffffff);
-			pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*(bar+1), addr >> 32);
-			dev->resource[bar].start = addr;
-			dev->resource[bar].end = addr + len - 1;
-
-			off += len;
-		}
+	if (!(window_prop = of_get_property(np, "ibm,opal-m64-window", NULL))) {
+		dev_err(&dev->dev, "Unable to find ibm,opal-m64-window\n");
+		return -ENODEV;
 	}
 
-	/* BAR 4/5 is for the CXL protocol. Bits[48:49] must be set to 10 */
+	window = of_read_number(window_prop, 2);
+	size = of_read_number(&window_prop[4], 2);
+	off = window;
+
+	bars[0] = &dev->resource[0];
+	bars[1] = &dev->resource[2];
+	sort(bars, 2, sizeof(struct resource *), cmpbar, NULL);
+
+	for (i = 1; i >= 0; i--) {
+		bar = bars[i] - &dev->resource[0];
+		len = bars[i]->end - bars[i]->start + 1;
+		addr = off;
+
+		dev_warn(&dev->dev, "Reassigning resource %i from "
+				"%#.16llx -> %#.16llx %#llx\n",
+				bar, dev->resource[bar].start, addr, len);
+		pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*bar, addr & 0xffffffff);
+		pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*(bar+1), addr >> 32);
+		dev->resource[bar].start = addr;
+		dev->resource[bar].end = addr + len - 1;
+
+		off += len;
+	}
+
+	return 0;
+}
+
+static int setup_cxl_bars(struct pci_dev *dev)
+{
+	int rc;
+
+	/* Check if the BARs have been assigned in a valid range for CXL */
+	// if ((p1_base(dev) < 0x100000000ULL) ||
+	//     (p2_base(dev) < 0x100000000ULL)) {
+	// 	dev_err(&dev->dev, "%#.16llx and/or %#.16llx < 4G, reassigning\n",  p1_base(dev), p2_base(dev));
+	// 	rc = reassign_cxl_bars(dev);
+	// }
+	rc = reassign_cxl_bars(dev);
+
+	if (rc)
+		return rc;
+
+	/* BAR 4/5 has a special meaning for CXL and must be programmed with a
+	 * special value corresponding to the CXL protocol address range.
+	 * For POWER 8 that means bits 48:49 must be set to 10 */
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00000000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00020000);
-	dev_info(&dev->dev, "wrote BAR4/5\n");
+
+	return 0;
 }
 
 /*
@@ -445,15 +473,12 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 	u32 val;
 	int rc;
 
-	dev_info(&dev->dev, "switch card to cxl\n");
+	dev_info(&dev->dev, "switch card to CXL\n");
 
 	if (!(vsec = find_cxl_vsec(dev))) {
-		dev_err(&dev->dev, "cxl: WARNING: CXL VSEC not found, assuming card is already in CXL mode!\n");
-		/* return -ENODEV; */
+		dev_warn(&dev->dev, "WARNING: CXL VSEC not found, assuming card is already in CXL mode!\n");
 		return 0;
 	}
-
-	dev_info(&dev->dev, "vsec found at offset %#x\n", vsec);
 
 	if ((rc = pci_read_config_dword(dev, vsec + 0x8, &val))) {
 		dev_err(&dev->dev, "failed to read current mode control: %i", rc);
@@ -462,7 +487,7 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 	val &= ~CXL_PROTOCOL_MASK;
 	val |= CXL_PROTOCOL_256TB | CXL_PROTOCOL_ENABLE;
 	if ((rc = pci_write_config_dword(dev, vsec + 0x8, val))) {
-		dev_err(&dev->dev, "failed to enable cxl protocol: %i", rc);
+		dev_err(&dev->dev, "failed to enable CXL protocol: %i", rc);
 		return rc;
 	}
 
@@ -509,8 +534,6 @@ static int init_slice(struct cxl_t *adapter,
 		return rc;
 	}
 
-	pr_devel("afu_desc_mmio: %p\n", afu->afu_desc_mmio);
-
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
 	cxl_ops->afu_reset(afu);
 	dump_afu_descriptor(dev, afu);
@@ -547,12 +570,12 @@ static int init_slice(struct cxl_t *adapter,
 	afu->pp_size = AFUD_PPPSA_LEN(val) * 4096;
 	afu->mmio = AFUD_PPPSA_PSA(val);
 	if (!afu->mmio)
-		pr_devel("AFU doesn't support mmio space\n");
+		pr_devel("AFU doesn't support problem state area\n");
 	afu->pp_mmio = AFUD_PPPSA_PP(val);
 	if (afu->pp_mmio) {
 		afu->pp_offset = AFUD_READ_PPPSA_OFF(afu);
 	} else {
-		pr_devel("AFU doesn't support per process mmio space\n");
+		pr_devel("AFU doesn't support per process problem state area\n");
 		afu->pp_offset = 0;
 	}
 
@@ -630,7 +653,6 @@ static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
 		return -ENODEV;
 	}
 
-	dev_info(&dev->dev, "cxl vsec found at offset %#x\n", vsec_off);
 	pci_read_config_word(dev, CXL_VSEC_LENGTH(vsec_off), &vseclen);
 	vseclen = vseclen >> 4;
 	if (vseclen < CXL_VSEC_MIN_SIZE) {
@@ -783,17 +805,19 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	int slice;
 	int rc;
 
-	dev_info(&dev->dev, "pci probe\n");
 	pci_dev_get(dev);
 	dump_cxl_config_space(dev);
 
-	reassign_cxl_bars(dev);
+	if ((rc = setup_cxl_bars(dev))) {
+		dev_err(&dev->dev, "setup_cxl_bars failed: %i\n", rc);
+		return rc;
+	}
 
 	if ((rc = enable_cxl_protocol(dev))) {
 		dev_err(&dev->dev, "enable_cxl_protocol failed: %i\n", rc);
 		return rc;
 	}
-	dev_info(&dev->dev, "cxl protocol enabled\n");
+	dev_info(&dev->dev, "CXL protocol enabled\n");
 
 	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
