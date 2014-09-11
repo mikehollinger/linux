@@ -50,11 +50,13 @@ int cxl_debugfs_adapter_add(struct cxl_t *adapter)
 
 	return 0;
 }
+EXPORT_SYMBOL(cxl_debugfs_adapter_add);
 
 void cxl_debugfs_adapter_remove(struct cxl_t *adapter)
 {
 	debugfs_remove_recursive(adapter->debugfs);
 }
+EXPORT_SYMBOL(cxl_debugfs_adapter_remove);
 
 int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 {

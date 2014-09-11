@@ -302,12 +302,14 @@ err:
 	adapter->driver->release_one_irq(adapter, hwirq);
 	return -ENOMEM;
 }
+EXPORT_SYMBOL(cxl_register_psl_err_irq);
 
 void cxl_release_psl_err_irq(struct cxl_t *adapter)
 {
 	cxl_unmap_irq(adapter->err_virq, adapter);
 	adapter->driver->release_one_irq(adapter, adapter->err_hwirq);
 }
+EXPORT_SYMBOL(cxl_release_psl_err_irq);
 
 int cxl_register_psl_irq(struct cxl_afu_t *afu)
 {
