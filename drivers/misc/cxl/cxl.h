@@ -298,12 +298,6 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_MODEL_TIME_SLICED 0x4
 #define CXL_SUPPORTED_MODELS (CXL_MODEL_DEDICATED | CXL_MODEL_DIRECTED)
 
-/* CXL character device info */
-extern dev_t cxl_dev;
-extern struct bus_type cxl_bus_type;
-#define CXL_NUM_MINORS 256 /* Total to reserve */
-#define CXL_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/slave) */
-
 enum cxl_context_status {
 	CLOSED,
 	OPENED,
@@ -418,14 +412,6 @@ struct cxl_context_t {
 	bool pending_afu_err;
 };
 
-struct cxl_vsec {
-	u32 afu_desc_off;
-	u32 afu_desc_size;
-	u32 ps_off;
-	u32 ps_size;
-	u8 nAFUs;
-};
-
 struct cxl_t {
 	union {
 		struct { /* hv */
@@ -436,7 +422,6 @@ struct cxl_t {
 		};
 		u64 handle;
 	};
-	struct cxl_vsec vsec;
 	struct cxl_driver_ops *driver;
 	struct cxl_afu_t slice[CXL_MAX_SLICES];
 	struct cdev afu_cdev;
@@ -445,10 +430,13 @@ struct cxl_t {
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
 	struct dentry *debugfs;
-	struct list_head list;
 	struct bin_attribute cxl_attr;
 	int adapter_num;
-	int slices;
+	u64 afu_desc_off;
+	u64 afu_desc_size;
+	u64 ps_off;
+	u64 ps_size;
+	u8 slices;
 	bool reset_image_factory;
 };
 
@@ -544,8 +532,10 @@ void cxl_unregister_afu(struct cxl_afu_t *afu);
 
 int cxl_file_init(void);
 void cxl_file_exit(void);
+int cxl_register_adapter(struct cxl_t *adapter);
 int add_cxl_afu_dev(struct cxl_afu_t *afu);
 void del_cxl_afu_dev(struct cxl_afu_t *afu);
+
 void cxl_context_detach_all(struct cxl_afu_t *afu);
 void cxl_context_free(struct cxl_context_t *ctx);
 void cxl_context_detach(struct cxl_context_t *ctx);
@@ -570,7 +560,7 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data);
 int cxl_debugfs_init(void);
 void cxl_debugfs_exit(void);
 int cxl_debugfs_adapter_add(struct cxl_t *adapter);
-int cxl_debugfs_adapter_remove(struct cxl_t *adapter);
+void cxl_debugfs_adapter_remove(struct cxl_t *adapter);
 int cxl_debugfs_afu_add(struct cxl_afu_t *afu);
 
 void cxl_handle_fault(struct work_struct *work);

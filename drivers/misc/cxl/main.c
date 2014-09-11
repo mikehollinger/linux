@@ -35,56 +35,53 @@ static DEFINE_IDR(cxl_adapter_idr);
 const struct cxl_backend_ops *cxl_ops;
 EXPORT_SYMBOL(cxl_ops);
 
-static int _cxl_slbia_core(int adapter_num, void *p, void *data)
+static inline void cxl_slbia_core(struct mm_struct *mm)
 {
-	struct cxl_t *adapter = p;
+	struct cxl_t *adapter;
 	struct cxl_afu_t *afu;
 	struct cxl_context_t *ctx;
 	struct task_struct *task;
 	unsigned long flags;
-	int slice, id;
+	int card, slice, id;
 
-	/* XXX: Make this lookup faster with link from mm to ctx */
-	for (slice = 0; slice < adapter->slices; slice++) {
-		afu = &adapter->slice[slice];
-		if (!afu->enabled)
-			continue;
-		rcu_read_lock();
-		idr_for_each_entry(&afu->contexts_idr, ctx, id) {
-			if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-				pr_devel("%s unable to get task %i\n",
-					 __func__, pid_nr(ctx->pid));
-				continue;
-			}
-
-			if (task->mm != mm)
-				goto next;
-
-			pr_devel("%s matched mm - card: %i afu: %i pe: %i\n",
-				 __func__, adapter->adapter_num, slice, ctx->ph);
-
-			spin_lock_irqsave(&ctx->sst_lock, flags);
-			if (!ctx->sstp)
-				goto next_unlock;
-			memset(ctx->sstp, 0, ctx->sst_size);
-			mb();
-			cxl_ops->slbia(afu);
-
-next_unlock:
-			spin_unlock_irqrestore(&ctx->sst_lock, flags);
-next:
-			put_task_struct(task);
-		}
-		rcu_read_unlock();
-	}
-}
-
-static inline void cxl_slbia_core(struct mm_struct *mm)
-{
 	pr_devel("%s called\n", __func__);
 
 	spin_lock(&adapter_idr_lock);
-	idr_for_each(cxl_adapter_idr, _cxl_slbia_core, NULL);
+	idr_for_each_entry(&cxl_adapter_idr, adapter, card) {
+		/* XXX: Make this lookup faster with link from mm to ctx */
+		for (slice = 0; slice < adapter->slices; slice++) {
+			afu = &adapter->slice[slice];
+			if (!afu->enabled)
+				continue;
+			rcu_read_lock();
+			idr_for_each_entry(&afu->contexts_idr, ctx, id) {
+				if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
+					pr_devel("%s unable to get task %i\n",
+						 __func__, pid_nr(ctx->pid));
+					continue;
+				}
+
+				if (task->mm != mm)
+					goto next;
+
+				pr_devel("%s matched mm - card: %i afu: %i pe: %i\n",
+					 __func__, adapter->adapter_num, slice, ctx->ph);
+
+				spin_lock_irqsave(&ctx->sst_lock, flags);
+				if (!ctx->sstp)
+					goto next_unlock;
+				memset(ctx->sstp, 0, ctx->sst_size);
+				mb();
+				cxl_ops->slbia(afu);
+
+next_unlock:
+				spin_unlock_irqrestore(&ctx->sst_lock, flags);
+next:
+				put_task_struct(task);
+			}
+			rcu_read_unlock();
+		}
+	}
 	spin_unlock(&adapter_idr_lock);
 }
 
@@ -152,22 +149,10 @@ struct cxl_t *get_cxl_adapter(int num)
 	struct cxl_t *adapter;
 
 	rcu_read_lock();
-	adapter = idr_find(cxl_adapter_idr, num);
+	adapter = idr_find(&cxl_adapter_idr, num);
 	rcu_read_unlock();
 
 	return adapter;
-}
-
-static void afu_t_init(struct cxl_t *adapter, int slice)
-{
-	struct cxl_afu_t *afu = &adapter->slice[slice];
-
-	afu->adapter = adapter;
-	afu->slice = slice;
-	idr_init(&afu->contexts_idr);
-	spin_lock_init(&afu->contexts_lock);
-	spin_lock_init(&afu->afu_cntl_lock);
-	mutex_init(&afu->spa_mutex);
 }
 
 int cxl_map_slice_regs(struct cxl_afu_t *afu,
@@ -246,31 +231,6 @@ void cxl_remove_adapter_nr(struct cxl_t *adapter)
 }
 EXPORT_SYMBOL(cxl_remove_adapter_nr);
 
-int cxl_init_adapter(struct cxl_t *adapter, int slices)
-{
-	int slice, rc = 0;
-
-	adapter->device.class = cxl_class;
-	adapter->slices = slices;
-	pr_devel("%i slices\n", adapter->slices);
-
-	/* Register the adapter device */
-	dev_set_name(&adapter->device, "card%i", adapter->adapter_num);
-	adapter->device.devt = MKDEV(MAJOR(cxl_dev), adapter->adapter_num * CXL_DEV_MINORS);
-	if ((rc = device_register(&adapter->device)))
-		goto out1;
-
-
-	return 0;
-
-out2:
-	device_unregister(&adapter->device);
-out1:
-	pr_devel("cxl_init_adapter: %i\n", rc);
-	return rc;
-}
-EXPORT_SYMBOL(cxl_init_adapter);
-
 int cxl_init_afu(struct cxl_afu_t *afu, u64 handle, irq_hw_number_t err_irq)
 {
 	int rc;
@@ -309,22 +269,6 @@ void cxl_unregister_afu(struct cxl_afu_t *afu)
 	cxl_ops->release_afu(afu);
 }
 EXPORT_SYMBOL(cxl_unregister_afu);
-
-void cxl_unregister_adapter(struct cxl_t *adapter)
-{
-	int slice;
-
-	/* Unregister CXL adapter device */
-
-	spin_lock(&adapter_idr_lock);
-	list_del(&adapter->list);
-	spin_unlock(&adapter_idr_lock);
-
-	for (slice = 0; slice < adapter->slices; slice++)
-		cxl_unregister_afu(&adapter->slice[slice]);
-	del_cxl_dev(adapter);
-}
-EXPORT_SYMBOL(cxl_unregister_adapter);
 
 static int __init init_cxl(void)
 {

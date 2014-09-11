@@ -30,6 +30,9 @@
 
 #include "cxl.h"
 
+#define CXL_NUM_MINORS 256 /* Total to reserve */
+#define CXL_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/slave) */
+
 dev_t cxl_dev;
 
 struct class *cxl_class;
@@ -387,8 +390,6 @@ int add_cxl_afu_dev(struct cxl_afu_t *afu)
 
 	return 0;
 
-out4:
-	cdev_del(&afu->adapter->afu_master_cdev);
 out3:
 	cxl_sysfs_afu_remove(afu);
 out2:
@@ -412,14 +413,17 @@ void del_cxl_afu_dev(struct cxl_afu_t *afu)
 	cxl_context_detach_all(afu);
 }
 
-
-/* FIXME - no longer called */
-void cxl_file_adapter_remove(struct cxl_t *adapter)
+/* Just use unregister_device when done */
+int cxl_register_adapter(struct cxl_t *adapter)
 {
-	device_unregister(&adapter->device);
+	adapter->device.class = cxl_class;
+
+	dev_set_name(&adapter->device, "card%i", adapter->adapter_num);
+	adapter->device.devt = MKDEV(MAJOR(cxl_dev), adapter->adapter_num * CXL_DEV_MINORS);
+
+	return device_register(&adapter->device);
 }
-
-
+EXPORT_SYMBOL(cxl_register_adapter);
 
 int __init cxl_file_init(void)
 {

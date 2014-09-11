@@ -46,6 +46,7 @@ extern int pnv_cxl_get_irq_count(struct pci_dev *dev);
 #define CXL_PERST_RELOAD	(1ull << 29)
 #define CXL_USER_IMAGE		(1ull << 28)
 
+#define CXL_VSEC_MIN_SIZE		0x80
 #define CXL_VSEC_LENGTH(vsec)		(vsec + 0x6) /* WORD */
 #define CXL_VSEC_NAFUS(vsec)		(vsec + 0x8) /* BYTE */
 #define CXL_VSEC_AFU_DESC_OFF(vsec)	(vsec + 0x20)
@@ -617,9 +618,11 @@ static void cxl_unmap_adapter_regs(struct cxl_t *adapter)
 		iounmap(adapter->p2_mmio);
 }
 
-static int cxl_read_vsec(struct cxl_vsec *vsec, struct pci_dev *dev)
+static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
 {
 	int vsec_off;
+	u32 afu_desc_off, afu_desc_size;
+	u32 ps_off, ps_size;
 	u16 vseclen;
 
 	if (!(vsec_off = find_cxl_vsec(dev))) {
@@ -630,40 +633,45 @@ static int cxl_read_vsec(struct cxl_vsec *vsec, struct pci_dev *dev)
 	dev_info(&dev->dev, "cxl vsec found at offset %#x\n", vsec_off);
 	pci_read_config_word(dev, CXL_VSEC_LENGTH(vsec_off), &vseclen);
 	vseclen = vseclen >> 4;
-	pci_read_config_byte(dev, CXL_VSEC_NAFUS(vsec_off), &vsec->nAFUs);
-	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_OFF(vsec_off), &vsec->afu_desc_off);
-	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_SIZE(vsec_off), &vsec->afu_desc_size);
-	pci_read_config_dword(dev, CXL_VSEC_PS_OFF(vsec_off), &vsec->ps_off);
-	pci_read_config_dword(dev, CXL_VSEC_PS_SIZE(vsec_off), &vsec->ps_size);
+	if (vseclen < CXL_VSEC_MIN_SIZE) {
+		pr_err("ABORTING: CXL VSEC too short\n");
+		return -EINVAL;
+	}
+
+	pci_read_config_byte(dev, CXL_VSEC_NAFUS(vsec_off), &adapter->slices);
+	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_OFF(vsec_off), &afu_desc_off);
+	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_SIZE(vsec_off), &afu_desc_size);
+	pci_read_config_dword(dev, CXL_VSEC_PS_OFF(vsec_off), &ps_off);
+	pci_read_config_dword(dev, CXL_VSEC_PS_SIZE(vsec_off), &ps_size);
 
 	/* Convert everything to bytes, because there is NO WAY I'd look at the
 	 * code a month later and forget what units these are in ;-) */
-	vsec->ps_off  *= 64 * 1024;
-	vsec->ps_size *= 64 * 1024;
-	vsec->afu_desc_off *= 64 * 1024;
-	vsec->afu_desc_size *= 64 * 1024;
+	adapter->ps_off = ps_off * 64 * 1024;
+	adapter->ps_size = ps_size * 64 * 1024;
+	adapter->afu_desc_off = afu_desc_off * 64 * 1024;
+	adapter->afu_desc_size = afu_desc_size *64 * 1024;
 
 	return 0;
 }
 
-static int cxl_vsec_looks_ok(struct cxl_vsec *vsec, struct pci_dev *dev)
+static int cxl_vsec_looks_ok(struct cxl_t *adapter, struct pci_dev *dev)
 {
-	if (!vsec->nAFUs) {
+	if (!adapter->slices) {
 		/* Once we support dynamic reprogramming we can use the card if
 		 * it supports loadable AFUs */
 		dev_err(&dev->dev, "ABORTING: Device has no AFUs\n");
 		return -EINVAL;
 	}
 
-	if (!vsec->afu_desc_off || !vsec->afu_desc_size) {
+	if (!adapter->afu_desc_off || !adapter->afu_desc_size) {
 		dev_err(&dev->dev, "ABORTING: VSEC shows no AFU descriptors\n");
 		return -EINVAL;
 	}
 
-	if (vsec->ps_size > p2_size(dev) - vsec->ps_off) {
+	if (adapter->ps_size > p2_size(dev) - adapter->ps_off) {
 		dev_err(&dev->dev, "ABORTING: Problem state size larger than "
-				   "available in BAR2: 0x%x > 0x%llx\n",
-			 vsec->ps_size, p2_size(dev) - vsec->ps_off);
+				   "available in BAR2: 0x%llx > 0x%llx\n",
+			 adapter->ps_size, p2_size(dev) - adapter->ps_off);
 		return -EINVAL;
 	}
 
@@ -673,7 +681,7 @@ static int cxl_vsec_looks_ok(struct cxl_vsec *vsec, struct pci_dev *dev)
 static void cxl_release_adapter(struct device *dev)
 {
 	struct cxl_t *adapter = to_cxl_adapter(dev);
-	struct pci_dev *pdev = adapter->device.parent;
+	struct pci_dev *pdev = to_pci_dev(adapter->device.parent);
 
 	pr_devel("cxl_release_adapter\n");
 
@@ -688,6 +696,8 @@ static void cxl_release_adapter(struct device *dev)
 
 static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 {
+	struct cxl_t *adapter;
+
 	if (!(adapter = kzalloc(sizeof(struct cxl_t), GFP_KERNEL)))
 		return NULL;
 
@@ -699,19 +709,18 @@ static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 	return adapter;
 }
 
-static int cxl_init_adapter(struct pci_dev *dev)
+static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 {
 	struct cxl_t *adapter;
-	struct cxl_vsec vsec;
 	int rc;
 
 	if (!(adapter = cxl_alloc_adapter(dev)))
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	if ((rc = cxl_read_vsec(&adapter->vsec, dev)))
+	if ((rc = cxl_read_vsec(adapter, dev)))
 		goto err1;
 
-	if ((rc = cxl_vsec_looks_ok(&adapter->vsec, dev)))
+	if ((rc = cxl_vsec_looks_ok(adapter, dev)))
 		goto err1;
 
 	if ((rc = cxl_map_adapter_regs(adapter, dev)))
@@ -731,22 +740,16 @@ static int cxl_init_adapter(struct pci_dev *dev)
 	/* Don't care if this one fails: */
 	cxl_debugfs_adapter_add(adapter);
 
-	/* After we call this function we must not free the adapter! */
-	if ((rc = cxl_register_adapter(adapter, cxl_release_adapter)))
+	/* After we call this function we must not free the adapter directly,
+	 * even if it returns an error! */
+	if ((rc = cxl_register_adapter(adapter)))
 		goto err_put1;
 
-	// if ((rc = ___cxl_init_adapter(adapter, vsec.nAFUs))) {
-	// 	dev_err(&dev->dev, "cxl_alloc_adapter failed: %i\n", rc);
-	// 	goto err9;
-	// }
+	return adapter;
 
-
-	return 0;
-
-err9:
 err_put1:
-	device_unregister(adapter->device);
-	return rc;
+	device_unregister(&adapter->device);
+	return ERR_PTR(rc);
 
 	/* If you add more error paths before cxl_register_adapter remember:
 err4:
@@ -759,11 +762,24 @@ err2:
 	cxl_unmap_adapter_regs(adapter);
 err1:
 	kfree(adapter);
-	return rc;
+	return ERR_PTR(rc);
+}
+
+static void afu_t_init(struct cxl_t *adapter, int slice)
+{
+	struct cxl_afu_t *afu = &adapter->slice[slice];
+
+	afu->adapter = adapter;
+	afu->slice = slice;
+	idr_init(&afu->contexts_idr);
+	spin_lock_init(&afu->contexts_lock);
+	spin_lock_init(&afu->afu_cntl_lock);
+	mutex_init(&afu->spa_mutex);
 }
 
 static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
+	struct cxl_t *adapter;
 	int slice;
 	int rc;
 
@@ -784,16 +800,18 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		return rc;
 	}
 
-	if ((rc = cxl_init_adapter(dev))) {
-		dev_err(&dev->dev, "cxl_init_adapter failed: %i\n", rc);
-		return rc;
+	adapter = cxl_init_adapter(dev);
+	if (IS_ERR(adapter)) {
+		dev_err(&dev->dev, "cxl_init_adapter failed: %li\n", PTR_ERR(adapter));
+		return PTR_ERR(adapter);
 	}
 
-	for (slice = 0; slice < vsec.nAFUs; slice++) {
-		if ((rc = init_slice(adapter, vsec.ps_off, vsec.ps_size,
-				     vsec.afu_desc_off, vsec.afu_desc_size,
+	for (slice = 0; slice < adapter->slices; slice++) {
+		afu_t_init(adapter, slice);
+		if ((rc = init_slice(adapter, adapter->ps_off, adapter->ps_size,
+				     adapter->afu_desc_off, adapter->afu_desc_size,
 				     slice, dev))) {
-			dev_warn(&dev->dev, "AFU %i failed to initialise\n", slice);
+			dev_warn(&dev->dev, "AFU %i failed to initialise: %i\n", slice, rc);
 		}
 	}
 
@@ -803,11 +821,14 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 static void cxl_remove(struct pci_dev *dev)
 {
 	struct cxl_t *adapter = pci_get_drvdata(dev);
+	int afu;
 
 	dev_warn(&dev->dev, "pci remove\n");
 
 	/* FIXME: Test this!!! */
-	cxl_unregister_adapter(adapter);
+	for (afu = 0; afu < adapter->slices; afu++)
+		cxl_unregister_afu(&adapter->slice[afu]);
+	device_unregister(&adapter->device);
 }
 
 static struct pci_driver cxl_pci_driver = {
