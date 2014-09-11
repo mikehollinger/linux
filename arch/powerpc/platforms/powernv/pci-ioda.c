@@ -125,7 +125,7 @@ static struct pnv_ioda_pe *pnv_ioda_get_pe(struct pci_dev *dev)
 	return &phb->ioda.pe_array[pdn->pe_number];
 }
 
-struct device_node * pnv_pci_to_phb_node(struct pci_dev *dev)
+struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev)
 {
 	struct device_node *np;
 	struct property *prop = NULL;
