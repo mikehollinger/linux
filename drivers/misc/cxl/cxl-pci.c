@@ -22,19 +22,9 @@
 #include <asm/opal.h>
 #include <asm/msi_bitmap.h>
 #include <asm/pci-bridge.h> /* for struct pci_controller */
+#include <asm/pnv-pci.h>
 
 #include "cxl.h"
-
-extern int pnv_phb_to_cxl(struct pci_dev *dev);
-extern int pnv_cxl_ioda_msi_setup(struct pci_dev *dev, unsigned int hwirq,
-				  unsigned int virq);
-extern int pnv_cxl_alloc_hwirqs(struct pci_dev *dev, int num);
-extern void pnv_cxl_release_hwirqs(struct pci_dev *dev, int hwirq, int num);
-extern int pnv_cxl_alloc_hwirq_ranges(struct cxl_irq_ranges *irqs,
-				      struct pci_dev *dev, int num);
-extern void pnv_cxl_release_hwirq_ranges(struct cxl_irq_ranges *irqs,
-					 struct pci_dev *dev);
-extern int pnv_cxl_get_irq_count(struct pci_dev *dev);
 
 #define CXL_PCI_VSEC_ID	0x1280
 
