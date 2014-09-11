@@ -17,7 +17,52 @@
 
 /*********  Adapter attributes  **********************************************/
 
+static ssize_t caia_version_show(struct device *device,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct cxl_t *adapter = to_cxl_adapter(device);
+
+	return scnprintf(buf, PAGE_SIZE, "%i.%i\n", adapter->caia_major,
+			 adapter->caia_minor);
+}
+
+static ssize_t psl_revision_show(struct device *device,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct cxl_t *adapter = to_cxl_adapter(device);
+
+	return scnprintf(buf, PAGE_SIZE, "%i\n", adapter->psl_rev);
+}
+
+static ssize_t base_image_show(struct device *device,
+			       struct device_attribute *attr,
+			       char *buf)
+{
+	struct cxl_t *adapter = to_cxl_adapter(device);
+
+	return scnprintf(buf, PAGE_SIZE, "%i\n", adapter->base_image);
+}
+
+static ssize_t image_loaded_show(struct device *device,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct cxl_t *adapter = to_cxl_adapter(device);
+
+	if (adapter->user_image_loaded)
+		return scnprintf(buf, PAGE_SIZE, "user\n");
+	return scnprintf(buf, PAGE_SIZE, "factory\n");
+}
+
 static struct device_attribute adapter_attrs[] = {
+	__ATTR_RO(caia_version),
+	__ATTR_RO(psl_revision),
+	__ATTR_RO(base_image),
+	__ATTR_RO(image_loaded),
+	/* __ATTR_RW(reset_loads_image); */
+	/* __ATTR_RW(reset_image_select); */
 };
 
 
