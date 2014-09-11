@@ -26,23 +26,68 @@
 
 #include "cxl.h"
 
+
 #define CXL_PCI_VSEC_ID	0x1280
+#define CXL_VSEC_MIN_SIZE 0x80
 
-#define CXL_PROTOCOL_MASK	(7ull << 21)
-#define CXL_PROTOCOL_256TB	(1ull << 23) /* Power 8 uses this */
-#define CXL_PROTOCOL_512TB	(1ull << 22)
-#define CXL_PROTOCOL_1024TB	(1ull << 21)
-#define CXL_PROTOCOL_ENABLE	(1ull << 16)
-#define CXL_PERST_RELOAD	(1ull << 29)
-#define CXL_USER_IMAGE		(1ull << 28)
+#define CXL_READ_VSEC_LENGTH(dev, vsec, dest)			\
+	{							\
+		pci_read_config_word(dev, vsec + 0x6, dest);	\
+		*dest >>= 4;					\
+	}
+#define CXL_READ_VSEC_NAFUS(dev, vsec, dest) \
+	pci_read_config_byte(dev, vsec + 0x8, dest)
 
-#define CXL_VSEC_MIN_SIZE		0x80
-#define CXL_VSEC_LENGTH(vsec)		(vsec + 0x6) /* WORD */
-#define CXL_VSEC_NAFUS(vsec)		(vsec + 0x8) /* BYTE */
-#define CXL_VSEC_AFU_DESC_OFF(vsec)	(vsec + 0x20)
-#define CXL_VSEC_AFU_DESC_SIZE(vsec)	(vsec + 0x24)
-#define CXL_VSEC_PS_OFF(vsec)		(vsec + 0x28)
-#define CXL_VSEC_PS_SIZE(vsec)		(vsec + 0x2c)
+#define CXL_READ_VSEC_STATUS(dev, vsec, dest) \
+	pci_read_config_byte(dev, vsec + 0x9, dest)
+#define CXL_STATUS_SECOND_PORT  0x80
+#define CXL_STATUS_MSI_X_FULL   0x40
+#define CXL_STATUS_MSI_X_SINGLE 0x20
+#define CXL_STATUS_FLASH_RW     0x08
+#define CXL_STATUS_FLASH_RO     0x04
+#define CXL_STATUS_LOADABLE_AFU 0x02
+#define CXL_STATUS_LOADABLE_PSL 0x01
+/* If we see these features we won't try to use the card */
+#define CXL_UNSUPPORTED_FEATURES \
+	(CXL_STATUS_SECOND_PORT | CXL_STATUS_MSI_X_FULL | \
+	 CXL_STATUS_MSI_X_SINGLE)
+
+#define CXL_READ_VSEC_MODE_CONTROL(dev, vsec, dest) \
+	pci_read_config_byte(dev, vsec + 0xa, dest)
+#define CXL_WRITE_VSEC_MODE_CONTROL(dev, vsec, val) \
+	pci_write_config_byte(dev, vsec + 0xa, val)
+#define CXL_VSEC_PROTOCOL_MASK   0xe0
+#define CXL_VSEC_PROTOCOL_256TB  0x80 /* Power 8 uses this */
+#define CXL_VSEC_PROTOCOL_512TB  0x40
+#define CXL_VSEC_PROTOCOL_1024TB 0x20
+#define CXL_VSEC_PROTOCOL_ENABLE 0x01
+
+#define CXL_READ_VSEC_PSL_REVISION(dev, vsec, dest) \
+	pci_read_config_word(dev, vsec + 0xc, dest)
+#define CXL_READ_VSEC_CAIA_MINOR(dev, vsec, dest) \
+	pci_read_config_byte(dev, vsec + 0xe, dest)
+#define CXL_READ_VSEC_CAIA_MAJOR(dev, vsec, dest) \
+	pci_read_config_byte(dev, vsec + 0xf, dest)
+#define CXL_READ_VSEC_BASE_IMAGE(dev, vsec, dest) \
+	pci_read_config_word(dev, vsec + 0x10, dest)
+
+#define CXL_READ_VSEC_IMAGE_STATE(dev, vsec, dest) \
+	pci_read_config_byte(dev, vsec + 0x13, dest)
+#define CXL_WRITE_VSEC_IMAGE_STATE(dev, vsec, val) \
+	pci_write_config_byte(dev, vsec + 0x13, val)
+#define CXL_VSEC_USER_IMAGE_LOADED 0x80 /* RO */
+#define CXL_VSEC_PERST_LOADS_IMAGE 0x20 /* RW */
+#define CXL_VSEC_PERST_SELECT_USER 0x10 /* RW */
+
+#define CXL_READ_VSEC_AFU_DESC_OFF(dev, vsec, dest) \
+	pci_read_config_dword(dev, vsec + 0x20, dest)
+#define CXL_READ_VSEC_AFU_DESC_SIZE(dev, vsec, dest) \
+	pci_read_config_dword(dev, vsec + 0x24, dest)
+#define CXL_READ_VSEC_PS_OFF(dev, vsec, dest) \
+	pci_read_config_dword(dev, vsec + 0x28, dest)
+#define CXL_READ_VSEC_PS_SIZE(dev, vsec, dest) \
+	pci_read_config_dword(dev, vsec + 0x2c, dest)
+
 
 /* This works a little different than the p1/p2 register accesses to make it
  * easier to pull out individual fields */
@@ -383,23 +428,23 @@ static int setup_cxl_bars(struct pci_dev *dev)
 static int switch_card_to_cxl(struct pci_dev *dev)
 {
 	int vsec;
-	u32 val;
+	u8 val;
 	int rc;
 
 	dev_info(&dev->dev, "switch card to CXL\n");
 
 	if (!(vsec = find_cxl_vsec(dev))) {
-		dev_warn(&dev->dev, "WARNING: CXL VSEC not found, assuming card is already in CXL mode!\n");
-		return 0;
+		dev_err(&dev->dev, "ABORTING: CXL VSEC not found!\n");
+		return -ENODEV;
 	}
 
-	if ((rc = pci_read_config_dword(dev, vsec + 0x8, &val))) {
+	if ((rc = CXL_READ_VSEC_MODE_CONTROL(dev, vsec, &val))) {
 		dev_err(&dev->dev, "failed to read current mode control: %i", rc);
 		return rc;
 	}
-	val &= ~CXL_PROTOCOL_MASK;
-	val |= CXL_PROTOCOL_256TB | CXL_PROTOCOL_ENABLE;
-	if ((rc = pci_write_config_dword(dev, vsec + 0x8, val))) {
+	val &= ~CXL_VSEC_PROTOCOL_MASK;
+	val |= CXL_VSEC_PROTOCOL_256TB | CXL_VSEC_PROTOCOL_ENABLE;
+	if ((rc = CXL_WRITE_VSEC_MODE_CONTROL(dev, vsec, val))) {
 		dev_err(&dev->dev, "failed to enable CXL protocol: %i", rc);
 		return rc;
 	}
@@ -556,28 +601,38 @@ static void cxl_unmap_adapter_regs(struct cxl_t *adapter)
 
 static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
 {
-	int vsec_off;
+	int vsec;
 	u32 afu_desc_off, afu_desc_size;
 	u32 ps_off, ps_size;
 	u16 vseclen;
+	u8 image_state;
 
-	if (!(vsec_off = find_cxl_vsec(dev))) {
+	if (!(vsec = find_cxl_vsec(dev))) {
 		dev_err(&dev->dev, "ABORTING: CXL VSEC not found!\n");
 		return -ENODEV;
 	}
 
-	pci_read_config_word(dev, CXL_VSEC_LENGTH(vsec_off), &vseclen);
-	vseclen = vseclen >> 4;
+	CXL_READ_VSEC_LENGTH(dev, vsec, &vseclen);
 	if (vseclen < CXL_VSEC_MIN_SIZE) {
 		pr_err("ABORTING: CXL VSEC too short\n");
 		return -EINVAL;
 	}
 
-	pci_read_config_byte(dev, CXL_VSEC_NAFUS(vsec_off), &adapter->slices);
-	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_OFF(vsec_off), &afu_desc_off);
-	pci_read_config_dword(dev, CXL_VSEC_AFU_DESC_SIZE(vsec_off), &afu_desc_size);
-	pci_read_config_dword(dev, CXL_VSEC_PS_OFF(vsec_off), &ps_off);
-	pci_read_config_dword(dev, CXL_VSEC_PS_SIZE(vsec_off), &ps_size);
+	CXL_READ_VSEC_STATUS(dev, vsec, &adapter->vsec_status);
+	CXL_READ_VSEC_PSL_REVISION(dev, vsec, &adapter->psl_rev);
+	CXL_READ_VSEC_CAIA_MAJOR(dev, vsec, &adapter->caia_major);
+	CXL_READ_VSEC_CAIA_MINOR(dev, vsec, &adapter->caia_minor);
+	CXL_READ_VSEC_BASE_IMAGE(dev, vsec, &adapter->base_image);
+	CXL_READ_VSEC_IMAGE_STATE(dev, vsec, &image_state);
+	adapter->user_image_loaded = !!(image_state & CXL_VSEC_USER_IMAGE_LOADED);
+	adapter->perst_loads_image = !!(image_state & CXL_VSEC_PERST_LOADS_IMAGE);
+	adapter->perst_select_user = !!(image_state & CXL_VSEC_PERST_SELECT_USER);
+
+	CXL_READ_VSEC_NAFUS(dev, vsec, &adapter->slices);
+	CXL_READ_VSEC_AFU_DESC_OFF(dev, vsec, &afu_desc_off);
+	CXL_READ_VSEC_AFU_DESC_SIZE(dev, vsec, &afu_desc_size);
+	CXL_READ_VSEC_PS_OFF(dev, vsec, &ps_off);
+	CXL_READ_VSEC_PS_SIZE(dev, vsec, &ps_size);
 
 	/* Convert everything to bytes, because there is NO WAY I'd look at the
 	 * code a month later and forget what units these are in ;-) */
@@ -591,6 +646,11 @@ static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
 
 static int cxl_vsec_looks_ok(struct cxl_t *adapter, struct pci_dev *dev)
 {
+	if (adapter->vsec_status & CXL_UNSUPPORTED_FEATURES) {
+		dev_err(&dev->dev, "ABORTING: CXL requires unsupported features\n");
+		return -EINVAL;
+	}
+
 	if (!adapter->slices) {
 		/* Once we support dynamic reprogramming we can use the card if
 		 * it supports loadable AFUs */

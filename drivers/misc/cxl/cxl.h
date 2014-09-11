@@ -438,8 +438,15 @@ struct cxl_t {
 	u64 afu_desc_size;
 	u64 ps_off;
 	u64 ps_size;
+	u16 psl_rev;
+	u16 base_image;
+	u8 vsec_status;
+	u8 caia_major;
+	u8 caia_minor;
 	u8 slices;
-	bool reset_image_factory;
+	bool user_image_loaded;
+	bool perst_loads_image;
+	bool perst_select_user;
 };
 
 struct cxl_driver_ops {
