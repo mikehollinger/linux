@@ -24,6 +24,8 @@
 
 #include <uapi/misc/cxl.h>
 
+extern uint cxl_verbose;
+
 #define CXL_TIMEOUT 5
 
 /* Opaque types to avoid accidentally passing registers for the wrong MMIO

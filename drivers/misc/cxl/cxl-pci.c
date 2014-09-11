@@ -118,11 +118,13 @@ static int find_cxl_vsec(struct pci_dev *dev)
 
 }
 
-#ifdef DEBUG
 static void dump_cxl_config_space(struct pci_dev *dev)
 {
 	int vsec;
 	u32 val;
+
+	if (!cxl_verbose)
+		return;
 
 	dev_info(&dev->dev, "dump_cxl_config_space\n");
 
@@ -226,6 +228,9 @@ static void dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
 {
 	u64 val;
 
+	if (!cxl_verbose)
+		return;
+
 #define show_reg(name, what) \
 	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", name, what)
 
@@ -265,10 +270,6 @@ static void dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
 
 #undef show_reg
 }
-#else /* DEBUG */
-#define dump_cxl_config_space(...) do { } while (0)
-#define dump_afu_descriptor(...) do { } while (0)
-#endif /* DEBUG */
 
 extern struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev);
 

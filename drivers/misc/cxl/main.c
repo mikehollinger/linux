@@ -35,6 +35,11 @@ static DEFINE_IDR(cxl_adapter_idr);
 const struct cxl_backend_ops *cxl_ops;
 EXPORT_SYMBOL(cxl_ops);
 
+uint cxl_verbose;
+EXPORT_SYMBOL(cxl_verbose);
+module_param_named(verbose, cxl_verbose, uint, 0600);
+MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
+
 static inline void cxl_slbia_core(struct mm_struct *mm)
 {
 	struct cxl_t *adapter;
