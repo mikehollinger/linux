@@ -622,6 +622,8 @@ static void cxl_release_adapter(struct device *dev)
 	cxl_debugfs_adapter_remove(adapter);
 	cxl_release_psl_err_irq(adapter);
 	cxl_unmap_adapter_regs(adapter);
+	pci_release_region(pdev, 0);
+	pci_release_region(pdev, 2);
 	cxl_remove_adapter_nr(adapter);
 	kfree(adapter);
 
@@ -720,10 +722,8 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	pci_dev_get(dev);
 	dump_cxl_config_space(dev);
 
-	if ((rc = setup_cxl_bars(dev))) {
-		dev_err(&dev->dev, "setup_cxl_bars failed: %i\n", rc);
+	if ((rc = setup_cxl_bars(dev)))
 		return rc;
-	}
 
 	if ((rc = enable_cxl_protocol(dev))) {
 		dev_err(&dev->dev, "enable_cxl_protocol failed: %i\n", rc);
