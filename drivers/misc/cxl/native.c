@@ -68,7 +68,8 @@ static int afu_disable(struct cxl_afu_t *afu)
 			   CXL_AFU_Cntl_An_ES_MASK, false);
 }
 
-static int afu_reset(struct cxl_afu_t *afu)
+/* We have to disable when we reset */
+static int afu_reset_and_disable(struct cxl_afu_t *afu)
 {
 	pr_devel("AFU reset request\n");
 
@@ -217,7 +218,7 @@ static int init_afu_native(struct cxl_afu_t *afu, u64 handle)
 	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
 	cxl_p1n_write(afu, CXL_PSL_ID_An, CXL_PSL_ID_An_F | CXL_PSL_ID_An_L);
 
-	if ((rc = afu_reset(afu)))
+	if ((rc = afu_reset_and_disable(afu)))
 		return rc;
 
 	return rc;
@@ -436,7 +437,7 @@ static int init_dedicated_process_native(struct cxl_context_t *ctx,
 
 
 	/* Ensure AFU is disabled */
-	afu_disable(afu);
+	afu_reset_and_disable(afu);
 	if ((result = psl_purge(afu)))
 		return result;
 
@@ -496,7 +497,7 @@ static int init_dedicated_process_native(struct cxl_context_t *ctx,
 	/* master only context for dedicated */
 	assign_psn_space(ctx);
 
-	if ((result = afu_reset(afu)))
+	if ((result = afu_reset_and_disable(afu)))
 		return result;
 
 	/* XXX: Might want the WED & enable in a separate fn? */
@@ -524,7 +525,7 @@ static int init_process_native(struct cxl_context_t *ctx, bool kernel,
 static int detach_process_native(struct cxl_context_t *ctx)
 {
 	if (ctx->afu->current_model == CXL_MODEL_DEDICATED) {
-		afu_reset(ctx->afu);
+		afu_reset_and_disable(ctx->afu);
 		afu_disable(ctx->afu);
 		psl_purge(ctx->afu);
 		return 0;
@@ -595,7 +596,7 @@ static const struct cxl_backend_ops cxl_native_ops = {
 	.release_afu = release_afu_native,
 	.check_error = check_error,
 	.slbia = afu_slbia_native,
-	.afu_reset = afu_reset,
+	.afu_reset = afu_reset_and_disable,
 };
 
 void init_cxl_native(void)
