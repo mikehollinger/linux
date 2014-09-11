@@ -247,9 +247,8 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-unsigned int
-cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
-		irq_handler_t handler, void *cookie)
+unsigned int cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
+			 irq_handler_t handler, void *cookie)
 {
 	unsigned int virq;
 	int result;
