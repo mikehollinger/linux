@@ -15,6 +15,11 @@
 
 #define master_to_afu(d) container_of(d, struct cxl_afu_t, device_master)
 
+/*********  Adapter attributes  **********************************************/
+
+static struct device_attribute adapter_attrs[] = {
+};
+
 
 /*********  AFU master specific attributes  **********************************/
 
@@ -201,6 +206,32 @@ static struct device_attribute afu_attrs[] = {
 	__ATTR_RW(prefault_mode),
 	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),
 };
+
+
+
+int cxl_sysfs_adapter_add(struct cxl_t *adapter)
+{
+	int i, rc;
+
+	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++) {
+		if ((rc = device_create_file(&adapter->device, &adapter_attrs[i])))
+			goto err;
+	}
+	return 0;
+err:
+	for (i--; i >= 0; i--)
+		device_remove_file(&adapter->device, &adapter_attrs[i]);
+	return rc;
+}
+EXPORT_SYMBOL(cxl_sysfs_adapter_add);
+void cxl_sysfs_adapter_remove(struct cxl_t *adapter)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++)
+		device_remove_file(&adapter->device, &adapter_attrs[i]);
+}
+EXPORT_SYMBOL(cxl_sysfs_adapter_remove);
 
 int cxl_sysfs_afu_add(struct cxl_afu_t *afu)
 {

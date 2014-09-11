@@ -397,8 +397,6 @@ out:
 	return rc;
 }
 
-
-
 void del_cxl_afu_dev(struct cxl_afu_t *afu)
 {
 	cxl_sysfs_afu_remove(afu);

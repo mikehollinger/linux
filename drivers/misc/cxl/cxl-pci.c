@@ -620,6 +620,7 @@ static void cxl_release_adapter(struct device *dev)
 
 	pr_devel("cxl_release_adapter\n");
 
+	cxl_sysfs_adapter_remove(adapter);
 	cxl_debugfs_adapter_remove(adapter);
 	cxl_release_psl_err_irq(adapter);
 	cxl_unmap_adapter_regs(adapter);
@@ -680,6 +681,9 @@ static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 	/* After we call this function we must not free the adapter directly,
 	 * even if it returns an error! */
 	if ((rc = cxl_register_adapter(adapter)))
+		goto err_put1;
+
+	if ((rc = cxl_sysfs_adapter_add(adapter)))
 		goto err_put1;
 
 	return adapter;

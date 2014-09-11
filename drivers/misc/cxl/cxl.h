@@ -542,6 +542,8 @@ void cxl_context_detach_all(struct cxl_afu_t *afu);
 void cxl_context_free(struct cxl_context_t *ctx);
 void cxl_context_detach(struct cxl_context_t *ctx);
 
+int cxl_sysfs_adapter_add(struct cxl_t *adapter);
+void cxl_sysfs_adapter_remove(struct cxl_t *adapter);
 int cxl_sysfs_afu_add(struct cxl_afu_t *afu);
 void cxl_sysfs_afu_remove(struct cxl_afu_t *afu);
 
