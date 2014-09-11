@@ -280,18 +280,6 @@ static void dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
 #define dump_afu_descriptor(...) do { } while (0)
 #endif /* DEBUG */
 
-static int cmpbar(const void *p1, const void *p2)
-{
-	struct resource *r1 = *(struct resource **)p1;
-	struct resource *r2 = *(struct resource **)p2;
-	resource_size_t l1 = r1->end - r1->start;
-	resource_size_t l2 = r2->end - r2->start;
-
-	pr_warn("cxl %#.16llx <> %#.16llx : %#llx\n", l1, l2, l1 - l2);
-
-	return l1 - l2;
-}
-
 extern struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev);
 
 static int init_implementation_adapter_regs(struct cxl_t *adapter, struct pci_dev *dev)
@@ -379,80 +367,14 @@ static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.release_afu = cxl_release_afu,
 };
 
-
-
-static int reassign_cxl_bars(struct pci_dev *dev)
-{
-	const __be32 *window_prop;
-	LIST_HEAD(head);
-	u64 window, size;
-	u64 off, addr;
-	int bar, i;
-	struct resource *bars[2];
-	resource_size_t len;
-	struct device_node *np;
-
-	dev_warn(&dev->dev, "Reassign CXL BARs\n");
-
-	if (!(np = pnv_pci_to_phb_node(dev))) {
-		dev_err(&dev->dev, "Unable to get CXL PHB node\n");
-		return -ENODEV;
-	}
-
-	/*
-	 * CXL requires the m64 address space for BAR assignment. Our PHB code
-	 * in Linux doesn't use it yet, and Linux will have assigned BARs from
-	 * the m32 space. This code reassigns the BARs from the m64 space,
-	 * which is OK since the CXL card can be the only thing behind the
-	 * PHB so it won't ever be assigned to anything else. Later when Linux
-	 * can assign BARs from the m64 space we can use that instead.
-	 */
-	if (!(window_prop = of_get_property(np, "ibm,opal-m64-window", NULL))) {
-		dev_err(&dev->dev, "Unable to find ibm,opal-m64-window\n");
-		return -ENODEV;
-	}
-
-	window = of_read_number(window_prop, 2);
-	size = of_read_number(&window_prop[4], 2);
-	off = window;
-
-	bars[0] = &dev->resource[0];
-	bars[1] = &dev->resource[2];
-	sort(bars, 2, sizeof(struct resource *), cmpbar, NULL);
-
-	for (i = 1; i >= 0; i--) {
-		bar = bars[i] - &dev->resource[0];
-		len = bars[i]->end - bars[i]->start + 1;
-		addr = off;
-
-		dev_warn(&dev->dev, "Reassigning resource %i from "
-				"%#.16llx -> %#.16llx %#llx\n",
-				bar, dev->resource[bar].start, addr, len);
-		pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*bar, addr & 0xffffffff);
-		pci_write_config_dword(dev, PCI_BASE_ADDRESS_0 + 4*(bar+1), addr >> 32);
-		dev->resource[bar].start = addr;
-		dev->resource[bar].end = addr + len - 1;
-
-		off += len;
-	}
-
-	return 0;
-}
-
 static int setup_cxl_bars(struct pci_dev *dev)
 {
-	int rc;
-
-	/* Check if the BARs have been assigned in a valid range for CXL */
-	// if ((p1_base(dev) < 0x100000000ULL) ||
-	//     (p2_base(dev) < 0x100000000ULL)) {
-	// 	dev_err(&dev->dev, "%#.16llx and/or %#.16llx < 4G, reassigning\n",  p1_base(dev), p2_base(dev));
-	// 	rc = reassign_cxl_bars(dev);
-	// }
-	rc = reassign_cxl_bars(dev);
-
-	if (rc)
-		return rc;
+	/* Safety check in case we get backported to < 3.17 without M64 */
+	if ((p1_base(dev) < 0x100000000ULL) ||
+	    (p2_base(dev) < 0x100000000ULL)) {
+		dev_err(&dev->dev, "ABORTING: M32 BAR assignment incompatible with CXL\n");
+		return -ENODEV;
+	}
 
 	/* BAR 4/5 has a special meaning for CXL and must be programmed with a
 	 * special value corresponding to the CXL protocol address range.
