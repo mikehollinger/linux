@@ -8,8 +8,8 @@ Introduction
     coherent connection of FPGA based accelerators (and other devices)
     to a POWER system.
 
-    IBM refers to this as Coherent Accelerator Processor Interface or
-    CAPI.  In the kernel it's referred to by the name CXL to avoid
+    IBM refers to this as the Coherent Accelerator Processor Interface
+    or CAPI.  In the kernel it's referred to by the name CXL to avoid
     confusion with the ISDN CAPI subsystem.  
 
 Hardware overview
@@ -38,7 +38,7 @@ Hardware overview
     (AFU). AFUs are used to implement specific functionality behind
     the PSL which among other things provides memory address
     translation services to allow each AFU direct access to userspace
-    memory .
+    memory.
 
     The AFU is the core part of the accelerator (eg. the compression,
     crypto etc function).  The kernel has no knowledge of the function
@@ -66,10 +66,10 @@ AFU Models
     supported.  This means up to 16K simultaneous userspace
     applications may use the accelerator (although specific AFUs may
     support less).  In this mode, the AFU sends a 16 bit context ID
-    with each of it's requests.  This tells the PSL which context is
+    with each of its requests.  This tells the PSL which context is
     associated with this operation.  If the PSL can't translate a
     request, the ID can also be accessed by the kernel so it can
-    determine the associated userspace context to servic this
+    determine the associated userspace context to service this
     translation with.
 
 MMIO space
@@ -84,7 +84,7 @@ MMIO space
 Interrupts
 ==========
 
-    AFUs may generate interrupts that are destined userspace.  These
+    AFUs may generate interrupts that are destined for userspace.  These
     are received by the kernel as hardware interrupts and passed onto
     userspace.
 
@@ -95,7 +95,7 @@ Work Element Descriptor (WED)
 =============================
 
     The WED is a 64bit parameter passed to the AFU when a context is
-    started.  It's format is up to the AFU hence the kernel has no
+    started.  Its format is up to the AFU hence the kernel has no
     knowledge of what it represents.  Typically it will be a virtual
     address pointer to a work queue where the AFU and userspace can
     share control and status information or work queues.
@@ -106,7 +106,7 @@ Work Element Descriptor (WED)
 User API
 ========
 
-    The driver will create two character device per AFU under
+    The driver will create two character devices per AFU under
     /dev/cxl.  One for master and one for slave contexts.
 
     The master context (eg. /dev/cxl/afu0.0m), has access to all of
@@ -205,7 +205,7 @@ User API
 
 	Master contexts will get all of the MMIO space.  Slave
 	contexts will get only the per process space associated with
-	it's context.
+	its context.
 
 	This mmap call must be done after the IOCTL is started.
 
@@ -292,5 +292,5 @@ Sysfs Class
 ===========
 
     A cxl sysfs class is added under /sys/class/cxl to facilitate
-    enumeration and tuning of the accelerators. It's layout is
+    enumeration and tuning of the accelerators. Its layout is
     described in Documentation/ABI/testing/sysfs-class-cxl
