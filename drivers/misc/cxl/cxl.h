@@ -586,7 +586,7 @@ struct cxl_irq_info {
 };
 
 struct cxl_backend_ops {
-	int (*init_process)(struct cxl_context_t *ctx, bool kernel, u64 wed,
+	int (*attach_process)(struct cxl_context_t *ctx, bool kernel, u64 wed,
 			    u64 amr);
 	int (*detach_process)(struct cxl_context_t *ctx);
 

@@ -342,64 +342,7 @@ static int activate_afu_directed(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int deactivate_afu_directed(struct cxl_afu_t *afu)
-{
-	dev_info(&afu->dev, "Deactivating AFU directed model\n");
-
-	afu->current_model = 0;
-	afu->num_procs = 0;
-
-	release_spa(afu);
-
-	return 0;
-}
-
-static int activate_dedicated_process(struct cxl_afu_t *afu)
-{
-	dev_info(&afu->dev, "Activating dedicated process model\n");
-
-	afu->current_model = CXL_MODEL_DEDICATED;
-	afu->num_procs = 1;
-
-	return 0;
-}
-
-static int deactivate_dedicated_process(struct cxl_afu_t *afu)
-{
-	dev_info(&afu->dev, "Deactivating dedicated process model\n");
-
-	afu->current_model = 0;
-	afu->num_procs = 0;
-
-	return 0;
-}
-
-int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
-{
-	int rc;
-
-	if (afu->current_model == CXL_MODEL_DIRECTED) {
-		if ((rc = deactivate_afu_directed(afu)))
-			return rc;
-	}
-	if (afu->current_model == CXL_MODEL_DEDICATED) {
-		if ((rc = deactivate_dedicated_process(afu)))
-			return rc;
-	}
-
-	if (!model)
-		return 0;
-	if (model == CXL_MODEL_DIRECTED)
-		return activate_afu_directed(afu);
-	if (model == CXL_MODEL_DEDICATED)
-		return activate_dedicated_process(afu);
-
-	return -EINVAL;
-}
-EXPORT_SYMBOL(cxl_afu_activate_model);
-
-static int init_afu_directed_process(struct cxl_context_t *ctx,
-				     u64 wed, u64 amr)
+static int attach_afu_directed(struct cxl_context_t *ctx, u64 wed, u64 amr)
 {
 
 	u64 sr, sstp0, sstp1;
@@ -457,29 +400,50 @@ static int init_afu_directed_process(struct cxl_context_t *ctx,
 	return 0;
 }
 
-static int init_dedicated_process_native(struct cxl_context_t *ctx,
-					 u64 wed, u64 amr)
+static int deactivate_afu_directed(struct cxl_afu_t *afu)
+{
+	dev_info(&afu->dev, "Deactivating AFU directed model\n");
+
+	afu->current_model = 0;
+	afu->num_procs = 0;
+
+	afu_reset_and_disable(afu);
+	afu_disable(afu);
+	psl_purge(afu);
+
+	release_spa(afu);
+
+	return 0;
+}
+
+static int activate_dedicated_process(struct cxl_afu_t *afu)
+{
+	dev_info(&afu->dev, "Activating dedicated process model\n");
+
+	afu->current_model = CXL_MODEL_DEDICATED;
+	afu->num_procs = 1;
+
+	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_Process);
+
+	cxl_p1n_write(afu, CXL_PSL_CtxTime_An, 0); /* disable */
+	cxl_p1n_write(afu, CXL_PSL_SPAP_An, 0);    /* disable */
+	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
+	cxl_p1n_write(afu, CXL_PSL_LPID_An, mfspr(SPRN_LPID));
+	cxl_p1n_write(afu, CXL_HAURP_An, 0);       /* disable */
+	cxl_p1n_write(afu, CXL_PSL_SDR_An, mfspr(SPRN_SDR1));
+
+	cxl_p2n_write(afu, CXL_CSRP_An, 0);        /* disable */
+	cxl_p2n_write(afu, CXL_AURP0_An, 0);       /* disable */
+	cxl_p2n_write(afu, CXL_AURP1_An, 0);       /* disable */
+
+	return 0;
+}
+
+static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
 {
 	struct cxl_afu_t *afu = ctx->afu;
 	u64 sr, sstp0, sstp1;
 	int result;
-
-
-	/* Ensure AFU is disabled */
-	afu_reset_and_disable(afu);
-	if ((result = psl_purge(afu)))
-		return result;
-
-	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_Process);
-
-	/* Hypervisor initialise: */
-	cxl_p1n_write(afu, CXL_PSL_CtxTime_An, 0); /* disable */
-	cxl_p1n_write(afu, CXL_PSL_SPAP_An, 0);    /* disable */
-	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
-
-	cxl_p1n_write(afu, CXL_PSL_LPID_An, mfspr(SPRN_LPID));
-	cxl_p1n_write(afu, CXL_HAURP_An, 0);       /* disable */
-	cxl_p1n_write(afu, CXL_PSL_SDR_An, mfspr(SPRN_SDR1));
 
 	sr = CXL_PSL_SR_An_SC;
 	if (ctx->master)
@@ -491,11 +455,6 @@ static int init_dedicated_process_native(struct cxl_context_t *ctx,
 		sr |= CXL_PSL_SR_An_SF;
 	cxl_p2n_write(afu, CXL_PSL_PID_TID_An, (u64)current->pid << 32);
 	cxl_p1n_write(afu, CXL_PSL_SR_An, sr);
-
-	/* OS initialise: */
-	cxl_p2n_write(afu, CXL_CSRP_An, 0);        /* disable */
-	cxl_p2n_write(afu, CXL_AURP0_An, 0);       /* disable */
-	cxl_p2n_write(afu, CXL_AURP1_An, 0);       /* disable */
 
 	if ((result = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
 		return result;
@@ -522,24 +481,54 @@ static int init_dedicated_process_native(struct cxl_context_t *ctx,
 	if ((result = afu_reset_and_disable(afu)))
 		return result;
 
-	/* XXX: Might want the WED & enable in a separate fn? */
 	cxl_p2n_write(afu, CXL_PSL_WED_An, wed);
 
-	if ((result = afu_enable(afu)))
-		return result;
+	return afu_enable(afu);
+}
+
+static int deactivate_dedicated_process(struct cxl_afu_t *afu)
+{
+	dev_info(&afu->dev, "Deactivating dedicated process model\n");
+
+	afu->current_model = 0;
+	afu->num_procs = 0;
 
 	return 0;
 }
 
-static int init_process_native(struct cxl_context_t *ctx, bool kernel,
+int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
+{
+	int rc;
+
+	if (afu->current_model == CXL_MODEL_DIRECTED) {
+		if ((rc = deactivate_afu_directed(afu)))
+			return rc;
+	}
+	if (afu->current_model == CXL_MODEL_DEDICATED) {
+		if ((rc = deactivate_dedicated_process(afu)))
+			return rc;
+	}
+
+	if (!model)
+		return 0;
+	if (model == CXL_MODEL_DIRECTED)
+		return activate_afu_directed(afu);
+	if (model == CXL_MODEL_DEDICATED)
+		return activate_dedicated_process(afu);
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL(cxl_afu_activate_model);
+
+static int attach_process_native(struct cxl_context_t *ctx, bool kernel,
 			       u64 wed, u64 amr)
 {
 	ctx->kernel = kernel;
 	if (ctx->afu->current_model == CXL_MODEL_DIRECTED)
-		return init_afu_directed_process(ctx, wed, amr);
+		return attach_afu_directed(ctx, wed, amr);
 
 	if (ctx->afu->current_model == CXL_MODEL_DEDICATED)
-		return init_dedicated_process_native(ctx, wed, amr);
+		return attach_dedicated(ctx, wed, amr);
 
 	return -EINVAL;
 }
@@ -610,7 +599,7 @@ static int check_error(struct cxl_afu_t *afu)
 }
 
 static const struct cxl_backend_ops cxl_native_ops = {
-	.init_process = init_process_native,
+	.attach_process = attach_process_native,
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
 	.ack_irq = ack_irq_native,
