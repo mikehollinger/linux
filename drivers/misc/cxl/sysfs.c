@@ -235,30 +235,27 @@ static ssize_t model_store(struct device *device,
 			   struct device_attribute *attr,
 			   const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_afu(device);
-	int model = -1;
-	int ret;
+	struct cxl_afu_t *afu = to_cxl_afu(device);
+	int rc = -EBUSY;
 
 	/* can't change this if we have a user */
 	spin_lock(&afu->contexts_lock);
 	if (!idr_is_empty(&afu->contexts_idr))
-		return -EBUSY;
-
-	if (!strncmp(buf, "dedicated_process", 17))
-		afu->current_model = CXL_MODEL_DEDICATED;
-	if (!strncmp(buf, "afu_directed", 12))
-		afu->current_model = CXL_MODEL_DIRECTED;
-
-	if (model == -1) {
-		ret = -EINVAL;
 		goto out;
-	}
 
-	afu->current_model = model;
-	ret = count;
+	rc = -EINVAL;
+	if (!strncmp(buf, "dedicated_process", 17))
+		rc = cxl_afu_activate_model(afu, CXL_MODEL_DEDICATED);
+	if (!strncmp(buf, "afu_directed", 12))
+		rc = cxl_afu_activate_model(afu, CXL_MODEL_DIRECTED);
+	if (!strncmp(buf, "none", 4))
+		rc = cxl_afu_activate_model(afu, 0);
+
+	if (!rc)
+		rc = count;
 out:
 	spin_unlock(&afu->contexts_lock);
-	return ret;
+	return rc;
 }
 
 static struct device_attribute afu_attrs[] = {

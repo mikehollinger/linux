@@ -500,6 +500,9 @@ int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
 {
 	int rc;
 
+	if (model && !(model & afu->models_supported))
+		return -EINVAL;
+
 	if (afu->current_model == CXL_MODEL_DIRECTED) {
 		if ((rc = deactivate_afu_directed(afu)))
 			return rc;
