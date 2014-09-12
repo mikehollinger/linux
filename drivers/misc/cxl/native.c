@@ -457,17 +457,10 @@ static int init_dedicated_process_native(struct cxl_context_t *ctx,
 		sr |= CXL_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
 		sr |= CXL_PSL_SR_An_TC;
-	if (!ctx->kernel) {
-		/* GA1: HV=0, PR=1, R=1 */
-		sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
-		if (!test_tsk_thread_flag(current, TIF_32BIT))
-			sr |= CXL_PSL_SR_An_SF;
-		cxl_p2n_write(afu, CXL_PSL_PID_TID_An, (u64)current->pid << 32); /* Not using tid field */
-	} else { /* Initialise for kernel */
-		WARN_ONCE(1, "CXL initialised for kernel, this won't work on GA1 hardware!\n");
-		sr |= (mfmsr() & MSR_SF) | CXL_PSL_SR_An_HV;
-		cxl_p2n_write(afu, CXL_PSL_PID_TID_An, 0);
-	}
+	sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
+	if (!test_tsk_thread_flag(current, TIF_32BIT))
+		sr |= CXL_PSL_SR_An_SF;
+	cxl_p2n_write(afu, CXL_PSL_PID_TID_An, (u64)current->pid << 32);
 	cxl_p1n_write(afu, CXL_PSL_SR_An, sr);
 
 	/* OS initialise: */
