@@ -74,13 +74,6 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 }
 
 /*
- * Activate a context on its AFU.
- */
-void cxl_context_start(struct cxl_context_t *ctx)
-{
-}
-
-/*
  * Map a per-context mmio space into the given vma.
  */
 int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)

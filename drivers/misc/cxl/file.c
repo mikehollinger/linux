@@ -84,7 +84,6 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 		goto err_put_module;
 
 	pr_devel("afu_open pe: %i\n", ctx->ph);
-	cxl_context_start(ctx);
 	file->private_data = ctx;
 	cxl_ctx_get();
 

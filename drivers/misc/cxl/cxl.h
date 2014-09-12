@@ -568,7 +568,6 @@ void init_cxl_native(void);
 
 struct cxl_context_t *cxl_context_alloc(void);
 int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool master);
-void cxl_context_start(struct cxl_context_t *ctx);
 void cxl_context_free(struct cxl_context_t *ctx);
 int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma);
 
