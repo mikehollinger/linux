@@ -548,8 +548,6 @@ void cxl_release_psl_err_irq(struct cxl_t *adapter);
 int cxl_register_serr_irq(struct cxl_afu_t *afu);
 void cxl_release_serr_irq(struct cxl_afu_t *afu);
 int afu_register_irqs(struct cxl_context_t *ctx, u32 count);
-void afu_enable_irqs(struct cxl_context_t *ctx);
-void afu_disable_irqs(struct cxl_context_t *ctx);
 void afu_release_irqs(struct cxl_context_t *ctx);
 irqreturn_t cxl_slice_irq_err(int irq, void *data);
 

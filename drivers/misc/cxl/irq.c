@@ -384,40 +384,6 @@ int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 	return 0;
 }
 
-void afu_enable_irqs(struct cxl_context_t *ctx)
-{
-	irq_hw_number_t hwirq;
-	unsigned int virq;
-	int r, i;
-
-	pr_devel("Enabling CXL Interrupts\n");
-
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
-		hwirq = ctx->irqs.offset[r];
-		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
-			virq = irq_find_mapping(NULL, hwirq);
-			enable_irq(virq);
-		}
-	}
-}
-
-void afu_disable_irqs(struct cxl_context_t *ctx)
-{
-	irq_hw_number_t hwirq;
-	unsigned int virq;
-	int r, i;
-
-	pr_devel("Disabling CXL Interrupts\n");
-
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
-		hwirq = ctx->irqs.offset[r];
-		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
-			virq = irq_find_mapping(NULL, hwirq);
-			disable_irq(virq);
-		}
-	}
-}
-
 void afu_release_irqs(struct cxl_context_t *ctx)
 {
 	irq_hw_number_t hwirq;
