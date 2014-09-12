@@ -70,18 +70,23 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 		goto err_put_module;
 
 	spin_lock(&adapter->afu_list_lock);
-	if (!(afu = adapter->afu[slice]))
-		goto err_unlock;
+	if (!(afu = adapter->afu[slice])) {
+		spin_unlock(&adapter->afu_list_lock);
+		goto err_put_module;
+	}
 	get_device(&afu->dev);
 	spin_unlock(&adapter->afu_list_lock);
 
+	if (!afu->current_model)
+		goto err_put_afu;
+
 	if (!(ctx = cxl_context_alloc())) {
 		rc = -ENOMEM;
-		goto err_put_module;
+		goto err_put_afu;
 	}
 
 	if ((rc = cxl_context_init(ctx, afu, master)))
-		goto err_put_module;
+		goto err_put_afu;
 
 	pr_devel("afu_open pe: %i\n", ctx->ph);
 	file->private_data = ctx;
@@ -92,8 +97,8 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 
 	return 0;
 
-err_unlock:
-	spin_unlock(&adapter->afu_list_lock);
+err_put_afu:
+	put_device(&afu->dev);
 err_put_module:
 	module_put(adapter->driver->module);
 err_put_adapter:
