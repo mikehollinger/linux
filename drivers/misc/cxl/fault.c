@@ -25,9 +25,10 @@
 
 bool cxl_fault_debug = false;
 
-static struct cxl_sste*
-find_free_sste(struct cxl_sste *primary_group, bool sec_hash,
-	       struct cxl_sste *secondary_group, unsigned int *lru)
+static struct cxl_sste* find_free_sste(struct cxl_sste *primary_group,
+				       bool sec_hash,
+				       struct cxl_sste *secondary_group,
+				       unsigned int *lru)
 {
 	unsigned int i, entry;
 	struct cxl_sste *sste, *group = primary_group;

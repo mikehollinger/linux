@@ -657,8 +657,6 @@ int pnv_cxl_get_irq_count(struct pci_dev *dev)
         struct pnv_phb *phb = hose->private_data;
 
 	return phb->msi_bmp.irq_count;
-
-
 }
 EXPORT_SYMBOL(pnv_cxl_get_irq_count);
 

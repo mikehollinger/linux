@@ -297,12 +297,12 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 		if ((state & (CXL_SPA_SW_CMD_MASK | CXL_SPA_SW_STATE_MASK  | CXL_SPA_SW_LINK_MASK)) ==
 		    (cmd | (cmd >> 16) | ctx->ph))
 			break;
-
-		/* The command won't finish in the hardware if there are
-		 * outstanding DSIs.  Hence we need to yield here in case there
-
-		 * are outstanding DSIs that we need to service.
-		 * Tuning possiblity: we could wait for a while before sched */
+		/* The command won't finish in the PSL if there are
+		 * outstanding DSIs.  Hence we need to yield here in
+		 * case there are outstanding DSIs that we need to
+		 * service.  Tuning possiblity: we could wait for a
+		 * while before sched
+		 */
 		schedule();
 
 	}
