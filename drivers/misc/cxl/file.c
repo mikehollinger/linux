@@ -383,7 +383,34 @@ static char *cxl_devnode(struct device *dev, umode_t *mode)
 
 extern struct class *cxl_class;
 
-int cxl_chardev_afu_add(struct cxl_afu_t *afu)
+int cxl_chardev_m_afu_add(struct cxl_afu_t *afu)
+{
+	struct device *dev;
+	int rc;
+
+	cdev_init(&afu->afu_cdev_m, &afu_master_fops);
+	if ((rc = cdev_add(&afu->afu_cdev_m, CXL_AFU_MKDEV_M(afu), 1))) {
+		dev_err(&afu->dev, "Unable to add master chardev: %i\n", rc);
+		return rc;
+	}
+
+	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_M(afu), afu,
+			"afu%i.%im", afu->adapter->adapter_num, afu->slice);
+	if (IS_ERR(dev)) {
+		dev_err(&afu->dev, "Unable to create master chardev in sysfs: %i\n", rc);
+		rc = PTR_ERR(dev);
+		goto err;
+	}
+
+	afu->chardev_m = dev;
+
+	return 0;
+err:
+	cdev_del(&afu->afu_cdev_m);
+	return rc;
+}
+
+int cxl_chardev_s_afu_add(struct cxl_afu_t *afu)
 {
 	struct device *dev;
 	int rc;
@@ -399,45 +426,27 @@ int cxl_chardev_afu_add(struct cxl_afu_t *afu)
 	if (IS_ERR(dev)) {
 		dev_err(&afu->dev, "Unable to create shared chardev in sysfs: %i\n", rc);
 		rc = PTR_ERR(dev);
-		goto err1;
+		goto err;
 	}
 
 	afu->chardev_s = dev;
 
-	cdev_init(&afu->afu_cdev_m, &afu_master_fops);
-	if ((rc = cdev_add(&afu->afu_cdev_m, CXL_AFU_MKDEV_M(afu), 1))) {
-		dev_err(&afu->dev, "Unable to add master chardev: %i\n", rc);
-		goto err2;
-	}
-
-	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_M(afu), afu,
-			"afu%i.%im", afu->adapter->adapter_num, afu->slice);
-	if (IS_ERR(dev)) {
-		dev_err(&afu->dev, "Unable to create master chardev in sysfs: %i\n", rc);
-		rc = PTR_ERR(dev);
-		goto err3;
-	}
-
-	afu->chardev_m = dev;
-
 	return 0;
-
-err3:
-	cdev_del(&afu->afu_cdev_m);
-err2:
-	device_unregister(afu->chardev_s);
-	afu->chardev_s = NULL;
-err1:
+err:
 	cdev_del(&afu->afu_cdev_s);
 	return rc;
 }
 
 void cxl_chardev_afu_remove(struct cxl_afu_t *afu)
 {
-	cdev_del(&afu->afu_cdev_m);
-	device_unregister(afu->chardev_m);
-	cdev_del(&afu->afu_cdev_s);
-	device_unregister(afu->chardev_s);
+	if (afu->chardev_m) {
+		cdev_del(&afu->afu_cdev_m);
+		device_unregister(afu->chardev_m);
+	}
+	if (afu->chardev_s) {
+		cdev_del(&afu->afu_cdev_s);
+		device_unregister(afu->chardev_s);
+	}
 }
 
 int cxl_register_afu(struct cxl_afu_t *afu)

@@ -236,7 +236,7 @@ static ssize_t model_store(struct device *device,
 			   const char *buf, size_t count)
 {
 	struct cxl_afu_t *afu = to_cxl_afu(device);
-	int model = -1;
+	int old_model, model = -1;
 	int rc = -EBUSY;
 
 	/* can't change this if we have a user */
@@ -256,11 +256,16 @@ static ssize_t model_store(struct device *device,
 		goto err;
 	}
 
-	rc = cxl_afu_deactivate_model(afu);
+	/* cxl_afu_deactivate_model needs to be done outside the lock, prevent
+	 * other contexts coming in before we are ready: */
+	old_model = afu->current_model;
+	afu->current_model = 0;
+	afu->num_procs = 0;
+
 	spin_unlock(&afu->contexts_lock);
-	if (rc)
+
+	if ((rc = _cxl_afu_deactivate_model(afu, old_model)))
 		return rc;
-	/* This may need to sleep, do it outside the lock: */
 	if ((rc = cxl_afu_activate_model(afu, model)))
 		return rc;
 

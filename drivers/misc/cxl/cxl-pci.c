@@ -628,24 +628,19 @@ static int cxl_init_afu(struct cxl_t *adapter, int slice, struct pci_dev *dev)
 	if ((rc = cxl_register_afu(afu)))
 		goto err_put1;
 
-	if ((rc = cxl_chardev_afu_add(afu)))
-		goto err_put1;
-
 	if ((rc = cxl_sysfs_afu_add(afu)))
-		goto err_put2;
+		goto err_put1;
 
 
 	if ((rc = cxl_afu_select_best_model(afu)))
-		goto err_put3;
+		goto err_put2;
 
 	adapter->afu[afu->slice] = afu;
 
 	return 0;
 
-err_put3:
-	cxl_sysfs_afu_remove(afu);
 err_put2:
-	cxl_chardev_afu_remove(afu);
+	cxl_sysfs_afu_remove(afu);
 err_put1:
 	device_unregister(&afu->dev);
 	free = false;
@@ -669,7 +664,6 @@ static void cxl_remove_afu(struct cxl_afu_t *afu)
 		return;
 
 	cxl_sysfs_afu_remove(afu);
-	cxl_chardev_afu_remove(afu);
 	cxl_debugfs_afu_remove(afu);
 
 	spin_lock(&afu->adapter->afu_list_lock);
@@ -677,6 +671,8 @@ static void cxl_remove_afu(struct cxl_afu_t *afu)
 	spin_unlock(&afu->adapter->afu_list_lock);
 
 	cxl_context_detach_all(afu);
+	cxl_afu_deactivate_model(afu);
+
 	cxl_release_psl_irq(afu);
 	cxl_release_serr_irq(afu);
 	cxl_unmap_slice_regs(afu);

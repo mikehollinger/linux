@@ -522,7 +522,8 @@ int cxl_file_init(void);
 void cxl_file_exit(void);
 int cxl_register_adapter(struct cxl_t *adapter);
 int cxl_register_afu(struct cxl_afu_t *afu);
-int cxl_chardev_afu_add(struct cxl_afu_t *afu);
+int cxl_chardev_m_afu_add(struct cxl_afu_t *afu);
+int cxl_chardev_s_afu_add(struct cxl_afu_t *afu);
 void cxl_chardev_afu_remove(struct cxl_afu_t *afu);
 
 void cxl_context_detach_all(struct cxl_afu_t *afu);
@@ -535,6 +536,7 @@ int cxl_sysfs_afu_add(struct cxl_afu_t *afu);
 void cxl_sysfs_afu_remove(struct cxl_afu_t *afu);
 
 int cxl_afu_activate_model(struct cxl_afu_t *afu, int model);
+int _cxl_afu_deactivate_model(struct cxl_afu_t *afu, int model);
 int cxl_afu_deactivate_model(struct cxl_afu_t *afu);
 int cxl_afu_select_best_model(struct cxl_afu_t *afu);
 

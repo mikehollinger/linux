@@ -327,6 +327,8 @@ static void assign_psn_space(struct cxl_context_t *ctx)
 
 static int activate_afu_directed(struct cxl_afu_t *afu)
 {
+	int rc;
+
 	dev_info(&afu->dev, "Activating AFU directed model\n");
 
 	if (alloc_spa(afu))
@@ -339,7 +341,16 @@ static int activate_afu_directed(struct cxl_afu_t *afu)
 	afu->current_model = CXL_MODEL_DIRECTED;
 	afu->num_procs = afu->max_procs_virtualised;
 
+	if ((rc = cxl_chardev_m_afu_add(afu)))
+		return rc;
+
+	if ((rc = cxl_chardev_s_afu_add(afu)))
+		goto err;
+
 	return 0;
+err:
+	cxl_chardev_afu_remove(afu);
+	return rc;
 }
 
 static int attach_afu_directed(struct cxl_context_t *ctx, u64 wed, u64 amr)
@@ -407,6 +418,8 @@ static int deactivate_afu_directed(struct cxl_afu_t *afu)
 	afu->current_model = 0;
 	afu->num_procs = 0;
 
+	cxl_chardev_afu_remove(afu);
+
 	afu_reset_and_disable(afu);
 	afu_disable(afu);
 	psl_purge(afu);
@@ -436,7 +449,7 @@ static int activate_dedicated_process(struct cxl_afu_t *afu)
 	afu->current_model = CXL_MODEL_DEDICATED;
 	afu->num_procs = 1;
 
-	return 0;
+	return cxl_chardev_m_afu_add(afu);
 }
 
 static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
@@ -493,16 +506,23 @@ static int deactivate_dedicated_process(struct cxl_afu_t *afu)
 	afu->current_model = 0;
 	afu->num_procs = 0;
 
+	cxl_chardev_afu_remove(afu);
+
+	return 0;
+}
+
+int _cxl_afu_deactivate_model(struct cxl_afu_t *afu, int model)
+{
+	if (model == CXL_MODEL_DIRECTED)
+		return deactivate_afu_directed(afu);
+	if (model == CXL_MODEL_DEDICATED)
+		return deactivate_dedicated_process(afu);
 	return 0;
 }
 
 int cxl_afu_deactivate_model(struct cxl_afu_t *afu)
 {
-	if (afu->current_model == CXL_MODEL_DIRECTED)
-		return deactivate_afu_directed(afu);
-	if (afu->current_model == CXL_MODEL_DEDICATED)
-		return deactivate_dedicated_process(afu);
-	return 0;
+	return _cxl_afu_deactivate_model(afu, afu->current_model);
 }
 
 int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
