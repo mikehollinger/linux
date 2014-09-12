@@ -31,14 +31,14 @@ static irqreturn_t handle_psl_slice_error(struct cxl_context_t *ctx, u64 dsisr, 
 	serr = cxl_p1n_read(ctx->afu, CXL_PSL_SERR_An);
 	afu_debug = cxl_p1n_read(ctx->afu, CXL_AFU_DEBUG_An);
 
-	pr_crit("PSL ERROR STATUS: 0x%.16llx\n", errstat);
-	pr_crit("PSL_FIR1: 0x%.16llx\n", fir1);
-	pr_crit("PSL_FIR2: 0x%.16llx\n", fir2);
-	pr_crit("PSL_SERR_An: 0x%.16llx\n", serr);
-	pr_crit("PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
-	pr_crit("CXL_PSL_AFU_DEBUG_An: 0x%.16llx\n", afu_debug);
+	dev_crit(&ctx->afu->dev, "PSL ERROR STATUS: 0x%.16llx\n", errstat);
+	dev_crit(&ctx->afu->dev, "PSL_FIR1: 0x%.16llx\n", fir1);
+	dev_crit(&ctx->afu->dev, "PSL_FIR2: 0x%.16llx\n", fir2);
+	dev_crit(&ctx->afu->dev, "PSL_SERR_An: 0x%.16llx\n", serr);
+	dev_crit(&ctx->afu->dev, "PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
+	dev_crit(&ctx->afu->dev, "CXL_PSL_AFU_DEBUG_An: 0x%.16llx\n", afu_debug);
 
-	pr_crit("STOPPING CXL TRACE\n");
+	dev_crit(&ctx->afu->dev, "STOPPING CXL TRACE\n");
 	cxl_stop_trace(ctx->afu->adapter);
 
 	return cxl_ops->ack_irq(ctx, 0, errstat);
@@ -55,10 +55,10 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data)
 	fir_slice = cxl_p1n_read(afu, CXL_PSL_FIR_SLICE_An);
 	errstat = cxl_p2n_read(afu, CXL_PSL_ErrStat_An);
 	afu_debug = cxl_p1n_read(afu, CXL_AFU_DEBUG_An);
-	pr_crit("PSL_SERR_An: 0x%.16llx\n", serr);
-	pr_crit("PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
-	pr_crit("CXL_PSL_ErrStat_An: 0x%.16llx\n", errstat);
-	pr_crit("CXL_PSL_AFU_DEBUG_An: 0x%.16llx\n", afu_debug);
+	dev_crit(&afu->dev, "PSL_SERR_An: 0x%.16llx\n", serr);
+	dev_crit(&afu->dev, "PSL_FIR_SLICE_An: 0x%.16llx\n", fir_slice);
+	dev_crit(&afu->dev, "CXL_PSL_ErrStat_An: 0x%.16llx\n", errstat);
+	dev_crit(&afu->dev, "CXL_PSL_AFU_DEBUG_An: 0x%.16llx\n", afu_debug);
 
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
 
@@ -73,15 +73,15 @@ irqreturn_t cxl_irq_err(int irq, void *data)
 	WARN(1, "CXL ERROR interrupt %i\n", irq);
 
 	err_ivte = cxl_p1_read(adapter, CXL_PSL_ErrIVTE);
-	pr_crit("PSL_ErrIVTE: 0x%.16llx\n", err_ivte);
+	dev_crit(&adapter->dev, "PSL_ErrIVTE: 0x%.16llx\n", err_ivte);
 
-	pr_crit("STOPPING CXL TRACE\n");
+	dev_crit(&adapter->dev, "STOPPING CXL TRACE\n");
 	cxl_stop_trace(adapter);
 
 	fir1 = cxl_p1_read(adapter, CXL_PSL_FIR1);
 	fir2 = cxl_p1_read(adapter, CXL_PSL_FIR2);
 
-	pr_crit("PSL_FIR1: 0x%.16llx\nPSL_FIR2: 0x%.16llx\n", fir1, fir2);
+	dev_crit(&adapter->dev, "PSL_FIR1: 0x%.16llx\nPSL_FIR2: 0x%.16llx\n", fir1, fir2);
 
 	return IRQ_HANDLED;
 }
@@ -157,8 +157,9 @@ static irqreturn_t cxl_irq(int irq, void *data)
 			 * much point buffering multiple AFU errors.
 			 * OTOH if we DO ever see a storm of these come in it's
 			 * probably best that we log them somewhere: */
-			pr_err_ratelimited("CXL AFU Error undelivered to pe %i: %.llx\n",
-					ctx->ph, irq_info.afu_err);
+			dev_err_ratelimited(&ctx->afu->dev, "CXL AFU Error "
+					    "undelivered to pe %i: %.llx\n",
+					    ctx->ph, irq_info.afu_err);
 		} else {
 			spin_lock(&ctx->lock);
 			ctx->afu_err = irq_info.afu_err;
@@ -246,7 +247,7 @@ unsigned int cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
 	/* IRQ Domain? */
 	virq = irq_create_mapping(NULL, hwirq);
 	if (!virq) {
-		pr_warn("cxl_map_irq: irq_create_mapping failed\n");
+		dev_warn(&adapter->dev, "cxl_map_irq: irq_create_mapping failed\n");
 		return 0;
 	}
 
@@ -257,7 +258,7 @@ unsigned int cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
 
 	result = request_irq(virq, handler, 0, "cxl", cookie);
 	if (result) {
-		pr_warn("cxl_map_irq: request_irq failed: %i\n", result);
+		dev_warn(&adapter->dev, "cxl_map_irq: request_irq failed: %i\n", result);
 		return 0;
 	}
 
@@ -389,7 +390,7 @@ void afu_enable_irqs(struct cxl_context_t *ctx)
 	unsigned int virq;
 	int r, i;
 
-	pr_info("Enabling CXL Interrupts\n");
+	pr_devel("Enabling CXL Interrupts\n");
 
 	for (r = 1; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
@@ -406,7 +407,7 @@ void afu_disable_irqs(struct cxl_context_t *ctx)
 	unsigned int virq;
 	int r, i;
 
-	pr_info("Disabling CXL Interrupts\n");
+	pr_devel("Disabling CXL Interrupts\n");
 
 	for (r = 1; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];

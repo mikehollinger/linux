@@ -35,7 +35,7 @@ static int afu_control(struct cxl_afu_t *afu, u64 command,
 	AFU_Cntl = cxl_p2n_read(afu, CXL_AFU_Cntl_An);
 	while ((AFU_Cntl & mask) != result) {
 		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: AFU control timed out!\n");
+			dev_warn(&afu->dev, "WARNING: AFU control timed out!\n");
 			spin_unlock(&afu->afu_cntl_lock);
 			return -EBUSY;
 		}
@@ -108,17 +108,17 @@ static int psl_purge(struct cxl_afu_t *afu)
 	while ((PSL_CNTL &  CXL_PSL_SCNTL_An_Ps_MASK)
 			== CXL_PSL_SCNTL_An_Ps_Pending) {
 		if (time_after_eq(jiffies, timeout)) {
-			pr_warn("WARNING: PSL Purge timed out!\n");
+			dev_warn(&afu->dev, "WARNING: PSL Purge timed out!\n");
 			return -EBUSY;
 		}
 		dsisr = cxl_p2n_read(afu, CXL_PSL_DSISR_An);
 		pr_devel_ratelimited("PSL purging... PSL_CNTL: 0x%.16llx  PSL_DSISR: 0x%.16llx\n", PSL_CNTL, dsisr);
 		if (dsisr & CXL_PSL_DSISR_TRANS) {
 			dar = cxl_p2n_read(afu, CXL_PSL_DAR_An);
-			pr_warn("PSL purge terminating pending translation, DSISR: 0x%.16llx, DAR: 0x%.16llx\n", dsisr, dar);
+			dev_notice(&afu->dev, "PSL purge terminating pending translation, DSISR: 0x%.16llx, DAR: 0x%.16llx\n", dsisr, dar);
 			cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_AE);
 		} else if (dsisr) {
-			pr_warn("PSL purge acknowledging pending non-translation fault, DSISR: 0x%.16llx\n", dsisr);
+			dev_notice(&afu->dev, "PSL purge acknowledging pending non-translation fault, DSISR: 0x%.16llx\n", dsisr);
 			cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_A);
 		} else {
 			cpu_relax();

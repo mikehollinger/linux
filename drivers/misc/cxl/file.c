@@ -318,7 +318,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 		if (count >= event.header.size)
 			ctx->pending_afu_err = false;
 	} else if (ctx->status == CLOSED) {
-		pr_warn("afu_read fatal error\n");
+		pr_devel("afu_read fatal error\n");
 		spin_unlock_irqrestore(&ctx->lock, flags);
 		return -EIO;
 	} else
@@ -469,7 +469,7 @@ int __init cxl_file_init(void)
 
 	cxl_class = class_create(THIS_MODULE, "cxl");
 	if (IS_ERR(cxl_class)) {
-		pr_warn("Unable to create cxl class\n");
+		pr_err("Unable to create CXL class\n");
 		rc = PTR_ERR(cxl_class);
 		goto err;
 	}
