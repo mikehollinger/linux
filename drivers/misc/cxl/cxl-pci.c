@@ -502,7 +502,6 @@ static int init_slice(struct cxl_t *adapter,
 	afu->irqs_max = afu->user_irqs;
 	val = AFUD_READ_INFO(afu);
 	afu->pp_irqs = AFUD_NUM_INTS_PER_PROC(val);
-	afu->num_procs = AFUD_NUM_PROCS(val);
 
 	afu->models_supported = 0;
 	if (AFUD_AFU_DIRECTED(val))
@@ -514,9 +513,11 @@ static int init_slice(struct cxl_t *adapter,
 
 	if (afu->models_supported & CXL_MODEL_DIRECTED) {
 		afu->current_model = CXL_MODEL_DIRECTED;
+		afu->num_procs = AFUD_NUM_PROCS(val);
 		pr_devel("AFU in AFU directed model\n");
 	} else if (afu->models_supported & CXL_MODEL_DEDICATED) {
 		afu->current_model = CXL_MODEL_DEDICATED;
+		afu->num_procs = 1;
 		pr_devel("AFU in dedicated process model\n");
 	} else {
 		pr_err("No supported AFU programing models available\n");
