@@ -196,14 +196,6 @@ static long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	if (ctx->status == CLOSED)
 		return -EIO;
 
-#if 0 /* XXX: No longer holding onto mm due to refcounting issue. */
-	if (current->mm != ctx->afu->mm) {
-		pr_err("CXL: %s (%i) attempted to perform ioctl on AFU with "
-		       "other memory map!\n", current->comm, current->pid);
-		return -EPERM;
-	}
-#endif
-
 	pr_devel("afu_ioctl\n");
 	switch (cmd) {
 	case CXL_IOCTL_START_WORK:
