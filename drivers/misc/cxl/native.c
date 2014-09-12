@@ -332,12 +332,12 @@ static int activate_afu_directed(struct cxl_afu_t *afu)
 	if (alloc_spa(afu))
 		return -ENOMEM;
 
-	afu->current_model = CXL_MODEL_DIRECTED;
-	afu->num_procs = afu->max_procs_virtualised;
-
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_AFU);
 	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
 	cxl_p1n_write(afu, CXL_PSL_ID_An, CXL_PSL_ID_An_F | CXL_PSL_ID_An_L);
+
+	afu->current_model = CXL_MODEL_DIRECTED;
+	afu->num_procs = afu->max_procs_virtualised;
 
 	return 0;
 }
@@ -420,9 +420,6 @@ static int activate_dedicated_process(struct cxl_afu_t *afu)
 {
 	dev_info(&afu->dev, "Activating dedicated process model\n");
 
-	afu->current_model = CXL_MODEL_DEDICATED;
-	afu->num_procs = 1;
-
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_Process);
 
 	cxl_p1n_write(afu, CXL_PSL_CtxTime_An, 0); /* disable */
@@ -435,6 +432,9 @@ static int activate_dedicated_process(struct cxl_afu_t *afu)
 	cxl_p2n_write(afu, CXL_CSRP_An, 0);        /* disable */
 	cxl_p2n_write(afu, CXL_AURP0_An, 0);       /* disable */
 	cxl_p2n_write(afu, CXL_AURP1_An, 0);       /* disable */
+
+	afu->current_model = CXL_MODEL_DEDICATED;
+	afu->num_procs = 1;
 
 	return 0;
 }
