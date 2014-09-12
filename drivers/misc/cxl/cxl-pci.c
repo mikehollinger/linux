@@ -668,19 +668,18 @@ static void cxl_remove_afu(struct cxl_afu_t *afu)
 	if (!afu)
 		return;
 
-	spin_lock(&afu->adapter->afu_list_lock);
-
-	afu->adapter->afu[afu->slice] = NULL;
-
 	cxl_sysfs_afu_remove(afu);
 	cxl_chardev_afu_remove(afu);
-	cxl_context_detach_all(afu);
 	cxl_debugfs_afu_remove(afu);
+
+	spin_lock(&afu->adapter->afu_list_lock);
+	afu->adapter->afu[afu->slice] = NULL;
+	spin_unlock(&afu->adapter->afu_list_lock);
+
+	cxl_context_detach_all(afu);
 	cxl_release_psl_irq(afu);
 	cxl_release_serr_irq(afu);
 	cxl_unmap_slice_regs(afu);
-
-	spin_unlock(&afu->adapter->afu_list_lock);
 
 	device_unregister(&afu->dev);
 }
