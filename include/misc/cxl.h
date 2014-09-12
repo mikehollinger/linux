@@ -20,14 +20,14 @@ struct cxl_irq_ranges {
 #ifdef CONFIG_CXL_BASE
 
 void cxl_slbia(struct mm_struct *mm);
-void cxl_get(void);
-void cxl_put(void);
-bool cxl_in_use(void);
+void cxl_ctx_get(void);
+void cxl_ctx_put(void);
+bool cxl_ctx_in_use(void);
 
 #else /* CONFIG_CXL_BASE */
 
 #define cxl_slbia(...) do { } while (0)
-#define cxl_in_use(...) false
+#define cxl_ctx_in_use(...) false
 
 #endif /* CONFIG_CXL_BASE */
 

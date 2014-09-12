@@ -64,23 +64,23 @@ void cxl_slbia(struct mm_struct *mm)
 }
 EXPORT_SYMBOL(cxl_slbia);
 
-void cxl_get(void)
+void cxl_ctx_get(void)
 {
 	atomic_inc(&use_count);
 }
-EXPORT_SYMBOL(cxl_get);
+EXPORT_SYMBOL(cxl_ctx_get);
 
-void cxl_put(void)
+void cxl_ctx_put(void)
 {
 	atomic_dec(&use_count);
 }
-EXPORT_SYMBOL(cxl_put);
+EXPORT_SYMBOL(cxl_ctx_put);
 
-bool cxl_in_use(void)
+bool cxl_ctx_in_use(void)
 {
 	return (atomic_read(&use_count) != 0);
 }
-EXPORT_SYMBOL(cxl_in_use);
+EXPORT_SYMBOL(cxl_ctx_in_use);
 
 int register_cxl_calls(struct cxl_calls *calls)
 {

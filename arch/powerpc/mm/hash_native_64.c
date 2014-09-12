@@ -154,7 +154,7 @@ static inline void tlbie(unsigned long vpn, int psize, int apsize,
 	unsigned int use_local;
 	int lock_tlbie = !mmu_has_feature(MMU_FTR_LOCKLESS_TLBIE);
 
-	use_local = local && mmu_has_feature(MMU_FTR_TLBIEL) && !cxl_in_use();
+	use_local = local && mmu_has_feature(MMU_FTR_TLBIEL) && !cxl_ctx_in_use();
 
 	if (use_local)
 		use_local = mmu_psize_defs[psize].tlbiel;
