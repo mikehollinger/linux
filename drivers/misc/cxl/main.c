@@ -50,8 +50,9 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 	spin_lock(&adapter_idr_lock);
 	idr_for_each_entry(&cxl_adapter_idr, adapter, card) {
 		/* XXX: Make this lookup faster with link from mm to ctx */
+		spin_lock(&adapter->afu_list_lock);
 		for (slice = 0; slice < adapter->slices; slice++) {
-			afu = &adapter->slice[slice];
+			afu = adapter->afu[slice];
 			if (!afu->enabled)
 				continue;
 			rcu_read_lock();
@@ -82,6 +83,7 @@ next:
 			}
 			rcu_read_unlock();
 		}
+		spin_unlock(&adapter->afu_list_lock);
 	}
 	spin_unlock(&adapter_idr_lock);
 }
@@ -145,68 +147,18 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 	return 0;
 }
 
+/* Find a CXL adapter by it's number and increase it's refcount */
 struct cxl_t *get_cxl_adapter(int num)
 {
 	struct cxl_t *adapter;
 
-	rcu_read_lock();
-	adapter = idr_find(&cxl_adapter_idr, num);
-	rcu_read_unlock();
+	spin_lock(&adapter_idr_lock);
+	if ((adapter = idr_find(&cxl_adapter_idr, num)))
+		get_device(&adapter->dev);
+	spin_unlock(&adapter_idr_lock);
 
 	return adapter;
 }
-
-int cxl_map_slice_regs(struct cxl_afu_t *afu,
-		  u64 p1n_base, u64 p1n_size,
-		  u64 p2n_base, u64 p2n_size,
-		  u64 psn_base, u64 psn_size,
-		  u64 afu_desc, u64 afu_desc_size)
-{
-	pr_devel("cxl_map_slice_regs: p1: %#.16llx %#llx, p2: %#.16llx %#llx, ps: %#.16llx %#llx, afu_desc: %#.16llx %#llx\n",
-			p1n_base, p1n_size, p2n_base, p2n_size, psn_base, psn_size, afu_desc, afu_desc_size);
-
-	afu->p1n_mmio = NULL;
-	afu->afu_desc_mmio = NULL;
-	if (p1n_base)
-		if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
-			goto err;
-	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
-		goto err1;
-	if (!(afu->psn_mmio = ioremap(psn_base, psn_size)))
-		goto err2;
-	if (afu_desc)
-		if (!(afu->afu_desc_mmio = ioremap(afu_desc, afu_desc_size)))
-			goto err3;
-	afu->psn_phys = psn_base;
-	afu->psn_size = psn_size;
-	afu->afu_desc_size = afu_desc_size;
-
-	return 0;
-err3:
-	iounmap(afu->psn_mmio);
-err2:
-	iounmap(afu->p2n_mmio);
-err1:
-	if (afu->p1n_mmio)
-		iounmap(afu->p1n_mmio);
-err:
-	WARN(1, "Error mapping AFU MMIO regions\n");
-	return -EFAULT;
-}
-EXPORT_SYMBOL(cxl_map_slice_regs);
-
-void cxl_unmap_slice_regs(struct cxl_afu_t *afu)
-{
-	if (afu->psn_mmio)
-		iounmap(afu->psn_mmio);
-
-	if (afu->p1n_mmio)
-		iounmap(afu->p2n_mmio);
-
-	if (afu->p1n_mmio)
-		iounmap(afu->p1n_mmio);
-}
-EXPORT_SYMBOL(cxl_unmap_slice_regs);
 
 int cxl_alloc_adapter_nr(struct cxl_t *adapter)
 {
@@ -232,44 +184,19 @@ void cxl_remove_adapter_nr(struct cxl_t *adapter)
 }
 EXPORT_SYMBOL(cxl_remove_adapter_nr);
 
-int cxl_init_afu(struct cxl_afu_t *afu, u64 handle, irq_hw_number_t err_irq)
+int cxl_afu_select_best_model(struct cxl_afu_t *afu)
 {
-	int rc;
+	if (afu->models_supported & CXL_MODEL_DIRECTED)
+		return cxl_afu_activate_model(afu, CXL_MODEL_DIRECTED);
 
-	pr_devel("cxl_init_afu: slice: %i, handle: %#llx, err_irq: %#lx\n",
-			afu->slice, handle, err_irq);
+	if (afu->models_supported & CXL_MODEL_DEDICATED)
+		return cxl_afu_activate_model(afu, CXL_MODEL_DEDICATED);
 
-	afu->err_hwirq = err_irq;
-
-	if ((rc = cxl_register_psl_irq(afu)))
-		return rc;
-
-	/* Initialise the hardware? */
-	if ((rc = cxl_ops->init_afu(afu, handle)))
-		goto err;
-
-	/* Add afu character devices */
-	if ((rc = add_cxl_afu_dev(afu)))
-		/* FIXME: init_afu may have allocated an error interrupt */
-		goto err;
-
-	cxl_debugfs_afu_add(afu);
-
+	dev_warn(&afu->dev, "No supported programing models available\n");
+	/* We don't fail this so the user can inspect sysfs */
 	return 0;
-
-err:
-	cxl_release_psl_irq(afu);
-	return rc;
 }
-EXPORT_SYMBOL(cxl_init_afu);
-
-void cxl_unregister_afu(struct cxl_afu_t *afu)
-{
-	cxl_release_psl_irq(afu);
-	del_cxl_afu_dev(afu);
-	cxl_ops->release_afu(afu);
-}
-EXPORT_SYMBOL(cxl_unregister_afu);
+EXPORT_SYMBOL(cxl_afu_select_best_model);
 
 static int __init init_cxl(void)
 {

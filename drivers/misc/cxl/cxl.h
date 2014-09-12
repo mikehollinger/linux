@@ -317,31 +317,25 @@ struct cxl_sste {
 	__be64 vsid_data;
 };
 
-#define to_cxl_adapter(d) container_of(d, struct cxl_t, device)
-#define to_cxl_afu(d) container_of(d, struct cxl_afu_t, device)
+#define to_cxl_adapter(d) container_of(d, struct cxl_t, dev)
+#define to_cxl_afu(d) container_of(d, struct cxl_afu_t, dev)
 
 struct cxl_afu_t {
-	union {
-		struct { /* hv */
-			void __iomem *p1n_mmio;
-			irq_hw_number_t err_hwirq;
-			unsigned int err_virq;
-		};
-		u64 handle;
-	};
-	irq_hw_number_t psl_hwirq; /* Shared by all contexts on this AFU */
-
+	irq_hw_number_t psl_hwirq;
+	irq_hw_number_t serr_hwirq;
+	unsigned int serr_virq;
+	void __iomem *p1n_mmio;
 	void __iomem *p2n_mmio;
-	void __iomem *psn_mmio;
 	phys_addr_t psn_phys;
-	u64 psn_size;
 	u64 pp_offset;
 	u64 pp_size;
 	void __iomem *afu_desc_mmio;
-	u64 afu_desc_size;
 	struct cxl_t *adapter;
-	struct device device, device_master;
+	struct device dev;
+	struct cdev afu_cdev_s, afu_cdev_m;
+	struct device *chardev_s, *chardev_m;
 	struct idr contexts_idr;
+	struct dentry *debugfs;
 	spinlock_t contexts_lock;
 	struct mutex spa_mutex;
 	spinlock_t afu_cntl_lock;
@@ -358,17 +352,16 @@ struct cxl_afu_t {
 	unsigned int psl_virq;
 
 	int pp_irqs;
-	int user_irqs;
 	int irqs_max;
 	int num_procs;
+	int max_procs_virtualised;
 	int slice;
 	int models_supported;
 	int current_model;
 	enum prefault_modes prefault_mode;
-	bool mmio;
-	bool pp_mmio;
+	bool psa;
+	bool pp_psa;
 	bool enabled;
-
 };
 
 /* This is a cxl context.  If the PSL is in dedicated model, there will be one
@@ -415,25 +408,20 @@ struct cxl_context_t {
 };
 
 struct cxl_t {
-	union {
-		struct { /* hv */
-			void __iomem *p1_mmio;
-			void __iomem *p2_mmio;
-			irq_hw_number_t err_hwirq;
-			unsigned int err_virq;
-		};
-		u64 handle;
-	};
+	void __iomem *p1_mmio;
+	void __iomem *p2_mmio;
+	irq_hw_number_t err_hwirq;
+	unsigned int err_virq;
 	struct cxl_driver_ops *driver;
-	struct cxl_afu_t slice[CXL_MAX_SLICES];
-	struct cdev afu_cdev;
-	struct cdev afu_master_cdev;
-	struct device device;
+	spinlock_t afu_list_lock;
+	struct cxl_afu_t *afu[CXL_MAX_SLICES];
+	struct device dev;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
 	struct dentry *debugfs;
 	struct bin_attribute cxl_attr;
 	int adapter_num;
+	int user_irqs;
 	u64 afu_desc_off;
 	u64 afu_desc_size;
 	u64 ps_off;
@@ -447,7 +435,6 @@ struct cxl_t {
 	bool user_image_loaded;
 	bool perst_loads_image;
 	bool perst_select_user;
-	bool sysfs_init;
 };
 
 struct cxl_driver_ops {
@@ -457,7 +444,6 @@ struct cxl_driver_ops {
 	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
 	void (*release_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter);
 	int (*setup_irq)(struct cxl_t *adapter, unsigned int hwirq, unsigned int virq);
-	void (*release_afu)(struct cxl_afu_t *afu);
 };
 
 /* common == phyp + powernv */
@@ -531,20 +517,13 @@ void unregister_cxl_calls(struct cxl_calls *calls);
 
 int cxl_alloc_adapter_nr(struct cxl_t *adapter);
 void cxl_remove_adapter_nr(struct cxl_t *adapter);
-int cxl_map_slice_regs(struct cxl_afu_t *afu,
-		  u64 p1n_base, u64 p1n_size,
-		  u64 p2n_base, u64 p2n_size,
-		  u64 psn_base, u64 psn_size,
-		  u64 afu_desc, u64 afu_desc_size);
-void cxl_unmap_slice_regs(struct cxl_afu_t *afu);
-int cxl_init_afu(struct cxl_afu_t *afu, u64 handle, irq_hw_number_t err_irq);
-void cxl_unregister_afu(struct cxl_afu_t *afu);
 
 int cxl_file_init(void);
 void cxl_file_exit(void);
 int cxl_register_adapter(struct cxl_t *adapter);
-int add_cxl_afu_dev(struct cxl_afu_t *afu);
-void del_cxl_afu_dev(struct cxl_afu_t *afu);
+int cxl_register_afu(struct cxl_afu_t *afu);
+int cxl_chardev_afu_add(struct cxl_afu_t *afu);
+void cxl_chardev_afu_remove(struct cxl_afu_t *afu);
 
 void cxl_context_detach_all(struct cxl_afu_t *afu);
 void cxl_context_free(struct cxl_context_t *ctx);
@@ -555,14 +534,18 @@ void cxl_sysfs_adapter_remove(struct cxl_t *adapter);
 int cxl_sysfs_afu_add(struct cxl_afu_t *afu);
 void cxl_sysfs_afu_remove(struct cxl_afu_t *afu);
 
+int cxl_afu_activate_model(struct cxl_afu_t *afu, int model);
+int cxl_afu_select_best_model(struct cxl_afu_t *afu);
 
-unsigned int
-cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq, irq_handler_t handler, void *cookie);
+unsigned int cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
+		         irq_handler_t handler, void *cookie);
 void cxl_unmap_irq(unsigned int virq, void *cookie);
-int cxl_register_psl_err_irq(struct cxl_t *adapter);
-void cxl_release_psl_err_irq(struct cxl_t *adapter);
 int cxl_register_psl_irq(struct cxl_afu_t *afu);
 void cxl_release_psl_irq(struct cxl_afu_t *afu);
+int cxl_register_psl_err_irq(struct cxl_t *adapter);
+void cxl_release_psl_err_irq(struct cxl_t *adapter);
+int cxl_register_serr_irq(struct cxl_afu_t *afu);
+void cxl_release_serr_irq(struct cxl_afu_t *afu);
 int afu_register_irqs(struct cxl_context_t *ctx, u32 count);
 void afu_enable_irqs(struct cxl_context_t *ctx);
 void afu_disable_irqs(struct cxl_context_t *ctx);
@@ -574,6 +557,7 @@ void cxl_debugfs_exit(void);
 int cxl_debugfs_adapter_add(struct cxl_t *adapter);
 void cxl_debugfs_adapter_remove(struct cxl_t *adapter);
 int cxl_debugfs_afu_add(struct cxl_afu_t *afu);
+void cxl_debugfs_afu_remove(struct cxl_afu_t *afu);
 
 void cxl_handle_fault(struct work_struct *work);
 void cxl_prefault(struct cxl_context_t *ctx, u64 wed);
@@ -602,8 +586,6 @@ struct cxl_irq_info {
 };
 
 struct cxl_backend_ops {
-	int (*init_afu)(struct cxl_afu_t *afu, u64 handle);
-
 	int (*init_process)(struct cxl_context_t *ctx, bool kernel, u64 wed,
 			    u64 amr);
 	int (*detach_process)(struct cxl_context_t *ctx);
@@ -611,7 +593,6 @@ struct cxl_backend_ops {
 	int (*get_irq)(struct cxl_context_t *ctx, struct cxl_irq_info *info);
 	int (*ack_irq)(struct cxl_context_t *ctx, u64 tfc, u64 psl_reset_mask);
 
-	void (*release_afu)(struct cxl_afu_t *afu);
 	int (*check_error)(struct cxl_afu_t *afu);
 	void (*slbia)(struct cxl_afu_t *afu);
 	int (*afu_reset)(struct cxl_afu_t *afu);

@@ -49,8 +49,7 @@
 #define CXL_STATUS_LOADABLE_PSL 0x01
 /* If we see these features we won't try to use the card */
 #define CXL_UNSUPPORTED_FEATURES \
-	(CXL_STATUS_SECOND_PORT | CXL_STATUS_MSI_X_FULL | \
-	 CXL_STATUS_MSI_X_SINGLE)
+	(CXL_STATUS_MSI_X_FULL | CXL_STATUS_MSI_X_SINGLE)
 
 #define CXL_READ_VSEC_MODE_CONTROL(dev, vsec, dest) \
 	pci_read_config_byte(dev, vsec + 0xa, dest)
@@ -168,9 +167,6 @@ static void dump_cxl_config_space(struct pci_dev *dev)
 	int vsec;
 	u32 val;
 
-	if (!cxl_verbose)
-		return;
-
 	dev_info(&dev->dev, "dump_cxl_config_space\n");
 
 	pci_read_config_dword(dev, PCI_BASE_ADDRESS_0, &val);
@@ -269,15 +265,12 @@ static void dump_cxl_config_space(struct pci_dev *dev)
 #undef show_reg
 }
 
-static void dump_afu_descriptor(struct pci_dev *dev, struct cxl_afu_t *afu)
+static void dump_afu_descriptor(struct cxl_afu_t *afu)
 {
 	u64 val;
 
-	if (!cxl_verbose)
-		return;
-
 #define show_reg(name, what) \
-	dev_info(&dev->dev, "afu desc: %30s: %#llx\n", name, what)
+	dev_info(&afu->dev, "afu desc: %30s: %#llx\n", name, what)
 
 	val = AFUD_READ_INFO(afu);
 	show_reg("num_ints_per_process", AFUD_NUM_INTS_PER_PROC(val));
@@ -335,13 +328,29 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter, struct pci_de
 	chipid = be32_to_cpup(prop);
 	of_node_put(np);
 
+	/* Tell PSL where to route data to */
 	psl_dsnctl = 0x02E8900002000000ULL | (chipid << (63-5));
-
-	cxl_p1_write(adapter, CXL_PSL_DSNDCTL, psl_dsnctl); /* Tell PSL where to route data to */
+	cxl_p1_write(adapter, CXL_PSL_DSNDCTL, psl_dsnctl);
 	cxl_p1_write(adapter, CXL_PSL_RESLCKTO, 0x20000000200ULL);
-	cxl_p1_write(adapter, CXL_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL); /* snoop write mask */
-	cxl_p1_write(adapter, CXL_PSL_FIR_CNTL, 0x0800000000000000ULL); /* set fir_accum */
-	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x0000FF7C00000000ULL); /* for debugging with trace arrays */
+	/* snoop write mask */
+	cxl_p1_write(adapter, CXL_PSL_SNWRALLOC, 0x00000000FFFFFFFFULL);
+	/* set fir_accum */
+	cxl_p1_write(adapter, CXL_PSL_FIR_CNTL, 0x0800000000000000ULL);
+	/* for debugging with trace arrays */
+	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x0000FF7C00000000ULL);
+
+	return 0;
+}
+
+static int init_implementation_afu_regs(struct cxl_afu_t *afu)
+{
+	/* read/write masks for this slice */
+	cxl_p1n_write(afu, CXL_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL);
+	/* APC read/write masks for this slice */
+	cxl_p1n_write(afu, CXL_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL);
+	/* for debugging with trace arrays */
+	cxl_p1n_write(afu, CXL_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL);
+	cxl_p1n_write(afu, CXL_PSL_RXCTL_A, 0xF000000000000000ULL);
 
 	return 0;
 }
@@ -349,49 +358,40 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter, struct pci_de
 static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq,
 			 unsigned int virq)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_ioda_msi_setup(dev, hwirq, virq);
 }
 
 static int alloc_one_hwirq(struct cxl_t *adapter)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_alloc_hwirqs(dev, 1);
 }
 
 static void release_one_hwirq(struct cxl_t *adapter, int hwirq)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_release_hwirqs(dev, hwirq, 1);
 }
 
 static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_alloc_hwirq_ranges(irqs, dev, num);
 }
 
 static void release_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter)
 {
-	struct pci_dev *dev = to_pci_dev(adapter->device.parent);
+	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	pnv_cxl_release_hwirq_ranges(irqs, dev);
 
 }
 
-
-static void cxl_release_afu(struct cxl_afu_t *afu)
-{
-	struct pci_dev *dev = to_pci_dev(afu->adapter->device.parent);
-
-	cxl_unmap_slice_regs(afu);
-	pnv_cxl_release_hwirqs(dev, afu->err_hwirq, 1);
-	pnv_cxl_release_hwirqs(dev, afu->psl_hwirq, 1);
-}
 
 static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.module = THIS_MODULE,
@@ -400,7 +400,6 @@ static struct cxl_driver_ops cxl_pci_driver_ops = {
 	.alloc_irq_ranges = alloc_hwirq_ranges,
 	.release_irq_ranges = release_hwirq_ranges,
 	.setup_irq = setup_cxl_msi,
-	.release_afu = cxl_release_afu,
 };
 
 static int setup_cxl_bars(struct pci_dev *dev)
@@ -465,45 +464,85 @@ static int enable_cxl_protocol(struct pci_dev *dev)
 	return rc;
 }
 
-static int init_slice(struct cxl_t *adapter,
-		      u64 ps_off, u64 ps_size,
-		      u64 afu_desc_off, u64 afu_desc_size,
-		      int slice, struct pci_dev *dev)
-{
-	struct cxl_afu_t *afu = &(adapter->slice[slice]);
-	u64 p1n_base, p2n_base, psn_base, afu_desc = 0;
-	u64 val;
-	int rc;
-	int err_hwirq;
 
+static int cxl_map_slice_regs(struct cxl_afu_t *afu, struct cxl_t *adapter, struct pci_dev *dev)
+{
+	u64 p1n_base, p2n_base, afu_desc;
 	const u64 p1n_size = 0x100;
 	const u64 p2n_size = 0x1000;
 
-	p1n_base = p1_base(dev) + 0x10000 + (slice * p1n_size);
-	p2n_base = p2_base(dev) + (slice * p2n_size);
-	psn_base = p2_base(dev) + (ps_off + (slice * ps_size));
-	afu_desc = p2_base(dev) + afu_desc_off + (slice * afu_desc_size);
+	p1n_base = p1_base(dev) + 0x10000 + (afu->slice * p1n_size);
+	p2n_base = p2_base(dev) + (afu->slice * p2n_size);
+	afu->psn_phys = p2_base(dev) + (adapter->ps_off + (afu->slice * adapter->ps_size));
+	afu_desc = p2_base(dev) + adapter->afu_desc_off + (afu->slice * adapter->afu_desc_size);
 
-	if ((rc = cxl_map_slice_regs(afu,
-				      p1n_base, p1n_size,
-				      p2n_base, p2n_size,
-				      psn_base, ps_size,
-				      afu_desc, afu_desc_size))) {
-		return rc;
+	if (!(afu->p1n_mmio = ioremap(p1n_base, p1n_size)))
+		goto err;
+	if (!(afu->p2n_mmio = ioremap(p2n_base, p2n_size)))
+		goto err1;
+	if (afu_desc) {
+		if (!(afu->afu_desc_mmio = ioremap(afu_desc, adapter->afu_desc_size)))
+			goto err2;
 	}
 
-	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
-	cxl_ops->afu_reset(afu);
-	dump_afu_descriptor(dev, afu);
+	return 0;
+err2:
+	iounmap(afu->p2n_mmio);
+err1:
+	iounmap(afu->p1n_mmio);
+err:
+	dev_err(&afu->dev, "Error mapping AFU MMIO regions\n");
+	return -ENOMEM;
+}
+
+static void cxl_unmap_slice_regs(struct cxl_afu_t *afu)
+{
+	if (afu->p1n_mmio)
+		iounmap(afu->p2n_mmio);
+	if (afu->p1n_mmio)
+		iounmap(afu->p1n_mmio);
+}
+
+static void cxl_release_afu(struct device *dev)
+{
+	struct cxl_afu_t *afu = to_cxl_afu(dev);
+
+	pr_devel("cxl_release_afu\n");
+
+	kfree(afu);
+}
+
+static struct cxl_afu_t *cxl_alloc_afu(struct cxl_t *adapter, int slice)
+{
+	struct cxl_afu_t *afu;
+
+	if (!(afu = kzalloc(sizeof(struct cxl_afu_t), GFP_KERNEL)))
+		return NULL;
+
+	afu->adapter = adapter;
+	afu->dev.parent = &adapter->dev;
+	afu->dev.release = cxl_release_afu;
+	afu->slice = slice;
+	idr_init(&afu->contexts_idr);
+	spin_lock_init(&afu->contexts_lock);
+	spin_lock_init(&afu->afu_cntl_lock);
+	mutex_init(&afu->spa_mutex);
 
 	afu->prefault_mode = CXL_PREFAULT_NONE;
-	/* Total - 1 PSL ERROR - #AFU*(1 slice error + 1 DSI) */
-	afu->user_irqs = pnv_cxl_get_irq_count(dev) - 1 - 2*adapter->slices;
-	afu->irqs_max = afu->user_irqs;
+	afu->irqs_max = afu->adapter->user_irqs;
+
+	return afu;
+}
+
+/* Expects AFU struct to have recently been zeroed out */
+static int cxl_read_afu_descriptor(struct cxl_afu_t *afu)
+{
+	u64 val;
+
 	val = AFUD_READ_INFO(afu);
 	afu->pp_irqs = AFUD_NUM_INTS_PER_PROC(val);
+	afu->max_procs_virtualised = AFUD_NUM_PROCS(val);
 
-	afu->models_supported = 0;
 	if (AFUD_AFU_DIRECTED(val))
 		afu->models_supported |= CXL_MODEL_DIRECTED;
 	if (AFUD_DEDICATED_PROCESS(val))
@@ -511,55 +550,139 @@ static int init_slice(struct cxl_t *adapter,
 	if (AFUD_TIME_SLICED(val))
 		afu->models_supported |= CXL_MODEL_TIME_SLICED;
 
-	if (afu->models_supported & CXL_MODEL_DIRECTED) {
-		afu->current_model = CXL_MODEL_DIRECTED;
-		afu->num_procs = AFUD_NUM_PROCS(val);
-		pr_devel("AFU in AFU directed model\n");
-	} else if (afu->models_supported & CXL_MODEL_DEDICATED) {
-		afu->current_model = CXL_MODEL_DEDICATED;
-		afu->num_procs = 1;
-		pr_devel("AFU in dedicated process model\n");
-	} else {
-		pr_err("No supported AFU programing models available\n");
-		rc = -ENODEV;
-		goto out;
-	}
-
 	val = AFUD_READ_PPPSA(afu);
 	afu->pp_size = AFUD_PPPSA_LEN(val) * 4096;
-	afu->mmio = AFUD_PPPSA_PSA(val);
-	if (!afu->mmio)
-		pr_devel("AFU doesn't support problem state area\n");
-	afu->pp_mmio = AFUD_PPPSA_PP(val);
-	if (afu->pp_mmio) {
+	afu->psa = AFUD_PPPSA_PSA(val);
+	if ((afu->pp_psa = AFUD_PPPSA_PP(val)))
 		afu->pp_offset = AFUD_READ_PPPSA_OFF(afu);
-	} else {
-		pr_devel("AFU doesn't support per process problem state area\n");
-		afu->pp_offset = 0;
+
+	return 0;
+}
+
+static int cxl_afu_descriptor_looks_ok(struct cxl_afu_t *afu)
+{
+	if (afu->psa && afu->adapter->ps_size <
+			(afu->pp_offset + afu->pp_size*afu->max_procs_virtualised)) {
+		dev_err(&afu->dev, "per-process PSA can't fit inside the PSA!\n");
+		return -ENODEV;
 	}
 
-	WARN_ON(afu->mmio && afu->psn_size < (afu->pp_offset +
-				 afu->pp_size*afu->num_procs));
-	WARN_ON(afu->pp_mmio && (afu->pp_size < PAGE_SIZE));
+	if (afu->pp_psa && (afu->pp_size < PAGE_SIZE))
+		dev_warn(&afu->dev, "AFU uses < PAGE_SIZE per-process PSA!");
 
-	err_hwirq = pnv_cxl_alloc_hwirqs(dev, 1);
-	if (err_hwirq < 0) {
-		rc = err_hwirq;
-		goto out;
-	}
+	return 0;
+}
 
-	if ((rc = cxl_init_afu(afu, 0, err_hwirq))) {
-		dev_err(&dev->dev, "cxl_init_afu failed: %i\n", rc);
-		goto out1;
-	}
+static int sanitise_afu_regs(struct cxl_afu_t *afu)
+{
+	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
+
+	return 0;
+}
+
+static int cxl_init_afu(struct cxl_t *adapter, int slice, struct pci_dev *dev)
+{
+	struct cxl_afu_t *afu;
+	bool free = true;
+	int rc;
+
+	if (!(afu = cxl_alloc_afu(adapter, slice)))
+		return -ENOMEM;
+
+	if ((rc = dev_set_name(&afu->dev, "afu%i.%i", adapter->adapter_num, slice)))
+		goto err1;
+
+	if ((rc = cxl_map_slice_regs(afu, adapter, dev)))
+		goto err1;
+
+	if ((rc = sanitise_afu_regs(afu)))
+		goto err2;
+
+	/* We need to reset the AFU before we can read the AFU descriptor */
+	if ((rc = cxl_ops->afu_reset(afu)))
+		goto err2;
+
+	if (cxl_verbose)
+		dump_afu_descriptor(afu);
+
+	if ((rc = cxl_read_afu_descriptor(afu)))
+		goto err2;
+
+	if ((rc = cxl_afu_descriptor_looks_ok(afu)))
+		goto err2;
+
+	if ((rc = init_implementation_afu_regs(afu)))
+		goto err2;
+
+	if ((rc = cxl_register_serr_irq(afu)))
+		goto err2;
+
+	if ((rc = cxl_register_psl_irq(afu)))
+		goto err3;
+
+	/* Don't care if this fails */
+	cxl_debugfs_afu_add(afu);
+
+	/* After we call this function we must not free the afu directly, even
+	 * if it returns an error! */
+	if ((rc = cxl_register_afu(afu)))
+		goto err_put1;
+
+	if ((rc = cxl_chardev_afu_add(afu)))
+		goto err_put1;
+
+	if ((rc = cxl_sysfs_afu_add(afu)))
+		goto err_put2;
+
+
+	if ((rc = cxl_afu_select_best_model(afu)))
+		goto err_put3;
+
+	adapter->afu[afu->slice] = afu;
 
 	return 0;
 
-out1:
-	pnv_cxl_release_hwirqs(dev, err_hwirq, 1);
-out:
+err_put3:
+	cxl_sysfs_afu_remove(afu);
+err_put2:
+	cxl_chardev_afu_remove(afu);
+err_put1:
+	device_unregister(&afu->dev);
+	free = false;
+	cxl_debugfs_afu_remove(afu);
+	cxl_release_psl_irq(afu);
+err3:
+	cxl_release_serr_irq(afu);
+err2:
 	cxl_unmap_slice_regs(afu);
+err1:
+	if (free)
+		kfree(afu);
 	return rc;
+}
+
+static void cxl_remove_afu(struct cxl_afu_t *afu)
+{
+	pr_devel("cxl_remove_afu\n");
+
+	if (!afu)
+		return;
+
+	spin_lock(&afu->adapter->afu_list_lock);
+
+	afu->adapter->afu[afu->slice] = NULL;
+
+	cxl_sysfs_afu_remove(afu);
+	cxl_chardev_afu_remove(afu);
+	cxl_context_detach_all(afu);
+	cxl_debugfs_afu_remove(afu);
+	cxl_release_psl_irq(afu);
+	cxl_release_serr_irq(afu);
+	cxl_unmap_slice_regs(afu);
+
+	spin_unlock(&afu->adapter->afu_list_lock);
+
+	device_unregister(&afu->dev);
 }
 
 
@@ -609,7 +732,7 @@ static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
 	u8 image_state;
 
 	if (!(vsec = find_cxl_vsec(dev))) {
-		dev_err(&dev->dev, "ABORTING: CXL VSEC not found!\n");
+		dev_err(&adapter->dev, "ABORTING: CXL VSEC not found!\n");
 		return -ENODEV;
 	}
 
@@ -642,30 +765,36 @@ static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
 	adapter->afu_desc_off = afu_desc_off * 64 * 1024;
 	adapter->afu_desc_size = afu_desc_size *64 * 1024;
 
+	/* Total IRQs - 1 PSL ERROR - #AFU*(1 slice error + 1 DSI) */
+	adapter->user_irqs = pnv_cxl_get_irq_count(dev) - 1 - 2*adapter->slices;
+
 	return 0;
 }
 
 static int cxl_vsec_looks_ok(struct cxl_t *adapter, struct pci_dev *dev)
 {
+	if (adapter->vsec_status & CXL_STATUS_SECOND_PORT)
+		return -EBUSY;
+
 	if (adapter->vsec_status & CXL_UNSUPPORTED_FEATURES) {
-		dev_err(&dev->dev, "ABORTING: CXL requires unsupported features\n");
+		dev_err(&adapter->dev, "ABORTING: CXL requires unsupported features\n");
 		return -EINVAL;
 	}
 
 	if (!adapter->slices) {
 		/* Once we support dynamic reprogramming we can use the card if
 		 * it supports loadable AFUs */
-		dev_err(&dev->dev, "ABORTING: Device has no AFUs\n");
+		dev_err(&adapter->dev, "ABORTING: Device has no AFUs\n");
 		return -EINVAL;
 	}
 
 	if (!adapter->afu_desc_off || !adapter->afu_desc_size) {
-		dev_err(&dev->dev, "ABORTING: VSEC shows no AFU descriptors\n");
+		dev_err(&adapter->dev, "ABORTING: VSEC shows no AFU descriptors\n");
 		return -EINVAL;
 	}
 
 	if (adapter->ps_size > p2_size(dev) - adapter->ps_off) {
-		dev_err(&dev->dev, "ABORTING: Problem state size larger than "
+		dev_err(&adapter->dev, "ABORTING: Problem state size larger than "
 				   "available in BAR2: 0x%llx > 0x%llx\n",
 			 adapter->ps_size, p2_size(dev) - adapter->ps_off);
 		return -EINVAL;
@@ -677,20 +806,10 @@ static int cxl_vsec_looks_ok(struct cxl_t *adapter, struct pci_dev *dev)
 static void cxl_release_adapter(struct device *dev)
 {
 	struct cxl_t *adapter = to_cxl_adapter(dev);
-	struct pci_dev *pdev = to_pci_dev(adapter->device.parent);
 
 	pr_devel("cxl_release_adapter\n");
 
-	cxl_sysfs_adapter_remove(adapter);
-	cxl_debugfs_adapter_remove(adapter);
-	cxl_release_psl_err_irq(adapter);
-	cxl_unmap_adapter_regs(adapter);
-	pci_release_region(pdev, 0);
-	pci_release_region(pdev, 2);
-	cxl_remove_adapter_nr(adapter);
 	kfree(adapter);
-
-	pci_disable_device(pdev);
 }
 
 static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
@@ -700,10 +819,11 @@ static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 	if (!(adapter = kzalloc(sizeof(struct cxl_t), GFP_KERNEL)))
 		return NULL;
 
-	adapter->device.parent = &dev->dev;
-	adapter->device.release = cxl_release_adapter;
+	adapter->dev.parent = &dev->dev;
+	adapter->dev.release = cxl_release_adapter;
 	adapter->driver = &cxl_pci_driver_ops;
 	pci_set_drvdata(dev, adapter);
+	spin_lock_init(&adapter->afu_list_lock);
 
 	return adapter;
 }
@@ -711,29 +831,33 @@ static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 {
 	struct cxl_t *adapter;
+	bool free = true;
 	int rc;
 
 	if (!(adapter = cxl_alloc_adapter(dev)))
 		return ERR_PTR(-ENOMEM);
 
-	if ((rc = cxl_read_vsec(adapter, dev)))
+	if ((rc = cxl_alloc_adapter_nr(adapter)))
 		goto err1;
+
+	if ((rc = dev_set_name(&adapter->dev, "card%i", adapter->adapter_num)))
+		goto err2;
+
+	if ((rc = cxl_read_vsec(adapter, dev)))
+		goto err2;
 
 	if ((rc = cxl_vsec_looks_ok(adapter, dev)))
-		goto err1;
+		goto err2;
 
 	if ((rc = cxl_map_adapter_regs(adapter, dev)))
-		goto err1;
+		goto err2;
 
 	/* TODO: cxl_ops->sanitise_adapter_regs(adapter); */
 
 	if ((rc = init_implementation_adapter_regs(adapter, dev)))
-		goto err2;
+		goto err3;
 
 	if ((rc = cxl_register_psl_err_irq(adapter)))
-		goto err2;
-
-	if ((rc = cxl_alloc_adapter_nr(adapter)))
 		goto err3;
 
 	/* Don't care if this one fails: */
@@ -750,33 +874,37 @@ static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 	return adapter;
 
 err_put1:
-	device_unregister(&adapter->device);
-	return ERR_PTR(rc);
-
-	/* If you add more error paths before cxl_register_adapter remember:
-err4:
+	device_unregister(&adapter->dev);
+	free = false;
 	cxl_debugfs_adapter_remove(adapter);
-	cxl_remove_adapter_nr(adapter);
-	*/
-err3:
 	cxl_release_psl_err_irq(adapter);
-err2:
+err3:
 	cxl_unmap_adapter_regs(adapter);
+err2:
+	cxl_remove_adapter_nr(adapter);
 err1:
-	kfree(adapter);
+	if (free)
+		kfree(adapter);
 	return ERR_PTR(rc);
 }
 
-static void afu_t_init(struct cxl_t *adapter, int slice)
+static void cxl_remove_adapter(struct cxl_t *adapter)
 {
-	struct cxl_afu_t *afu = &adapter->slice[slice];
+	struct pci_dev *pdev = to_pci_dev(adapter->dev.parent);
 
-	afu->adapter = adapter;
-	afu->slice = slice;
-	idr_init(&afu->contexts_idr);
-	spin_lock_init(&afu->contexts_lock);
-	spin_lock_init(&afu->afu_cntl_lock);
-	mutex_init(&afu->spa_mutex);
+	pr_devel("cxl_release_adapter\n");
+
+	cxl_sysfs_adapter_remove(adapter);
+	cxl_debugfs_adapter_remove(adapter);
+	cxl_release_psl_err_irq(adapter);
+	cxl_unmap_adapter_regs(adapter);
+	cxl_remove_adapter_nr(adapter);
+
+	device_unregister(&adapter->dev);
+
+	pci_release_region(pdev, 0);
+	pci_release_region(pdev, 2);
+	pci_disable_device(pdev);
 }
 
 static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
@@ -786,7 +914,9 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	int rc;
 
 	pci_dev_get(dev);
-	dump_cxl_config_space(dev);
+
+	if (cxl_verbose)
+		dump_cxl_config_space(dev);
 
 	if ((rc = setup_cxl_bars(dev)))
 		return rc;
@@ -809,12 +939,8 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	for (slice = 0; slice < adapter->slices; slice++) {
-		afu_t_init(adapter, slice);
-		if ((rc = init_slice(adapter, adapter->ps_off, adapter->ps_size,
-				     adapter->afu_desc_off, adapter->afu_desc_size,
-				     slice, dev))) {
-			dev_warn(&dev->dev, "AFU %i failed to initialise: %i\n", slice, rc);
-		}
+		if ((rc = cxl_init_afu(adapter, slice, dev)))
+			dev_err(&dev->dev, "AFU %i failed to initialise: %i\n", slice, rc);
 	}
 
 	return 0;
@@ -827,10 +953,11 @@ static void cxl_remove(struct pci_dev *dev)
 
 	dev_warn(&dev->dev, "pci remove\n");
 
-	/* FIXME: Test this!!! */
+	/* Lock to prevent someone grabbing a ref through the adapter list as
+	 * we are removing it */
 	for (afu = 0; afu < adapter->slices; afu++)
-		cxl_unregister_afu(&adapter->slice[afu]);
-	device_unregister(&adapter->device);
+		cxl_remove_afu(adapter->afu[afu]);
+	cxl_remove_adapter(adapter);
 }
 
 static struct pci_driver cxl_pci_driver = {

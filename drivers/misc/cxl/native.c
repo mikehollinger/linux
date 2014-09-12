@@ -189,49 +189,6 @@ static void release_spa(struct cxl_afu_t *afu)
 	free_pages((unsigned long) afu->spa, afu->spa_order);
 }
 
-static int init_afu_native(struct cxl_afu_t *afu, u64 handle)
-{
-	u64 val;
-	int rc = 0;
-
-	if (afu->err_hwirq) { /* Can drop this test when the BML support is pulled out - under phyp we use cxl-of.c */
-		pr_devel("cxl slice error IVTE: %#lx\n", afu->err_hwirq);
-		afu->err_virq = cxl_map_irq(afu->adapter, afu->err_hwirq, cxl_slice_irq_err, afu);
-		val = cxl_p1n_read(afu, CXL_PSL_SERR_An);
-		val = (val & 0x00ffffffffff0000ULL) | (afu->err_hwirq & 0xffff);
-		cxl_p1n_write(afu, CXL_PSL_SERR_An, val);
-	}
-
-	cxl_p1n_write(afu, CXL_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL); /* read/write masks for this slice */
-	cxl_p1n_write(afu, CXL_PSL_COALLOC_A, 0xFF000000FEFEFEFEULL); /* APC read/write masks for this slice */
-
-	/* changes recommended per JT and Yoanna 11/15/2013 */
-	cxl_p1n_write(afu, CXL_PSL_SLICE_TRACE, 0x0000FFFF00000000ULL); /* for debugging with trace arrays */
-
-	cxl_p1n_write(afu, CXL_PSL_RXCTL_A, 0xF000000000000000ULL);
-
-	if (afu->current_model == CXL_MODEL_DIRECTED)
-		if (alloc_spa(afu))
-			return -ENOMEM;
-
-	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_AFU);
-	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
-	cxl_p1n_write(afu, CXL_PSL_ID_An, CXL_PSL_ID_An_F | CXL_PSL_ID_An_L);
-
-	if ((rc = afu_reset_and_disable(afu)))
-		return rc;
-
-	return rc;
-}
-
-static void release_afu_native(struct cxl_afu_t *afu)
-{
-	release_spa(afu);
-	cxl_unmap_irq(afu->err_virq, afu);
-	if (afu->adapter->driver && afu->adapter->driver->release_afu)
-		afu->adapter->driver->release_afu(afu);
-}
-
 static void afu_slbia_native(struct cxl_afu_t *afu)
 {
 	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
@@ -360,7 +317,7 @@ static void assign_psn_space(struct cxl_context_t *ctx)
 {
 	if (!ctx->afu->pp_size || ctx->master) {
 		ctx->psn_phys = ctx->afu->psn_phys;
-		ctx->psn_size = ctx->afu->psn_size;
+		ctx->psn_size = ctx->afu->adapter->ps_size;
 	} else {
 		ctx->psn_phys = ctx->afu->psn_phys +
 			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
@@ -368,6 +325,78 @@ static void assign_psn_space(struct cxl_context_t *ctx)
 	}
 }
 
+static int activate_afu_directed(struct cxl_afu_t *afu)
+{
+	dev_info(&afu->dev, "Activating AFU directed model\n");
+
+	if (alloc_spa(afu))
+		return -ENOMEM;
+
+	afu->current_model = CXL_MODEL_DIRECTED;
+	afu->num_procs = afu->max_procs_virtualised;
+
+	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_AFU);
+	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
+	cxl_p1n_write(afu, CXL_PSL_ID_An, CXL_PSL_ID_An_F | CXL_PSL_ID_An_L);
+
+	return 0;
+}
+
+static int deactivate_afu_directed(struct cxl_afu_t *afu)
+{
+	dev_info(&afu->dev, "Deactivating AFU directed model\n");
+
+	afu->current_model = 0;
+	afu->num_procs = 0;
+
+	release_spa(afu);
+
+	return 0;
+}
+
+static int activate_dedicated_process(struct cxl_afu_t *afu)
+{
+	dev_info(&afu->dev, "Activating dedicated process model\n");
+
+	afu->current_model = CXL_MODEL_DEDICATED;
+	afu->num_procs = 1;
+
+	return 0;
+}
+
+static int deactivate_dedicated_process(struct cxl_afu_t *afu)
+{
+	dev_info(&afu->dev, "Deactivating dedicated process model\n");
+
+	afu->current_model = 0;
+	afu->num_procs = 0;
+
+	return 0;
+}
+
+int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
+{
+	int rc;
+
+	if (afu->current_model == CXL_MODEL_DIRECTED) {
+		if ((rc = deactivate_afu_directed(afu)))
+			return rc;
+	}
+	if (afu->current_model == CXL_MODEL_DEDICATED) {
+		if ((rc = deactivate_dedicated_process(afu)))
+			return rc;
+	}
+
+	if (!model)
+		return 0;
+	if (model == CXL_MODEL_DIRECTED)
+		return activate_afu_directed(afu);
+	if (model == CXL_MODEL_DEDICATED)
+		return activate_dedicated_process(afu);
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL(cxl_afu_activate_model);
 
 static int init_afu_directed_process(struct cxl_context_t *ctx,
 				     u64 wed, u64 amr)
@@ -588,12 +617,10 @@ static int check_error(struct cxl_afu_t *afu)
 }
 
 static const struct cxl_backend_ops cxl_native_ops = {
-	.init_afu = init_afu_native,
 	.init_process = init_process_native,
 	.detach_process = detach_process_native,
 	.get_irq = get_irq_native,
 	.ack_irq = ack_irq_native,
-	.release_afu = release_afu_native,
 	.check_error = check_error,
 	.slbia = afu_slbia_native,
 	.afu_reset = afu_reset_and_disable,

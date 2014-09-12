@@ -90,11 +90,11 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
 
 	if (ctx->afu->current_model == CXL_MODEL_DEDICATED) {
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-		return vm_iomap_memory(vma, ctx->afu->psn_phys, ctx->afu->psn_size);
+		return vm_iomap_memory(vma, ctx->afu->psn_phys, ctx->afu->adapter->ps_size);
 	}
 
 	/* make sure there is a valid per process space for this AFU */
-	if ((ctx->master && !ctx->afu->mmio) || (!ctx->afu->pp_mmio)) {
+	if ((ctx->master && !ctx->afu->psa) || (!ctx->afu->pp_psa)) {
 		pr_devel("AFU doesn't support mmio space\n");
 		return -EINVAL;
 	}

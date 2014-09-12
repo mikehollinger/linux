@@ -15,16 +15,20 @@
 
 struct dentry *cxl_debugfs;
 
-void cxl_stop_trace(struct cxl_t *cxl)
+void cxl_stop_trace(struct cxl_t *adapter)
 {
 	int slice;
 
 	/* Stop the trace */
-	cxl_p1_write(cxl, CXL_PSL_TRACE, 0x8000000000000017LL);
+	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x8000000000000017LL);
 
 	/* Stop the slice traces */
-	for (slice = 0; slice < cxl->slices; slice++)
-		cxl_p1n_write(&cxl->slice[slice], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
+	spin_lock(&adapter->afu_list_lock);
+	for (slice = 0; slice < adapter->slices; slice++) {
+		if (adapter->afu[slice])
+			cxl_p1n_write(adapter->afu[slice], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
+	}
+	spin_unlock(&adapter->afu_list_lock);
 }
 
 int cxl_debugfs_adapter_add(struct cxl_t *adapter)
@@ -70,6 +74,7 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 	dir = debugfs_create_dir(buf, afu->adapter->debugfs);
 	if (IS_ERR(dir))
 		return PTR_ERR(dir);
+	afu->debugfs = dir;
 
 	debugfs_create_x64("fir",        S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
 	debugfs_create_x64("serr",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SERR_An));
@@ -86,6 +91,12 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 
 	return 0;
 }
+
+void cxl_debugfs_afu_remove(struct cxl_afu_t *afu)
+{
+	debugfs_remove_recursive(afu->debugfs);
+}
+EXPORT_SYMBOL(cxl_debugfs_afu_remove);
 
 int __init cxl_debugfs_init(void)
 {

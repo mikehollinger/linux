@@ -27,7 +27,22 @@
 #include "cxl.h"
 
 #define CXL_NUM_MINORS 256 /* Total to reserve */
-#define CXL_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/slave) */
+#define CXL_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/shared) */
+
+#define CXL_CARD_MINOR(adapter) (adapter->adapter_num * CXL_DEV_MINORS)
+#define CXL_AFU_MINOR(afu) (CXL_CARD_MINOR(afu->adapter) + 1 + (2 * afu->slice))
+#define CXL_AFU_MINOR_M(afu) (CXL_AFU_MINOR(afu) + 1)
+#define CXL_AFU_MKDEV(afu) MKDEV(MAJOR(cxl_dev), CXL_AFU_MINOR(afu))
+#define CXL_AFU_MKDEV_M(afu) MKDEV(MAJOR(cxl_dev), CXL_AFU_MINOR_M(afu))
+
+#define CXL_DEVT_ADAPTER(dev) (MINOR(dev) / CXL_DEV_MINORS)
+#define CXL_DEVT_AFU(dev) ((MINOR(dev) % CXL_DEV_MINORS - 1) / 2)
+
+#define CXL_DEVT_IS_CARD(dev) (MINOR(dev) % CXL_DEV_MINORS == 0)
+#define CXL_DEVT_IS_AFU(dev) (!CXL_DEVT_IS_CARD(dev))
+#define _CXL_DEVT_IS_AFU_S(dev) (((MINOR(dev) % CXL_DEV_MINORS) % 2) == 1)
+#define CXL_DEVT_IS_AFU_S(dev) (!CXL_DEVT_IS_CARD(dev) && _CXL_DEVT_IS_AFU_S(dev))
+#define CXL_DEVT_IS_AFU_M(dev) (!CXL_DEVT_IS_CARD(dev) && !_CXL_DEVT_IS_AFU_S(dev))
 
 dev_t cxl_dev;
 
@@ -38,36 +53,53 @@ static int
 __afu_open(struct inode *inode, struct file *file, bool master)
 {
 	struct cxl_t *adapter;
+	struct cxl_afu_t *afu;
 	struct cxl_context_t *ctx;
-	int minor = MINOR(inode->i_rdev);
-	int adapter_num = minor / CXL_DEV_MINORS;
-	int slice = (minor % CXL_DEV_MINORS - 1) % CXL_MAX_SLICES;
-	int rc;
+	int adapter_num = CXL_DEVT_ADAPTER(inode->i_rdev);
+	int slice = CXL_DEVT_AFU(inode->i_rdev);
+	int rc = -ENODEV;
 
-	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
+	pr_devel("afu_open afu%i.%i\n", slice, adapter_num);
 
-	adapter = get_cxl_adapter(adapter_num);
-	if (!adapter)
-		return -ENODEV;
-	if (slice > adapter->slices)
+	if (!(adapter = get_cxl_adapter(adapter_num)))
 		return -ENODEV;
 
-	/* We need to stop the bus driver from being unloaded */
 	if (!try_module_get(adapter->driver->module))
-		return -ENODEV;
+		goto err_put_adapter;
 
-	ctx = cxl_context_alloc();
-	if (!ctx)
-		return -ENOMEM;
+	if (slice > adapter->slices)
+		goto err_put_module;
 
-	if ((rc = cxl_context_init(ctx, &adapter->slice[slice], master)))
-		return rc;
+	spin_lock(&adapter->afu_list_lock);
+	if (!(afu = adapter->afu[slice]))
+		goto err_unlock;
+	get_device(&afu->dev);
+	spin_unlock(&adapter->afu_list_lock);
+
+	if (!(ctx = cxl_context_alloc())) {
+		rc = -ENOMEM;
+		goto err_put_module;
+	}
+
+	if ((rc = cxl_context_init(ctx, afu, master)))
+		goto err_put_module;
 
 	pr_devel("afu_open pe: %i\n", ctx->ph);
 	cxl_context_start(ctx);
 	file->private_data = ctx;
 
+	/* Our ref on the AFU will now hold the adapter */
+	put_device(&adapter->dev);
+
 	return 0;
+
+err_unlock:
+	spin_unlock(&adapter->afu_list_lock);
+err_put_module:
+	module_put(adapter->driver->module);
+err_put_adapter:
+	put_device(&adapter->dev);
+	return rc;
 }
 static int
 afu_open(struct inode *inode, struct file *file)
@@ -91,6 +123,8 @@ afu_release(struct inode *inode, struct file *file)
 	cxl_context_detach(ctx);
 
 	module_put(ctx->afu->adapter->driver->module);
+
+	put_device(&ctx->afu->dev);
 
 	/* It should be safe to remove the context now */
 	cxl_context_free(ctx);
@@ -338,90 +372,102 @@ static const struct file_operations afu_master_fops = {
 
 static char *cxl_devnode(struct device *dev, umode_t *mode)
 {
-	if (MINOR(dev->devt) % CXL_DEV_MINORS == 0) {
+	struct cxl_afu_t *afu;
+
+	if (CXL_DEVT_IS_CARD(dev->devt)) {
 		/* These minor numbers will eventually be used to program the
 		 * PSL and AFUs once we have dynamic reprogramming support */
 		return NULL;
+	} else { /* CXL_DEVT_IS_AFU */
+		/* Default character devices in each programming model just get
+		 * named /dev/cxl/afuX.Y */
+		afu = dev_get_drvdata(dev);
+		if ((afu->current_model == CXL_MODEL_DEDICATED) &&
+				CXL_DEVT_IS_AFU_M(dev->devt))
+			return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(&afu->dev));
+		if ((afu->current_model == CXL_MODEL_DIRECTED) &&
+				CXL_DEVT_IS_AFU_S(dev->devt))
+			return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(&afu->dev));
 	}
 	return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(dev));
 }
 
 extern struct class *cxl_class;
 
-int add_cxl_afu_dev(struct cxl_afu_t *afu)
+int cxl_chardev_afu_add(struct cxl_afu_t *afu)
 {
+	struct device *dev;
 	int rc;
-	unsigned int cxl_major = MAJOR(afu->adapter->device.devt);
-	unsigned int cxl_minor = MINOR(afu->adapter->device.devt);
 
-	/* Add the AFU slave device */
-	/* FIXME check afu->pp_mmio to see if we need this file */
-	afu->device.parent = &afu->adapter->device;
-	afu->device.class = cxl_class;
-	dev_set_name(&afu->device, "afu%i.%i", afu->adapter->adapter_num, afu->slice);
-	afu->device.devt = MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + afu->slice);
-
-	if ((rc = device_register(&afu->device)))
+	cdev_init(&afu->afu_cdev_s, &afu_fops);
+	if ((rc = cdev_add(&afu->afu_cdev_s, CXL_AFU_MKDEV(afu), 1))) {
+		dev_err(&afu->dev, "Unable to add shared chardev: %i\n", rc);
 		return rc;
-
-	cdev_init(&afu->adapter->afu_cdev, &afu_fops);
-	rc = cdev_add(&afu->adapter->afu_cdev, MKDEV(cxl_major, cxl_minor + CXL_MAX_SLICES + 1 + afu->slice), afu->adapter->slices);
-	if (rc) {
-		pr_err("Unable to register CXL AFU character devices: %i\n", rc);
-		goto out;
 	}
 
-	/* Add the AFU master device */
-	afu->device_master.parent = &afu->device;
-	afu->device_master.class = cxl_class;
-	dev_set_name(&afu->device_master, "afu%i.%im", afu->adapter->adapter_num, afu->slice);
-	afu->device_master.devt = MKDEV(cxl_major, cxl_minor + 1 + afu->slice);
-
-	if ((rc = device_register(&afu->device_master)))
-		goto out1;
-
-	if ((rc = cxl_sysfs_afu_add(afu)))
-		goto out2;
-
-	cdev_init(&afu->adapter->afu_master_cdev, &afu_master_fops);
-	rc = cdev_add(&afu->adapter->afu_master_cdev, MKDEV(cxl_major, cxl_minor + 1 + afu->slice), afu->adapter->slices);
-	if (rc) {
-		pr_err("Unable to register CXL AFU master character devices: %i\n", rc);
-		goto out3;
+	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV(afu), afu,
+			"afu%i.%is", afu->adapter->adapter_num, afu->slice);
+	if (IS_ERR(dev)) {
+		dev_err(&afu->dev, "Unable to create shared chardev in sysfs: %i\n", rc);
+		rc = PTR_ERR(dev);
+		goto err1;
 	}
+
+	afu->chardev_s = dev;
+
+	cdev_init(&afu->afu_cdev_m, &afu_master_fops);
+	if ((rc = cdev_add(&afu->afu_cdev_m, CXL_AFU_MKDEV_M(afu), 1))) {
+		dev_err(&afu->dev, "Unable to add master chardev: %i\n", rc);
+		goto err2;
+	}
+
+	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_M(afu), afu,
+			"afu%i.%im", afu->adapter->adapter_num, afu->slice);
+	if (IS_ERR(dev)) {
+		dev_err(&afu->dev, "Unable to create master chardev in sysfs: %i\n", rc);
+		rc = PTR_ERR(dev);
+		goto err3;
+	}
+
+	afu->chardev_m = dev;
 
 	return 0;
 
-out3:
-	cxl_sysfs_afu_remove(afu);
-out2:
-	device_unregister(&afu->device_master);
-out1:
-	cdev_del(&afu->adapter->afu_cdev);
-out:
-	device_unregister(&afu->device);
+err3:
+	cdev_del(&afu->afu_cdev_m);
+err2:
+	device_unregister(afu->chardev_s);
+	afu->chardev_s = NULL;
+err1:
+	cdev_del(&afu->afu_cdev_s);
 	return rc;
 }
 
-void del_cxl_afu_dev(struct cxl_afu_t *afu)
+void cxl_chardev_afu_remove(struct cxl_afu_t *afu)
 {
-	cxl_sysfs_afu_remove(afu);
-	cdev_del(&afu->adapter->afu_master_cdev);
-	device_unregister(&afu->device_master);
-	cdev_del(&afu->adapter->afu_cdev);
-	device_unregister(&afu->device);
-	cxl_context_detach_all(afu);
+	cdev_del(&afu->afu_cdev_m);
+	device_unregister(afu->chardev_m);
+	cdev_del(&afu->afu_cdev_s);
+	device_unregister(afu->chardev_s);
 }
 
-/* Just use unregister_device when done */
+int cxl_register_afu(struct cxl_afu_t *afu)
+{
+	afu->dev.class = cxl_class;
+
+	return device_register(&afu->dev);
+}
+
 int cxl_register_adapter(struct cxl_t *adapter)
 {
-	adapter->device.class = cxl_class;
+	adapter->dev.class = cxl_class;
 
-	dev_set_name(&adapter->device, "card%i", adapter->adapter_num);
-	adapter->device.devt = MKDEV(MAJOR(cxl_dev), adapter->adapter_num * CXL_DEV_MINORS);
+	/* Future: When we support dynamically reprogramming the PSL & AFU we
+	 * will expose the interface to do that via a chardev:
+	 * adapter->dev.devt = CXL_CARD_MKDEV(adapter);
+	 */
 
-	return device_register(&adapter->device);
+	return device_register(&adapter->dev);
 }
 EXPORT_SYMBOL(cxl_register_adapter);
 

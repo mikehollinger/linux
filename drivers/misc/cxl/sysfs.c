@@ -13,7 +13,7 @@
 
 #include "cxl.h"
 
-#define master_to_afu(d) container_of(d, struct cxl_afu_t, device_master)
+#define to_afu_chardev_m(d) dev_get_drvdata(d)
 
 /*********  Adapter attributes  **********************************************/
 
@@ -72,16 +72,16 @@ static ssize_t mmio_size_show_master(struct device *device,
 				     struct device_attribute *attr,
 				     char *buf)
 {
-	struct cxl_afu_t *afu = master_to_afu(device);
+	struct cxl_afu_t *afu = to_afu_chardev_m(device);
 
-	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->psn_size);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->adapter->ps_size);
 }
 
 static ssize_t pp_mmio_off_show(struct device *device,
 				struct device_attribute *attr,
 				char *buf)
 {
-	struct cxl_afu_t *afu = master_to_afu(device);
+	struct cxl_afu_t *afu = to_afu_chardev_m(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_offset);
 }
@@ -90,7 +90,7 @@ static ssize_t pp_mmio_len_show(struct device *device,
 				struct device_attribute *attr,
 				char *buf)
 {
-	struct cxl_afu_t *afu = master_to_afu(device);
+	struct cxl_afu_t *afu = to_afu_chardev_m(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_size);
 }
@@ -112,7 +112,7 @@ static ssize_t mmio_size_show(struct device *device,
 
 	if (afu->pp_size)
 		return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_size);
-	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->psn_size);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->adapter->ps_size);
 }
 
 static ssize_t reset_store_afu(struct device *device,
@@ -160,7 +160,7 @@ static ssize_t irqs_max_store(struct device *device,
 	if (irqs_max < afu->pp_irqs)
 		return -EINVAL;
 
-	if (irqs_max > afu->user_irqs)
+	if (irqs_max > afu->adapter->user_irqs)
 		return -EINVAL;
 
 	afu->irqs_max = irqs_max;
@@ -228,7 +228,7 @@ static ssize_t model_show(struct device *device,
 		return scnprintf(buf, PAGE_SIZE, "dedicated_process\n");
 	if (afu->current_model == CXL_MODEL_DIRECTED)
 		return scnprintf(buf, PAGE_SIZE, "afu_directed\n");
-	return -EINVAL;
+	return scnprintf(buf, PAGE_SIZE, "none\n");
 }
 
 static ssize_t model_store(struct device *device,
@@ -259,14 +259,13 @@ int cxl_sysfs_adapter_add(struct cxl_t *adapter)
 	int i, rc;
 
 	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++) {
-		if ((rc = device_create_file(&adapter->device, &adapter_attrs[i])))
+		if ((rc = device_create_file(&adapter->dev, &adapter_attrs[i])))
 			goto err;
 	}
-	adapter->sysfs_init = true;
 	return 0;
 err:
 	for (i--; i >= 0; i--)
-		device_remove_file(&adapter->device, &adapter_attrs[i]);
+		device_remove_file(&adapter->dev, &adapter_attrs[i]);
 	return rc;
 }
 EXPORT_SYMBOL(cxl_sysfs_adapter_add);
@@ -274,11 +273,8 @@ void cxl_sysfs_adapter_remove(struct cxl_t *adapter)
 {
 	int i;
 
-	if (!adapter->sysfs_init)
-		return;
-
 	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++)
-		device_remove_file(&adapter->device, &adapter_attrs[i]);
+		device_remove_file(&adapter->dev, &adapter_attrs[i]);
 }
 EXPORT_SYMBOL(cxl_sysfs_adapter_remove);
 
@@ -287,21 +283,22 @@ int cxl_sysfs_afu_add(struct cxl_afu_t *afu)
 	int afu_attr, mstr_attr, rc = 0;
 
 	for (afu_attr = 0; afu_attr < ARRAY_SIZE(afu_attrs); afu_attr++) {
-		if ((rc = device_create_file(&afu->device, &afu_attrs[afu_attr])))
+		if ((rc = device_create_file(&afu->dev, &afu_attrs[afu_attr])))
 			goto err;
 	}
 	for (mstr_attr = 0; mstr_attr < ARRAY_SIZE(afu_master_attrs); mstr_attr++) {
-		if ((rc = device_create_file(&afu->device_master, &afu_master_attrs[mstr_attr])))
+		if ((rc = device_create_file(afu->chardev_m, &afu_master_attrs[mstr_attr])))
 			goto err1;
 	}
+
 	return 0;
 
 err1:
 	for (mstr_attr--; mstr_attr >= 0; mstr_attr--)
-		device_remove_file(&afu->device_master, &afu_master_attrs[mstr_attr]);
+		device_remove_file(afu->chardev_m, &afu_master_attrs[mstr_attr]);
 err:
 	for (afu_attr--; afu_attr >= 0; afu_attr--)
-		device_remove_file(&afu->device, &afu_attrs[afu_attr]);
+		device_remove_file(&afu->dev, &afu_attrs[afu_attr]);
 	return rc;
 }
 void cxl_sysfs_afu_remove(struct cxl_afu_t *afu)
@@ -309,7 +306,7 @@ void cxl_sysfs_afu_remove(struct cxl_afu_t *afu)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(afu_master_attrs); i++)
-		device_remove_file(&afu->device_master, &afu_master_attrs[i]);
+		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
 	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++)
-		device_remove_file(&afu->device, &afu_attrs[i]);
+		device_remove_file(&afu->dev, &afu_attrs[i]);
 }
