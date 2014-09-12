@@ -66,6 +66,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	pr_devel("afu_open pe: %i\n", ctx->ph);
 	cxl_context_start(ctx);
 	file->private_data = ctx;
+	cxl_get();
 
 	return 0;
 }
@@ -95,6 +96,7 @@ afu_release(struct inode *inode, struct file *file)
 	/* It should be safe to remove the context now */
 	cxl_context_free(ctx);
 
+	cxl_put();
 	return 0;
 }
 

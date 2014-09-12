@@ -16,6 +16,8 @@
 /* protected by rcu */
 static struct cxl_calls *cxl_calls;
 
+static atomic_t use_count = ATOMIC_INIT(0);
+
 #ifdef CONFIG_CXL_MODULE
 
 static inline struct cxl_calls *cxl_calls_get(void)
@@ -61,6 +63,24 @@ void cxl_slbia(struct mm_struct *mm)
 	calls->cxl_slbia(mm);
 }
 EXPORT_SYMBOL(cxl_slbia);
+
+void cxl_get(void)
+{
+	atomic_inc(&use_count);
+}
+EXPORT_SYMBOL(cxl_get);
+
+void cxl_put(void)
+{
+	atomic_dec(&use_count);
+}
+EXPORT_SYMBOL(cxl_put);
+
+bool cxl_in_use(void)
+{
+	return (atomic_read(&use_count) == 0);
+}
+EXPORT_SYMBOL(cxl_in_use);
 
 int register_cxl_calls(struct cxl_calls *calls)
 {
