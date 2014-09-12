@@ -496,24 +496,22 @@ static int deactivate_dedicated_process(struct cxl_afu_t *afu)
 	return 0;
 }
 
+int cxl_afu_deactivate_model(struct cxl_afu_t *afu)
+{
+	if (afu->current_model == CXL_MODEL_DIRECTED)
+		return deactivate_afu_directed(afu);
+	if (afu->current_model == CXL_MODEL_DEDICATED)
+		return deactivate_dedicated_process(afu);
+	return 0;
+}
+
 int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
 {
-	int rc;
-
-	if (model && !(model & afu->models_supported))
-		return -EINVAL;
-
-	if (afu->current_model == CXL_MODEL_DIRECTED) {
-		if ((rc = deactivate_afu_directed(afu)))
-			return rc;
-	}
-	if (afu->current_model == CXL_MODEL_DEDICATED) {
-		if ((rc = deactivate_dedicated_process(afu)))
-			return rc;
-	}
-
 	if (!model)
 		return 0;
+	if (!(model & afu->models_supported))
+		return -EINVAL;
+
 	if (model == CXL_MODEL_DIRECTED)
 		return activate_afu_directed(afu);
 	if (model == CXL_MODEL_DEDICATED)

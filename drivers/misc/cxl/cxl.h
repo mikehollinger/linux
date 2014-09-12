@@ -535,6 +535,7 @@ int cxl_sysfs_afu_add(struct cxl_afu_t *afu);
 void cxl_sysfs_afu_remove(struct cxl_afu_t *afu);
 
 int cxl_afu_activate_model(struct cxl_afu_t *afu, int model);
+int cxl_afu_deactivate_model(struct cxl_afu_t *afu);
 int cxl_afu_select_best_model(struct cxl_afu_t *afu);
 
 unsigned int cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
