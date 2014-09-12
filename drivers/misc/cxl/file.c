@@ -37,11 +37,12 @@ EXPORT_SYMBOL(cxl_class);
 static int
 __afu_open(struct inode *inode, struct file *file, bool master)
 {
+	struct cxl_t *adapter;
+	struct cxl_context_t *ctx;
 	int minor = MINOR(inode->i_rdev);
 	int adapter_num = minor / CXL_DEV_MINORS;
 	int slice = (minor % CXL_DEV_MINORS - 1) % CXL_MAX_SLICES;
-	struct cxl_t *adapter;
-	struct cxl_context_t *ctx;
+	int rc;
 
 	pr_devel("afu_open adapter %i afu %i\n", adapter_num, slice);
 
@@ -59,7 +60,9 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	if (!ctx)
 		return -ENOMEM;
 
-	cxl_context_init(ctx, &adapter->slice[slice], master);
+	if ((rc = cxl_context_init(ctx, &adapter->slice[slice], master)))
+		return rc;
+
 	pr_devel("afu_open pe: %i\n", ctx->ph);
 	cxl_context_start(ctx);
 	file->private_data = ctx;
