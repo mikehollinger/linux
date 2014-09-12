@@ -78,7 +78,7 @@ EXPORT_SYMBOL(cxl_put);
 
 bool cxl_in_use(void)
 {
-	return (atomic_read(&use_count) == 0);
+	return (atomic_read(&use_count) != 0);
 }
 EXPORT_SYMBOL(cxl_in_use);
 
