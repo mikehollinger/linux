@@ -600,7 +600,6 @@ struct cxl_backend_ops {
 };
 extern const struct cxl_backend_ops *cxl_ops;
 
-/* XXX: LAB DEBUGGING */
 void cxl_stop_trace(struct cxl_t *cxl);
 
 #endif
