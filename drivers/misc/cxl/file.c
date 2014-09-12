@@ -49,8 +49,7 @@ dev_t cxl_dev;
 struct class *cxl_class;
 EXPORT_SYMBOL(cxl_class);
 
-static int
-__afu_open(struct inode *inode, struct file *file, bool master)
+static int __afu_open(struct inode *inode, struct file *file, bool master)
 {
 	struct cxl_t *adapter;
 	struct cxl_afu_t *afu;
@@ -87,6 +86,7 @@ __afu_open(struct inode *inode, struct file *file, bool master)
 	pr_devel("afu_open pe: %i\n", ctx->ph);
 	cxl_context_start(ctx);
 	file->private_data = ctx;
+	cxl_ctx_get();
 
 	/* Our ref on the AFU will now hold the adapter */
 	put_device(&adapter->dev);
@@ -101,20 +101,17 @@ err_put_adapter:
 	put_device(&adapter->dev);
 	return rc;
 }
-static int
-afu_open(struct inode *inode, struct file *file)
+static int afu_open(struct inode *inode, struct file *file)
 {
 	return __afu_open(inode, file, false);
 }
 
-static int
-afu_master_open(struct inode *inode, struct file *file)
+static int afu_master_open(struct inode *inode, struct file *file)
 {
 	return __afu_open(inode, file, true);
 }
 
-static int
-afu_release(struct inode *inode, struct file *file)
+static int afu_release(struct inode *inode, struct file *file)
 {
 	struct cxl_context_t *ctx = file->private_data;
 
@@ -129,11 +126,11 @@ afu_release(struct inode *inode, struct file *file)
 	/* It should be safe to remove the context now */
 	cxl_context_free(ctx);
 
+	cxl_ctx_put();
 	return 0;
 }
 
-static long
-afu_ioctl_start_work(struct cxl_context_t *ctx,
+static long afu_ioctl_start_work(struct cxl_context_t *ctx,
 		     struct cxl_ioctl_start_work __user *uwork)
 {
 	struct cxl_ioctl_start_work work;
@@ -178,8 +175,7 @@ afu_ioctl_start_work(struct cxl_context_t *ctx,
 	return 0;
 }
 
-static long
-afu_ioctl_check_error(struct cxl_context_t *ctx)
+static long afu_ioctl_check_error(struct cxl_context_t *ctx)
 {
 	if (ctx->status != STARTED)
 		return -EIO;
@@ -193,8 +189,7 @@ afu_ioctl_check_error(struct cxl_context_t *ctx)
 	return -EPERM;
 }
 
-static long
-afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct cxl_context_t *ctx = file->private_data;
 
@@ -220,14 +215,13 @@ afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return -EINVAL;
 }
 
-static long
-afu_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long afu_compat_ioctl(struct file *file, unsigned int cmd,
+			     unsigned long arg)
 {
 	return afu_ioctl(file, cmd, arg);
 }
 
-static int
-afu_mmap(struct file *file, struct vm_area_struct *vm)
+static int afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
 	struct cxl_context_t *ctx = file->private_data;
 
@@ -238,8 +232,7 @@ afu_mmap(struct file *file, struct vm_area_struct *vm)
 	return cxl_context_iomap(ctx, vm);
 }
 
-static unsigned int
-afu_poll(struct file *file, struct poll_table_struct *poll)
+static unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 {
 	struct cxl_context_t *ctx = file->private_data;
 	int mask = 0;
@@ -265,8 +258,8 @@ afu_poll(struct file *file, struct poll_table_struct *poll)
 	return mask;
 }
 
-static ssize_t
-afu_read(struct file *file, char __user *buf, size_t count, loff_t *off)
+static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
+			loff_t *off)
 {
 	struct cxl_context_t *ctx = file->private_data;
 	struct cxl_event event;

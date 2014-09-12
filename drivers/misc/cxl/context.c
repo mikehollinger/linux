@@ -162,17 +162,14 @@ void cxl_context_free(struct cxl_context_t *ctx)
 {
 	unsigned long flags;
 
-	if ((ctx->status == OPENED) || (ctx->status == STARTED)) {
-		idr_remove(&ctx->afu->contexts_idr, ctx->ph);
-		synchronize_rcu();
-	}
+	idr_remove(&ctx->afu->contexts_idr, ctx->ph);
+	synchronize_rcu();
 
-	if (ctx->status == STARTED) {
-		spin_lock_irqsave(&ctx->sst_lock, flags);
-		free_page((u64)ctx->sstp);
-		ctx->sstp = NULL;
-		spin_unlock_irqrestore(&ctx->sst_lock, flags);
-	}
+	spin_lock_irqsave(&ctx->sst_lock, flags);
+	free_page((u64)ctx->sstp);
+	ctx->sstp = NULL;
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
+
 	put_pid(ctx->pid);
 	kfree(ctx);
 }
