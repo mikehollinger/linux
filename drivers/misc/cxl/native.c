@@ -554,6 +554,11 @@ static int attach_process_native(struct cxl_context_t *ctx, bool kernel,
 	return -EINVAL;
 }
 
+/* TODO: handle case when this is called with IRQs off which may
+ * happen when we unbind the driver.  Terminate & remove use a mutex
+ * lock and schedule which will not good with lock held.  May need to
+ * write do_process_element_cmd() that handles outstanding page
+ * faults. */
 static int detach_process_native(struct cxl_context_t *ctx)
 {
 	if (ctx->afu->current_model == CXL_MODEL_DEDICATED) {
