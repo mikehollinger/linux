@@ -575,7 +575,10 @@ static int cxl_afu_descriptor_looks_ok(struct cxl_afu_t *afu)
 
 static int sanitise_afu_regs(struct cxl_afu_t *afu)
 {
+	cxl_p1_write(afu->adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
+	cxl_p1n_write(afu, CXL_PSL_IVTE_Offset_An, 0x0000000000000000);
+	cxl_ops->slbia(afu);
 
 	return 0;
 }
