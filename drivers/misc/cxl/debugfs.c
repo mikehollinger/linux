@@ -91,6 +91,7 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 
 	return 0;
 }
+EXPORT_SYMBOL(cxl_debugfs_afu_add);
 
 void cxl_debugfs_afu_remove(struct cxl_afu_t *afu)
 {

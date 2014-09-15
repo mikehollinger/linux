@@ -334,6 +334,8 @@ err:
 		device_remove_file(&afu->dev, &afu_attrs[afu_attr]);
 	return rc;
 }
+EXPORT_SYMBOL(cxl_sysfs_afu_add);
+
 void cxl_sysfs_afu_remove(struct cxl_afu_t *afu)
 {
 	int i;
@@ -343,3 +345,4 @@ void cxl_sysfs_afu_remove(struct cxl_afu_t *afu)
 	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++)
 		device_remove_file(&afu->dev, &afu_attrs[i]);
 }
+EXPORT_SYMBOL(cxl_sysfs_afu_remove);

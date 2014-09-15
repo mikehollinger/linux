@@ -455,6 +455,7 @@ int cxl_register_afu(struct cxl_afu_t *afu)
 
 	return device_register(&afu->dev);
 }
+EXPORT_SYMBOL(cxl_register_afu);
 
 int cxl_register_adapter(struct cxl_t *adapter)
 {

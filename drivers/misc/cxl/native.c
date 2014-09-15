@@ -532,6 +532,7 @@ int cxl_afu_deactivate_model(struct cxl_afu_t *afu)
 {
 	return _cxl_afu_deactivate_model(afu, afu->current_model);
 }
+EXPORT_SYMBOL(cxl_afu_deactivate_model);
 
 int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
 {

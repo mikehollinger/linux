@@ -349,12 +349,14 @@ int cxl_register_psl_irq(struct cxl_afu_t *afu)
 	return cxl_register_one_irq(afu->adapter, cxl_irq_multiplexed, afu,
 			&afu->psl_hwirq, &afu->psl_virq);
 }
+EXPORT_SYMBOL(cxl_register_psl_irq);
 
 void cxl_release_psl_irq(struct cxl_afu_t *afu)
 {
 	cxl_unmap_irq(afu->psl_virq, afu);
 	afu->adapter->driver->release_one_irq(afu->adapter, afu->psl_hwirq);
 }
+EXPORT_SYMBOL(cxl_release_psl_irq);
 
 int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 {
