@@ -353,6 +353,12 @@ err:
 	return rc;
 }
 
+#ifdef CONFIG_CPU_LITTLE_ENDIAN
+#define set_endian(sr) ((sr) |= CXL_PSL_SR_An_LE)
+#else
+#define set_endian(sr) ((sr) &= ~(CXL_PSL_SR_An_LE))
+#endif
+
 static int attach_afu_directed(struct cxl_context_t *ctx, u64 wed, u64 amr)
 {
 
@@ -375,6 +381,7 @@ static int attach_afu_directed(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	 * For kernel contexts: this would need to change
 	 */
 	sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
+	set_endian(sr);
 	sr &= ~(CXL_PSL_SR_An_HV);
 	if (!test_tsk_thread_flag(current, TIF_32BIT))
 		sr |= CXL_PSL_SR_An_SF;
@@ -459,6 +466,7 @@ static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	int result;
 
 	sr = CXL_PSL_SR_An_SC;
+	set_endian(sr);
 	if (ctx->master)
 		sr |= CXL_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)

@@ -161,6 +161,7 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_PSL_SR_An_SC  (1ull << (63-58)) /* Segment Table secondary hash */
 #define CXL_PSL_SR_An_R   MSR_DR            /* Relocate,      GA1: 1 */
 #define CXL_PSL_SR_An_MP  (1ull << (63-62)) /* Master Process */
+#define CXL_PSL_SR_An_LE  (1ull << (63-63)) /* Little Endian */
 
 /****** CXL_PSL_LLCMD_An ****************************************************/
 #define CXL_LLCMD_TERMINATE   0x0001000000000000ULL
