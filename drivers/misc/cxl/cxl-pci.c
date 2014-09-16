@@ -447,6 +447,11 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 		dev_err(&dev->dev, "failed to enable CXL protocol: %i", rc);
 		return rc;
 	}
+	/* The CAIA spec (v0.12 11.6 Bi-modal Device Support) states
+	 * we must wait 100ms after this mode switch before touching
+	 * PCIe config space.
+	 */
+	msleep(100);
 
 	return 0;
 }
