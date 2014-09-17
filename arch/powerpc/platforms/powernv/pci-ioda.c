@@ -529,6 +529,7 @@ struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev)
 }
 EXPORT_SYMBOL(pnv_pci_to_phb_node);
 
+#ifdef CONFIG_CXL_BASE
 int pnv_phb_to_cxl(struct pci_dev *dev)
 {
 	struct device_node *np;
@@ -660,6 +661,7 @@ int pnv_cxl_get_irq_count(struct pci_dev *dev)
 }
 EXPORT_SYMBOL(pnv_cxl_get_irq_count);
 
+#endif /* CONFIG_CXL_BASE */
 #endif /* CONFIG_PCI_MSI */
 
 static int pnv_ioda_configure_pe(struct pnv_phb *phb, struct pnv_ioda_pe *pe)
@@ -1487,6 +1489,7 @@ static void set_msi_irq_chip(struct pnv_phb *phb, unsigned int virq)
 	}
 }
 
+#ifdef CONFIG_CXL_BASE
 int pnv_cxl_ioda_msi_setup(struct pci_dev *dev, unsigned int hwirq,
 			   unsigned int virq)
 {
@@ -1511,6 +1514,7 @@ int pnv_cxl_ioda_msi_setup(struct pci_dev *dev, unsigned int hwirq,
 	return 0;
 }
 EXPORT_SYMBOL(pnv_cxl_ioda_msi_setup);
+#endif
 
 static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 				  unsigned int hwirq, unsigned int virq,
