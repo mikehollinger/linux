@@ -1004,8 +1004,8 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 	int rc, user_region = 0, local = 0;
 	int psize, ssize;
 
-	DBG_LOW("hash_page_mm(ea=%016lx, access=%lx, trap=%lx\n",
-		ea, access, trap);
+	DBG_LOW("%s(ea=%016lx, access=%lx, trap=%lx\n",
+		__func__, ea, access, trap);
 
 	/* Get region & vsid */
  	switch (REGION_ID(ea)) {
