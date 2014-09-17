@@ -1,9 +1,6 @@
 #ifndef __POWERNV_PCI_H
 #define __POWERNV_PCI_H
 
-#include <linux/msi.h>
-#include <asm/iommu.h>
-
 struct pci_dn;
 
 enum pnv_phb_type {
