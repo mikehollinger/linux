@@ -74,7 +74,6 @@ Description:	read only
 		Size of the MMIO space that may be mmaped by userspace.  This
 		includes all slave contexts space also.
 
-
 What:		/sys/class/cxl/<afu>m/pp_mmio_len
 Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
@@ -88,3 +87,39 @@ Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read only
 		Per Process MMIO space offset.
+
+
+Card info (eg. /sys/class/cxl/afu0.0)
+
+What:		/sys/class/cxl/<card>/caia_version
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Identifies the CAIA Version the card implements.
+
+What:		/sys/class/cxl/<card>/psl_version
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Identifies the revision level of the PSL.
+
+What:		/sys/class/cxl/<card>/base_image
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Identifies the revision level of the base image for devices
+		that support load-able PSLs. For FPGAs this field identifies
+		the image contained in the on-adapter flash which is loaded
+		during the initial program load
+
+What:		/sys/class/cxl/<card>/image_loaded
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		Will return "user" or "factory" depending on the image loaded
+		onto the card
+
