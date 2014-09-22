@@ -508,57 +508,32 @@ static struct pnv_ioda_pe *pnv_ioda_get_pe(struct pci_dev *dev)
 
 struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev)
 {
-	struct device_node *np;
-	struct property *prop = NULL;
+        struct pci_controller *hose = pci_bus_to_host(dev->bus);
 
-	np = of_node_get(pci_device_to_OF_node(dev));
-
-	/* Scan up the tree looking for the PHB node */
-	while (np) {
-		if ((prop = of_find_property(np, "ibm,opal-phbid", NULL)))
-			break;
-		np = of_get_next_parent(np);
-	}
-
-	if (!prop) {
-		of_node_put(np);
-		return NULL;
-	}
-
-	return np;
+        return hose->dn;
 }
 EXPORT_SYMBOL(pnv_pci_to_phb_node);
 
 #ifdef CONFIG_CXL_BASE
 int pnv_phb_to_cxl(struct pci_dev *dev)
 {
-	struct device_node *np;
+	struct pci_controller *hose = pci_bus_to_host(dev->bus);
+	struct pnv_phb *phb = hose->private_data;
 	struct pnv_ioda_pe *pe;
-	const u64 *prop64;
-	u64 phb_id;
 	int rc;
-
-	dev_info(&dev->dev, "switch PHB to CXL\n");
-
-	if (!(np = pnv_pci_to_phb_node(dev)))
-		return -ENODEV;
-
-	prop64 = of_get_property(np, "ibm,opal-phbid", NULL);
-
-	phb_id = be64_to_cpup(prop64);
-	dev_info(&dev->dev, "PHB-ID  : 0x%016llx\n", phb_id);
 
 	if (!(pe = pnv_ioda_get_pe(dev))) {
 		rc = -ENODEV;
 		goto out;
 	}
-	dev_info(&dev->dev, "     pe : %i\n", pe->pe_number);
+	pe_info(pe, "switch PHB to CXL\n");
+	pe_info(pe, "PHB-ID  : 0x%016llx\n", phb->opal_id);
+	pe_info(pe, "     pe : %i\n", pe->pe_number);
 
-	if ((rc = opal_pci_set_phb_cxl_mode(phb_id, 1, pe->pe_number)))
+	if ((rc = opal_pci_set_phb_cxl_mode(phb->opal_id, 1, pe->pe_number)))
 		dev_err(&dev->dev, "opal_pci_set_phb_cxl_mode failed: %i\n", rc);
 
 out:
-	of_node_put(np);
 	return rc;
 }
 EXPORT_SYMBOL(pnv_phb_to_cxl);
