@@ -20,10 +20,7 @@ int msi_bitmap_alloc_hwirqs(struct msi_bitmap *bmp, int num)
 	int offset, order = get_count_order(num);
 
 	spin_lock_irqsave(&bmp->lock, flags);
-	/*
-	 * This is fast, but stricter than we need. We might want to add
-	 * a fallback routine which does a linear search with no alignment.
-	 */
+
 	offset = bitmap_find_next_zero_area(bmp->bitmap, bmp->irq_count, 0,
 					    num, (1 << order) - 1);
 	if (offset > bmp->irq_count)
