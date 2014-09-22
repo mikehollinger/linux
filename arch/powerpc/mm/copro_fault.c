@@ -133,7 +133,7 @@ int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 		return 1;
 	}
 	*vsid |= mmu_psize_defs[psize].sllp |
-		(ssize == MMU_SEGSIZE_1T) ? SLB_VSID_B_1T : 0;
+		((ssize == MMU_SEGSIZE_1T) ? SLB_VSID_B_1T : 0);
 
 	return 0;
 }
