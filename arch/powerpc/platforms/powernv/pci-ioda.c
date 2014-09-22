@@ -1471,22 +1471,22 @@ static void set_msi_irq_chip(struct pnv_phb *phb, unsigned int virq)
 	struct irq_data *idata;
 	struct irq_chip *ichip;
 
+	if (phb->type != PNV_PHB_IODA2)
+		return;
+
 	/*
 	 * Change the IRQ chip for the MSI interrupts on PHB3.
 	 * The corresponding IRQ chip should be populated for
 	 * the first time.
 	 */
-	if (phb->type == PNV_PHB_IODA2) {
-		if (!phb->ioda.irq_chip_init) {
-			idata = irq_get_irq_data(virq);
-			ichip = irq_data_get_irq_chip(idata);
-			phb->ioda.irq_chip_init = 1;
-			phb->ioda.irq_chip = *ichip;
-			phb->ioda.irq_chip.irq_eoi = pnv_ioda2_msi_eoi;
-		}
-
-		irq_set_chip(virq, &phb->ioda.irq_chip);
+	if (!phb->ioda.irq_chip_init) {
+		idata = irq_get_irq_data(virq);
+		ichip = irq_data_get_irq_chip(idata);
+		phb->ioda.irq_chip_init = 1;
+		phb->ioda.irq_chip = *ichip;
+		phb->ioda.irq_chip.irq_eoi = pnv_ioda2_msi_eoi;
 	}
+	irq_set_chip(virq, &phb->ioda.irq_chip);
 }
 
 #ifdef CONFIG_CXL_BASE
