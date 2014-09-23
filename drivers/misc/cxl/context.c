@@ -156,7 +156,9 @@ void cxl_context_free(struct cxl_context_t *ctx)
 {
 	unsigned long flags;
 
+	spin_lock(&ctx->afu->contexts_lock);
 	idr_remove(&ctx->afu->contexts_idr, ctx->ph);
+	spin_unlock(&ctx->afu->contexts_lock);
 	synchronize_rcu();
 
 	spin_lock_irqsave(&ctx->sst_lock, flags);
