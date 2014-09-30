@@ -456,46 +456,11 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 	return 0;
 }
 
-static int cxl_map_adapter_regs(struct cxl_t *adapter, struct pci_dev *dev)
-{
-	if (pci_request_region(dev, 2, "priv 2 regs"))
-		goto err1;
-	if (pci_request_region(dev, 0, "priv 1 regs"))
-		goto err2;
-
-	pr_devel("cxl_map_adapter_regs: p1: %#.16llx %#llx, p2: %#.16llx %#llx",
-			p1_base(dev), p1_size(dev), p2_base(dev), p2_size(dev));
-
-	if (!(adapter->p1_mmio = ioremap(p1_base(dev), p1_size(dev))))
-		goto err3;
-
-	if (!(adapter->p2_mmio = ioremap(p2_base(dev), p2_size(dev))))
-		goto err4;
-
-	return 0;
-
-err4:
-	iounmap(adapter->p1_mmio);
-	adapter->p1_mmio = NULL;
-err3:
-	pci_release_region(dev, 0);
-err2:
-	pci_release_region(dev, 2);
-err1:
-	return -ENOMEM;
-}
-
-static int enable_cxl_protocol(struct cxl_t *adapter, struct pci_dev *dev)
+static int enable_cxl_protocol(struct pci_dev *dev)
 {
 	int rc;
 
 	if ((rc = switch_card_to_cxl(dev)))
-		return rc;
-
-	if ((rc = cxl_map_adapter_regs(adapter, dev)))
-		return rc;
-
-	if ((rc = init_implementation_adapter_regs(adapter, dev)))
 		return rc;
 
 	if ((rc = pnv_phb_to_cxl(dev)))
@@ -723,6 +688,36 @@ static void cxl_remove_afu(struct cxl_afu_t *afu)
 	device_unregister(&afu->dev);
 }
 
+
+static int cxl_map_adapter_regs(struct cxl_t *adapter, struct pci_dev *dev)
+{
+	if (pci_request_region(dev, 2, "priv 2 regs"))
+		goto err1;
+	if (pci_request_region(dev, 0, "priv 1 regs"))
+		goto err2;
+
+	pr_devel("cxl_map_adapter_regs: p1: %#.16llx %#llx, p2: %#.16llx %#llx",
+			p1_base(dev), p1_size(dev), p2_base(dev), p2_size(dev));
+
+	if (!(adapter->p1_mmio = ioremap(p1_base(dev), p1_size(dev))))
+		goto err3;
+
+	if (!(adapter->p2_mmio = ioremap(p2_base(dev), p2_size(dev))))
+		goto err4;
+
+	return 0;
+
+err4:
+	iounmap(adapter->p1_mmio);
+	adapter->p1_mmio = NULL;
+err3:
+	pci_release_region(dev, 0);
+err2:
+	pci_release_region(dev, 2);
+err1:
+	return -ENOMEM;
+}
+
 static void cxl_unmap_adapter_regs(struct cxl_t *adapter)
 {
 	if (adapter->p1_mmio)
@@ -836,11 +831,14 @@ static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 	return adapter;
 }
 
-static int cxl_init_adapter(struct pci_dev *dev,
-				      struct cxl_t *adapter)
+static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 {
+	struct cxl_t *adapter;
 	bool free = true;
 	int rc;
+
+	if (!(adapter = cxl_alloc_adapter(dev)))
+		return ERR_PTR(-ENOMEM);
 
 	if ((rc = cxl_alloc_adapter_nr(adapter)))
 		goto err1;
@@ -854,7 +852,13 @@ static int cxl_init_adapter(struct pci_dev *dev,
 	if ((rc = cxl_vsec_looks_ok(adapter, dev)))
 		goto err2;
 
+	if ((rc = cxl_map_adapter_regs(adapter, dev)))
+		goto err2;
+
 	/* TODO: cxl_ops->sanitise_adapter_regs(adapter); */
+
+	if ((rc = init_implementation_adapter_regs(adapter, dev)))
+		goto err3;
 
 	if ((rc = cxl_register_psl_err_irq(adapter)))
 		goto err3;
@@ -870,7 +874,7 @@ static int cxl_init_adapter(struct pci_dev *dev,
 	if ((rc = cxl_sysfs_adapter_add(adapter)))
 		goto err_put1;
 
-	return 0;
+	return adapter;
 
 err_put1:
 	device_unregister(&adapter->dev);
@@ -884,7 +888,7 @@ err2:
 err1:
 	if (free)
 		kfree(adapter);
-	return rc;
+	return ERR_PTR(rc);
 }
 
 static void cxl_remove_adapter(struct cxl_t *adapter)
@@ -920,28 +924,21 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if ((rc = setup_cxl_bars(dev)))
 		return rc;
 
-	adapter = cxl_alloc_adapter(dev);
-	if (!(adapter)) {
-		dev_err(&dev->dev, "cxl_alloc_adapter failed: %li\n",
-			PTR_ERR(adapter));
-		return PTR_ERR(adapter);
+	if ((rc = enable_cxl_protocol(dev))) {
+		dev_err(&dev->dev, "enable_cxl_protocol failed: %i\n", rc);
+		return rc;
 	}
+	dev_info(&dev->dev, "CXL protocol enabled\n");
 
 	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
 		return rc;
 	}
 
-	if ((rc = enable_cxl_protocol(adapter, dev))) {
-		dev_err(&dev->dev, "enable_cxl_protocol failed: %i\n", rc);
-		return rc;
-	}
-	dev_info(&dev->dev, "CXL protocol enabled\n");
-
-	if ((rc = cxl_init_adapter(dev, adapter))) {
-		dev_err(&dev->dev, "cxl_init_adapter failed: %li\n",
-			PTR_ERR(adapter));
-		return rc;
+	adapter = cxl_init_adapter(dev);
+	if (IS_ERR(adapter)) {
+		dev_err(&dev->dev, "cxl_init_adapter failed: %li\n", PTR_ERR(adapter));
+		return PTR_ERR(adapter);
 	}
 
 	for (slice = 0; slice < adapter->slices; slice++) {
