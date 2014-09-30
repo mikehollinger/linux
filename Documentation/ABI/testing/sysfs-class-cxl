@@ -81,7 +81,7 @@ Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 Description:	read only
 		Per Process MMIO space length.
 
-What:		/sys/class/cxl/<afu>/pp_mmio_off
+What:		/sys/class/cxl/<afu>m/pp_mmio_off
 Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
@@ -89,7 +89,7 @@ Description:	read only
 		Per Process MMIO space offset.
 
 
-Card info (eg. /sys/class/cxl/afu0.0)
+Card info (eg. /sys/class/cxl/card0)
 
 What:		/sys/class/cxl/<card>/caia_version
 Date:		September 2014
