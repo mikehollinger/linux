@@ -180,8 +180,6 @@ static inline unsigned int mmu_psize_to_shift(unsigned int mmu_psize)
  * we work in all cases including 4k page size.
  */
 #define VPN_SHIFT	12
-#define slb_vsid_shift(ssize)	\
-	((ssize) == MMU_SEGSIZE_256M ? SLB_VSID_SHIFT : SLB_VSID_SHIFT_1T)
 
 /*
  * HPTE Large Page (LP) details
@@ -191,7 +189,12 @@ static inline unsigned int mmu_psize_to_shift(unsigned int mmu_psize)
 #define LP_MASK(i)	((0xFF >> (i)) << LP_SHIFT)
 
 #ifndef __ASSEMBLY__
-
+static inline int slb_vsid_shift(int ssize)
+{
+	if (ssize == MMU_SEGSIZE_256M)
+		return SLB_VSID_SHIFT;
+	return SLB_VSID_SHIFT_1T;
+}
 static inline int segment_shift(int ssize)
 {
 	if (ssize == MMU_SEGSIZE_256M)
@@ -319,6 +322,8 @@ extern int __hash_page_64K(unsigned long ea, unsigned long access,
 			   unsigned int local, int ssize);
 struct mm_struct;
 unsigned int hash_page_do_lazy_icache(unsigned int pp, pte_t pte, int trap);
+int calculate_vsid(struct mm_struct *mm, u64 ea,
+		   u64 *vsid, int *psize, int *ssize);
 extern int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, unsigned long trap);
 extern int hash_page(unsigned long ea, unsigned long access, unsigned long trap);
 int __hash_page_huge(unsigned long ea, unsigned long access, unsigned long vsid,

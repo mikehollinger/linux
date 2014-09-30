@@ -983,6 +983,38 @@ static void check_paca_psize(unsigned long ea, struct mm_struct *mm,
 	}
 }
 
+int calculate_vsid(struct mm_struct *mm, u64 ea,
+		   u64 *vsid, int *psize, int *ssize)
+{
+	switch (REGION_ID(ea)) {
+	case USER_REGION_ID:
+		pr_devel("%s: 0x%llx -- USER_REGION_ID\n", __func__, ea);
+		*psize = get_slice_psize(mm, ea);
+		*ssize = user_segment_size(ea);
+		*vsid = get_vsid(mm->context.id, ea, *ssize);
+		return 0;
+	case VMALLOC_REGION_ID:
+		pr_devel("%s: 0x%llx -- VMALLOC_REGION_ID\n", __func__, ea);
+		if (ea < VMALLOC_END)
+			*psize = mmu_vmalloc_psize;
+		else
+			*psize = mmu_io_psize;
+		*ssize = mmu_kernel_ssize;
+		*vsid = get_kernel_vsid(ea, mmu_kernel_ssize);
+		return 0;
+	case KERNEL_REGION_ID:
+		pr_devel("%s: 0x%llx -- KERNEL_REGION_ID\n", __func__, ea);
+		*psize = mmu_linear_psize;
+		*ssize = mmu_kernel_ssize;
+		*vsid = get_kernel_vsid(ea, mmu_kernel_ssize);
+		return 0;
+	default:
+		pr_debug("%s: invalid region access at %016llx\n", __func__, ea);
+		return 1;
+	}
+}
+EXPORT_SYMBOL_GPL(calculate_vsid);
+
 /* Result code is:
  *  0 - handled
  *  1 - normal page fault
@@ -993,7 +1025,7 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 {
 	enum ctx_state prev_state = exception_enter();
 	pgd_t *pgdir;
-	unsigned long vsid;
+	u64 vsid;
 	pte_t *ptep;
 	unsigned hugeshift;
 	const struct cpumask *tmp;
@@ -1003,35 +1035,20 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 	DBG_LOW("%s(ea=%016lx, access=%lx, trap=%lx\n",
 		__func__, ea, access, trap);
 
-	/* Get region & vsid */
- 	switch (REGION_ID(ea)) {
-	case USER_REGION_ID:
+	/* Get region */
+	if (REGION_ID(ea) == USER_REGION_ID) {
 		user_region = 1;
 		if (! mm) {
 			DBG_LOW(" user region with no mm !\n");
 			rc = 1;
 			goto bail;
 		}
-		psize = get_slice_psize(mm, ea);
-		ssize = user_segment_size(ea);
-		vsid = get_vsid(mm->context.id, ea, ssize);
-		break;
-	case VMALLOC_REGION_ID:
+	} else
 		mm = &init_mm;
-		vsid = get_kernel_vsid(ea, mmu_kernel_ssize);
-		if (ea < VMALLOC_END)
-			psize = mmu_vmalloc_psize;
-		else
-			psize = mmu_io_psize;
-		ssize = mmu_kernel_ssize;
-		break;
-	default:
-		/* Not a valid range
-		 * Send the problem up to do_page_fault 
-		 */
-		rc = 1;
+	rc = calculate_vsid(mm, ea, &vsid, &psize, &ssize);
+	if (rc)
 		goto bail;
-	}
+
 	DBG_LOW(" mm=%p, mm->pgdir=%p, vsid=%016lx\n", mm, mm->pgd, vsid);
 
 	/* Bad address. */

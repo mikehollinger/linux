@@ -95,45 +95,18 @@ EXPORT_SYMBOL_GPL(copro_handle_mm_fault);
 
 int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 {
-	int psize, ssize;
+	int psize, ssize, rc;
 
 	*esid = (ea & ESID_MASK) | SLB_ESID_V;
 
-	switch (REGION_ID(ea)) {
-	case USER_REGION_ID:
-		pr_devel("copro_data_segment: 0x%llx -- USER_REGION_ID\n", ea);
-#ifdef CONFIG_PPC_MM_SLICES
-		psize = get_slice_psize(mm, ea);
-#else
-		psize = mm->context.user_psize;
-#endif
-		ssize = user_segment_size(ea);
-		*vsid = (get_vsid(mm->context.id, ea, ssize)
-			 << slb_vsid_shift(ssize)) | SLB_VSID_USER;
-		break;
-	case VMALLOC_REGION_ID:
-		pr_devel("copro_data_segment: 0x%llx -- VMALLOC_REGION_ID\n", ea);
-		if (ea < VMALLOC_END)
-			psize = mmu_vmalloc_psize;
-		else
-			psize = mmu_io_psize;
-		ssize = mmu_kernel_ssize;
-		*vsid = (get_kernel_vsid(ea, mmu_kernel_ssize)
-			 << SLB_VSID_SHIFT) | SLB_VSID_KERNEL;
-		break;
-	case KERNEL_REGION_ID:
-		pr_devel("copro_data_segment: 0x%llx -- KERNEL_REGION_ID\n", ea);
-		psize = mmu_linear_psize;
-		ssize = mmu_kernel_ssize;
-		*vsid = (get_kernel_vsid(ea, mmu_kernel_ssize)
-			 << SLB_VSID_SHIFT) | SLB_VSID_KERNEL;
-		break;
-	default:
-		/* Future: support kernel segments so that drivers can use the
-		 * CoProcessors */
-		pr_debug("invalid region access at %016llx\n", ea);
-		return 1;
-	}
+	rc = calculate_vsid(mm, ea, vsid, &psize, &ssize);
+	if (rc)
+		return rc;
+	if (REGION_ID(ea) == USER_REGION_ID)
+		*vsid = (*vsid << slb_vsid_shift(ssize)) | SLB_VSID_USER;
+	else
+		*vsid = (*vsid << SLB_VSID_SHIFT) | SLB_VSID_KERNEL;
+
 	*vsid |= mmu_psize_defs[psize].sllp |
 		((ssize == MMU_SEGSIZE_1T) ? SLB_VSID_B_1T : 0);
 
