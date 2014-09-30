@@ -456,20 +456,6 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 	return 0;
 }
 
-static int enable_cxl_protocol(struct pci_dev *dev)
-{
-	int rc;
-
-	if ((rc = switch_card_to_cxl(dev)))
-		return rc;
-
-	if ((rc = pnv_phb_to_cxl(dev)))
-		return rc;
-
-	return rc;
-}
-
-
 static int cxl_map_slice_regs(struct cxl_afu_t *afu, struct cxl_t *adapter, struct pci_dev *dev)
 {
 	u64 p1n_base, p2n_base, afu_desc;
@@ -837,8 +823,12 @@ static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 	bool free = true;
 	int rc;
 
+
 	if (!(adapter = cxl_alloc_adapter(dev)))
 		return ERR_PTR(-ENOMEM);
+
+	if ((rc = switch_card_to_cxl(dev)))
+		goto err1;
 
 	if ((rc = cxl_alloc_adapter_nr(adapter)))
 		goto err1;
@@ -858,6 +848,9 @@ static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 	/* TODO: cxl_ops->sanitise_adapter_regs(adapter); */
 
 	if ((rc = init_implementation_adapter_regs(adapter, dev)))
+		goto err3;
+
+	if ((rc = pnv_phb_to_cxl(dev)))
 		goto err3;
 
 	if ((rc = cxl_register_psl_err_irq(adapter)))
@@ -923,12 +916,6 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	if ((rc = setup_cxl_bars(dev)))
 		return rc;
-
-	if ((rc = enable_cxl_protocol(dev))) {
-		dev_err(&dev->dev, "enable_cxl_protocol failed: %i\n", rc);
-		return rc;
-	}
-	dev_info(&dev->dev, "CXL protocol enabled\n");
 
 	if ((rc = pci_enable_device(dev))) {
 		dev_err(&dev->dev, "pci_enable_device failed: %i\n", rc);
