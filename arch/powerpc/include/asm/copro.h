@@ -19,6 +19,6 @@ int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid);
 #ifdef CONFIG_PPC_COPRO_BASE
 void copro_flush_all_slbs(struct mm_struct *mm);
 #else
-#define copro_flush_all_slbs(mm) do {} while(0)
+static inline void copro_flush_all_slbs(struct mm_struct *mm) {}
 #endif
 #endif /* _ASM_POWERPC_COPRO_H */
