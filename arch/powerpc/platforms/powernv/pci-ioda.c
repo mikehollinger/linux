@@ -596,7 +596,7 @@ int pnv_cxl_alloc_hwirq_ranges(struct cxl_irq_ranges *irqs,
 
 	return 0;
 fail:
-	for (range--; range >= 0; range--) {
+	for (range--; range >= 1; range--) {
 		hwirq = irqs->offset[range] - phb->msi_base;
 		msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq,
 				       irqs->range[range]);
@@ -614,7 +614,7 @@ void pnv_cxl_release_hwirq_ranges(struct cxl_irq_ranges *irqs,
 	int range = 0;
 	int hwirq;
 
-	for (range = 0; range < 4; range++) {
+	for (range = 1; range < CXL_IRQ_RANGES; range++) {
 		hwirq = irqs->offset[range] - phb->msi_base;
 		if (irqs->range[range]) {
 			pr_devel("cxl release irq range 0x%x: offset: 0x%lx  limit: %ld\n",
