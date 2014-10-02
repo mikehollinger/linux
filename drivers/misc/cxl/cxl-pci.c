@@ -56,9 +56,9 @@
 #define CXL_WRITE_VSEC_MODE_CONTROL(dev, vsec, val) \
 	pci_write_config_byte(dev, vsec + 0xa, val)
 #define CXL_VSEC_PROTOCOL_MASK   0xe0
-#define CXL_VSEC_PROTOCOL_256TB  0x80 /* Power 8 uses this */
+#define CXL_VSEC_PROTOCOL_1024TB 0x80
 #define CXL_VSEC_PROTOCOL_512TB  0x40
-#define CXL_VSEC_PROTOCOL_1024TB 0x20
+#define CXL_VSEC_PROTOCOL_256TB  0x20 /* Power 8 uses this */
 #define CXL_VSEC_PROTOCOL_ENABLE 0x01
 
 #define CXL_READ_VSEC_PSL_REVISION(dev, vsec, dest) \
