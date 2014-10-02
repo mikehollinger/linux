@@ -95,7 +95,7 @@ struct cxl_calls cxl_calls = {
 
 int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 {
-	unsigned long vsid, flags;
+	unsigned long vsid;
 	u64 ea_mask;
 	u64 size;
 
@@ -104,20 +104,12 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 
 	ctx->sst_size = PAGE_SIZE;
 	ctx->sst_lru = 0;
-	if (!ctx->sstp) {
-		ctx->sstp = (struct cxl_sste *)get_zeroed_page(GFP_KERNEL);
-		pr_devel("SSTP allocated at 0x%p\n", ctx->sstp);
-	} else {
-		pr_devel("Zeroing and reusing SSTP already allocated at 0x%p\n", ctx->sstp);
-		spin_lock_irqsave(&ctx->sst_lock, flags);
-		memset(ctx->sstp, 0, PAGE_SIZE);
-		cxl_ops->slbia(ctx->afu);
-		spin_unlock_irqrestore(&ctx->sst_lock, flags);
-	}
+	ctx->sstp = (struct cxl_sste *)get_zeroed_page(GFP_KERNEL);
 	if (!ctx->sstp) {
 		pr_err("cxl_alloc_sst: Unable to allocate segment table\n");
 		return -ENOMEM;
 	}
+	pr_devel("SSTP allocated at 0x%p\n", ctx->sstp);
 
 	vsid  = get_kernel_vsid((u64)ctx->sstp, mmu_kernel_ssize) << 12;
 
