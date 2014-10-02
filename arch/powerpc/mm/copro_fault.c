@@ -93,7 +93,7 @@ out_unlock:
 }
 EXPORT_SYMBOL_GPL(copro_handle_mm_fault);
 
-int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
+int copro_calc_full_va(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 {
 	int psize, ssize, rc;
 
@@ -109,7 +109,7 @@ int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(copro_data_segment);
+EXPORT_SYMBOL_GPL(copro_calc_full_va);
 
 void copro_flush_all_slbs(struct mm_struct *mm)
 {

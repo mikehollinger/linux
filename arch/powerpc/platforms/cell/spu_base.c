@@ -170,7 +170,7 @@ static int __spu_trap_data_seg(struct spu *spu, unsigned long ea)
 	struct spu_slb slb;
 	int ret;
 
-	ret = copro_data_segment(spu->mm, ea, &slb.esid, &slb.vsid);
+	ret = copro_calc_full_va(spu->mm, ea, &slb.esid, &slb.vsid);
 	if (ret)
 		return ret;
 

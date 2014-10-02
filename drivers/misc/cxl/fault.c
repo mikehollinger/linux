@@ -89,7 +89,7 @@ static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm,
 	int rc;
 
 	spin_lock_irqsave(&ctx->sst_lock, flags);
-	if (!(rc = copro_data_segment(mm, ea, &esid_data, &vsid_data))) {
+	if (!(rc = copro_calc_full_va(mm, ea, &esid_data, &vsid_data))) {
 		cxl_load_segment(ctx, esid_data, vsid_data);
 	}
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
@@ -264,7 +264,7 @@ static void cxl_prefault_vma(struct cxl_context_t *ctx)
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		for (ea = vma->vm_start; ea < vma->vm_end;
 				ea = next_segment(ea, vsid_data)) {
-			rc = copro_data_segment(mm, ea, &esid_data, &vsid_data);
+			rc = copro_calc_full_va(mm, ea, &esid_data, &vsid_data);
 			if (rc)
 				continue;
 

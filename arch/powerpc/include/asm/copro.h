@@ -13,7 +13,7 @@
 int copro_handle_mm_fault(struct mm_struct *mm, unsigned long ea,
 			  unsigned long dsisr, unsigned *flt);
 
-int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid);
+int copro_calc_full_va(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid);
 
 
 #ifdef CONFIG_PPC_COPRO_BASE
