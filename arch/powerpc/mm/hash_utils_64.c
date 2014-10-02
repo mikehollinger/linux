@@ -1036,6 +1036,10 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 		__func__, ea, access, trap);
 
 	/* Get region */
+	if (REGION_ID(ea) == KERNEL_REGION_ID) {
+		rc = 1;
+		goto bail;
+	}
 	if (REGION_ID(ea) == USER_REGION_ID) {
 		user_region = 1;
 		if (! mm) {
