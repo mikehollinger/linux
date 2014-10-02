@@ -102,10 +102,7 @@ int copro_data_segment(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
 	rc = calculate_vsid(mm, ea, vsid, &psize, &ssize);
 	if (rc)
 		return rc;
-	if (REGION_ID(ea) == USER_REGION_ID)
-		*vsid = (*vsid << slb_vsid_shift(ssize)) | SLB_VSID_USER;
-	else
-		*vsid = (*vsid << SLB_VSID_SHIFT) | SLB_VSID_KERNEL;
+	*vsid = (*vsid << slb_vsid_shift(ssize)) | SLB_VSID_USER;
 
 	*vsid |= mmu_psize_defs[psize].sllp |
 		((ssize == MMU_SEGSIZE_1T) ? SLB_VSID_B_1T : 0);
