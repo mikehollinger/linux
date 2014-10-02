@@ -1035,19 +1035,14 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 	DBG_LOW("%s(ea=%016lx, access=%lx, trap=%lx\n",
 		__func__, ea, access, trap);
 
- 	switch (REGION_ID(ea)) {
-	case USER_REGION_ID:
+	if (REGION_ID(ea) == USER_REGION_ID) {
 		user_region = 1;
 		if (! mm) {
 			DBG_LOW(" user region with no mm !\n");
 			rc = 1;
 			goto bail;
 		}
-		break;
-	case VMALLOC_REGION_ID:
-		mm = &init_mm;
-		break;
-	default:
+	} else if (REGION_ID(ea) != VMALLOC_REGION_ID) {
 		/* Not a valid range
 		 * Send the problem up to do_page_fault 
 		 */
@@ -1210,7 +1205,12 @@ EXPORT_SYMBOL_GPL(hash_page_mm);
 
 int hash_page(unsigned long ea, unsigned long access, unsigned long trap)
 {
-	return hash_page_mm(current->mm, ea, access, trap);
+	struct mm_struct *mm = current->mm;
+
+	if (REGION_ID(ea) == VMALLOC_REGION_ID)
+		mm = &init_mm;
+
+	return hash_page_mm(mm, ea, access, trap);
 }
 EXPORT_SYMBOL_GPL(hash_page);
 
