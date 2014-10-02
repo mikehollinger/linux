@@ -7,8 +7,8 @@
  * 2 of the License, or (at your option) any later version.
  */
 
-#ifndef _MISC_ASM_CXL_H
-#define _MISC_ASM_CXL_H
+#ifndef _MISC_CXL_H
+#define _MISC_CXL_H
 
 #define CXL_IRQ_RANGES 4
 
@@ -19,15 +19,29 @@ struct cxl_irq_ranges {
 
 #ifdef CONFIG_CXL_BASE
 
+extern atomic_t cxl_use_count;
+
+static inline bool cxl_ctx_in_use(void)
+{
+       return (atomic_read(&cxl_use_count) != 0);
+}
+
+static inline void cxl_ctx_get(void)
+{
+       atomic_inc(&cxl_use_count);
+}
+
+static inline void cxl_ctx_put(void)
+{
+       atomic_dec(&cxl_use_count);
+}
+
 void cxl_slbia(struct mm_struct *mm);
-void cxl_ctx_get(void);
-void cxl_ctx_put(void);
-bool cxl_ctx_in_use(void);
 
 #else /* CONFIG_CXL_BASE */
 
-#define cxl_slbia(...) do { } while (0)
-#define cxl_ctx_in_use(...) false
+static inline bool cxl_ctx_in_use(void) { return false; }
+static inline void cxl_slbia(struct mm_struct *mm) {}
 
 #endif /* CONFIG_CXL_BASE */
 
