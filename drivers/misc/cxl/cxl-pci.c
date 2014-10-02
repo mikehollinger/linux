@@ -566,7 +566,6 @@ static int cxl_afu_descriptor_looks_ok(struct cxl_afu_t *afu)
 
 static int sanitise_afu_regs(struct cxl_afu_t *afu)
 {
-	cxl_p1_write(afu->adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
 	cxl_p1n_write(afu, CXL_PSL_IVTE_Offset_An, 0x0000000000000000);
 	cxl_ops->slbia(afu);
@@ -817,6 +816,13 @@ static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 	return adapter;
 }
 
+static int sanitise_adapter_regs(struct cxl_t *adapter)
+{
+	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
+
+	return 0;
+}
+
 static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 {
 	struct cxl_t *adapter;
@@ -845,7 +851,8 @@ static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
 	if ((rc = cxl_map_adapter_regs(adapter, dev)))
 		goto err2;
 
-	/* TODO: cxl_ops->sanitise_adapter_regs(adapter); */
+	if ((rc = sanitise_adapter_regs(adapter)))
+		goto err2;
 
 	if ((rc = init_implementation_adapter_regs(adapter, dev)))
 		goto err3;
