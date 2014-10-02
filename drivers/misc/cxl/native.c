@@ -189,27 +189,40 @@ static void release_spa(struct cxl_afu_t *afu)
 	free_pages((unsigned long) afu->spa, afu->spa_order);
 }
 
-static void afu_slbia_native(struct cxl_afu_t *afu)
+static int afu_slbia_native(struct cxl_afu_t *afu)
 {
+	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
+
 	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
 	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_SLBI_IQ_ALL);
-	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_SLBIA_P)
+	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_SLBIA_P) {
+		if (time_after_eq(jiffies, timeout)) {
+			dev_warn(&afu->dev, "WARNING: CXL AFU SLBIA timed out!\n");
+			return -EBUSY;
+		}
 		cpu_relax();
+	}
+	return 0;
 }
 
-static void cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
+static int cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
 {
+	int rc;
+
 	/* 1. Disable SSTP by writing 0 to SSTP1[V] */
 	cxl_p2n_write(afu, CXL_SSTP1_An, 0);
 
 	/* 2. Invalidate all SLB entries */
-	afu_slbia_native(afu);
+	if ((rc = afu_slbia_native(afu)))
+		return rc;
 
 	/* 3. Set SSTP0_An */
 	cxl_p2n_write(afu, CXL_SSTP0_An, sstp0);
 
 	/* 4. Set SSTP1_An */
 	cxl_p2n_write(afu, CXL_SSTP1_An, sstp1);
+
+	return 0;
 }
 
 /* Using per slice version may improve performance here. (ie. SLBIA_An) */
@@ -463,7 +476,7 @@ static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
 {
 	struct cxl_afu_t *afu = ctx->afu;
 	u64 sr, sstp0, sstp1;
-	int result;
+	int rc;
 
 	sr = CXL_PSL_SR_An_SC;
 	set_endian(sr);
@@ -477,12 +490,14 @@ static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	cxl_p2n_write(afu, CXL_PSL_PID_TID_An, (u64)current->pid << 32);
 	cxl_p1n_write(afu, CXL_PSL_SR_An, sr);
 
-	if ((result = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
-		return result;
+	if ((rc = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
+		return rc;
+
+	if ((rc = cxl_write_sstp(afu, sstp0, sstp1)))
+		return rc;
 
 	cxl_prefault(ctx, wed);
 
-	cxl_write_sstp(afu, sstp0, sstp1);
 	cxl_p1n_write(afu, CXL_PSL_IVTE_Offset_An,
 		       (((u64)ctx->irqs.offset[0] & 0xffff) << 48) |
 		       (((u64)ctx->irqs.offset[1] & 0xffff) << 32) |
@@ -499,8 +514,8 @@ static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	/* master only context for dedicated */
 	assign_psn_space(ctx);
 
-	if ((result = afu_reset_and_disable(afu)))
-		return result;
+	if ((rc = afu_reset_and_disable(afu)))
+		return rc;
 
 	cxl_p2n_write(afu, CXL_PSL_WED_An, wed);
 

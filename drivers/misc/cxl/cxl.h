@@ -595,7 +595,7 @@ struct cxl_backend_ops {
 	int (*ack_irq)(struct cxl_context_t *ctx, u64 tfc, u64 psl_reset_mask);
 
 	int (*check_error)(struct cxl_afu_t *afu);
-	void (*slbia)(struct cxl_afu_t *afu);
+	int (*slbia)(struct cxl_afu_t *afu);
 	int (*afu_reset)(struct cxl_afu_t *afu);
 };
 extern const struct cxl_backend_ops *cxl_ops;

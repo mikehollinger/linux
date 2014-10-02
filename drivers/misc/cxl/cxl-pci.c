@@ -568,9 +568,7 @@ static int sanitise_afu_regs(struct cxl_afu_t *afu)
 {
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
 	cxl_p1n_write(afu, CXL_PSL_IVTE_Offset_An, 0x0000000000000000);
-	cxl_ops->slbia(afu);
-
-	return 0;
+	return cxl_ops->slbia(afu);
 }
 
 static int cxl_init_afu(struct cxl_t *adapter, int slice, struct pci_dev *dev)
