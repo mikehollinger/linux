@@ -592,7 +592,6 @@ static int sanitise_afu_regs(struct cxl_afu_t *afu)
 	cxl_p2n_write(afu, CXL_AURP0_An, 0x0000000000000000);
 	cxl_p2n_write(afu, CXL_SSTP1_An, 0x0000000000000000);
 	cxl_p2n_write(afu, CXL_SSTP0_An, 0x0000000000000000);
-	cxl_p2n_write(afu, CXL_PSL_TFC_An, 0x0000000000000000);
 	reg = cxl_p2n_read(afu, CXL_PSL_DSISR_An);
 	if (reg) {
 		dev_warn(&afu->dev, "AFU had pending DSISR: %#.16llx\n", reg);
