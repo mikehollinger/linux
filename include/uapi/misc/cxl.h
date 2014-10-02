@@ -29,12 +29,11 @@ struct cxl_ioctl_start_work {
 
 #define CXL_MAGIC 0xCA
 #define CXL_IOCTL_START_WORK      _IOWR(CXL_MAGIC, 0x00, struct cxl_ioctl_start_work)
-#define CXL_IOCTL_CHECK_ERROR     _IO(CXL_MAGIC,   0x02)
+#define CXL_IOCTL_CHECK_ERROR     _IO(CXL_MAGIC,   0x01)
 
 /* events from read() */
 
 enum cxl_event_type {
-	CXL_EVENT_READ_FAIL     = -1,
 	CXL_EVENT_RESERVED      = 0,
 	CXL_EVENT_AFU_INTERRUPT = 1,
 	CXL_EVENT_DATA_STORAGE  = 2,
@@ -51,7 +50,6 @@ struct cxl_event_header {
 };
 
 struct cxl_event_afu_interrupt {
-	struct cxl_event_header header;
 	__u16 irq; /* Raised AFU interrupt number */
 	__u16 reserved1;
 	__u32 reserved2;
@@ -61,7 +59,6 @@ struct cxl_event_afu_interrupt {
 };
 
 struct cxl_event_data_storage {
-	struct cxl_event_header header;
 	__u64 addr;
 	__u64 reserved1;
 	__u64 reserved2;
@@ -69,7 +66,6 @@ struct cxl_event_data_storage {
 };
 
 struct cxl_event_afu_error {
-	struct cxl_event_header header;
 	__u64 err;
 	__u64 reserved1;
 	__u64 reserved2;
@@ -77,8 +73,8 @@ struct cxl_event_afu_error {
 };
 
 struct cxl_event {
+	struct cxl_event_header header;
 	union {
-		struct cxl_event_header header;
 		struct cxl_event_afu_interrupt irq;
 		struct cxl_event_data_storage fault;
 		struct cxl_event_afu_error afu_err;

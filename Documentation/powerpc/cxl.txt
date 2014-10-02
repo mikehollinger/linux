@@ -227,7 +227,18 @@ User API
         card is removed.
 
         All events will return a struct cxl_event which is always the
-        same size.  A struct cxl_event_header at the start gives:
+        same size.
+
+		struct cxl_event {
+			struct cxl_event_header header;
+			union {
+				struct cxl_event_afu_interrupt irq;
+				struct cxl_event_data_storage fault;
+				struct cxl_event_afu_error afu_err;
+			};
+		};
+
+	A struct cxl_event_header at the start gives:
                 struct cxl_event_header {
                         __u32 type;
                         __u16 size;
@@ -257,7 +268,6 @@ User API
 
         If an AFU interrupt event is received, the full structure received is:
                 struct cxl_event_afu_interrupt {
-                        struct cxl_event_header header;
                         __u16 irq;
                         __u16 reserved1;
                         __u32 reserved2;
@@ -273,7 +283,6 @@ User API
 
         If an data storage event is received, the full structure received is:
                 struct cxl_event_data_storage {
-                        struct cxl_event_header header;
                         __u64 addr;
                         __u64 reserved1;
                         __u64 reserved2;
@@ -290,7 +299,6 @@ User API
 
         If an AFU error event is received, the full structure received is:
                 struct cxl_event_afu_error {
-                        struct cxl_event_header header;
                         __u64 err;
                         __u64 reserved1;
                         __u64 reserved2;
