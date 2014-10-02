@@ -568,15 +568,17 @@ static int attach_process_native(struct cxl_context_t *ctx, bool kernel,
  * lock and schedule which will not good with lock held.  May need to
  * write do_process_element_cmd() that handles outstanding page
  * faults. */
-static int detach_process_native(struct cxl_context_t *ctx)
-{
-	if (ctx->afu->current_model == CXL_MODEL_DEDICATED) {
-		afu_reset_and_disable(ctx->afu);
-		afu_disable(ctx->afu);
-		psl_purge(ctx->afu);
-		return 0;
-	}
 
+static inline int detach_process_native_dedicated(struct cxl_context_t *ctx)
+{
+	afu_reset_and_disable(ctx->afu);
+	afu_disable(ctx->afu);
+	psl_purge(ctx->afu);
+	return 0;
+}
+
+static inline int detach_process_native_afu_directed(struct cxl_context_t *ctx)
+{
 	if (!ctx->pe_inserted)
 		return 0;
 	if (terminate_process_element(ctx))
@@ -585,6 +587,14 @@ static int detach_process_native(struct cxl_context_t *ctx)
 		return -1;
 
 	return 0;
+}
+
+static int detach_process_native(struct cxl_context_t *ctx)
+{
+	if (ctx->afu->current_model == CXL_MODEL_DEDICATED)
+		return detach_process_native_dedicated(ctx);
+
+	return detach_process_native_afu_directed(ctx);
 }
 
 static int get_irq_native(struct cxl_context_t *ctx, struct cxl_irq_info *info)
