@@ -1449,12 +1449,11 @@ static void set_msi_irq_chip(struct pnv_phb *phb, unsigned int virq)
 	if (phb->type != PNV_PHB_IODA2)
 		return;
 
-	/*
-	 * Change the IRQ chip for the MSI interrupts on PHB3.
-	 * The corresponding IRQ chip should be populated for
-	 * the first time.
-	 */
 	if (!phb->ioda.irq_chip_init) {
+		/*
+		 * First time we setup an MSI IRQ, we need to setup the
+		 * corresponding IRQ chip to route correctly.
+		 */
 		idata = irq_get_irq_data(virq);
 		ichip = irq_data_get_irq_chip(idata);
 		phb->ioda.irq_chip_init = 1;
