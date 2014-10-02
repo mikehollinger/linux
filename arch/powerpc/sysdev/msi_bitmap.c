@@ -25,11 +25,11 @@ int msi_bitmap_alloc_hwirqs(struct msi_bitmap *bmp, int num)
 					    num, (1 << order) - 1);
 	if (offset > bmp->irq_count)
 		goto err;
+
 	bitmap_set(bmp->bitmap, offset, num);
 	spin_unlock_irqrestore(&bmp->lock, flags);
 
-	pr_debug("msi_bitmap: allocated 0x%x (2^%d) at offset 0x%x\n",
-		 num, order, offset);
+	pr_debug("msi_bitmap: allocated 0x%x at offset 0x%x\n", num, offset);
 
 	return offset;
 err:
@@ -184,6 +184,12 @@ void __init test_basics(void)
 	/* And if we free one we can then allocate another */
 	msi_bitmap_free_hwirqs(&bmp, size / 2, 1);
 	check(msi_bitmap_alloc_hwirqs(&bmp, 1) == size / 2);
+
+	/* Check we get a naturally aligned offset */
+	check(msi_bitmap_alloc_hwirqs(&bmp, 2) % 2 == 0);
+	check(msi_bitmap_alloc_hwirqs(&bmp, 4) % 4 == 0);
+	check(msi_bitmap_alloc_hwirqs(&bmp, 8) % 8 == 0);
+	check(msi_bitmap_alloc_hwirqs(&bmp, 9) % 16 == 0);
 
 	msi_bitmap_free(&bmp);
 
