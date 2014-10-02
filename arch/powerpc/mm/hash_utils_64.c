@@ -1035,20 +1035,25 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 	DBG_LOW("%s(ea=%016lx, access=%lx, trap=%lx\n",
 		__func__, ea, access, trap);
 
-	/* Get region */
-	if (REGION_ID(ea) == KERNEL_REGION_ID) {
-		rc = 1;
-		goto bail;
-	}
-	if (REGION_ID(ea) == USER_REGION_ID) {
+ 	switch (REGION_ID(ea)) {
+	case USER_REGION_ID:
 		user_region = 1;
 		if (! mm) {
 			DBG_LOW(" user region with no mm !\n");
 			rc = 1;
 			goto bail;
 		}
-	} else
+		break;
+	case VMALLOC_REGION_ID:
 		mm = &init_mm;
+		break;
+	default:
+		/* Not a valid range
+		 * Send the problem up to do_page_fault 
+		 */
+		rc = 1;
+		goto bail;
+	}
 	rc = calculate_vsid(mm, ea, &vsid, &psize, &ssize);
 	if (rc)
 		goto bail;
