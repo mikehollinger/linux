@@ -239,13 +239,16 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_SLBIE_MAX      PPC_BITMASK(24, 31)
 #define CXL_SLBIE_PENDING  PPC_BITMASK(56, 63)
 
-/****** CXL_SLBIA_[An] ******************************************************/
-#define CXL_SLBIA_P         (1ull) /* Pending (read) */
+/****** Common to all CXL_(T|S)LBIA_[An] registers **************************/
+#define CXL_TSLBIA_P         (1ull) /* Pending (read) */
 
-/****** Common to all PSL_SLBIE/A_[An] registers *****************************/
-#define CXL_SLBI_IQ_ALL     (0ull)              /* Inv qualifier */
-#define CXL_SLBI_IQ_LPID    (1ull)              /* Inv qualifier */
-#define CXL_SLBI_IQ_LPIDPID (3ull)              /* Inv qualifier */
+/****** Common to all CXL_(T|S)LBI(E|A)_[An] registers **********************/
+#define CXL_TSLBI_IQ_ALL     (0ull)              /* Inv qualifier */
+#define CXL_TSLBI_IQ_LPID    (1ull)              /* Inv qualifier */
+#define CXL_TSLBI_IQ_LPIDPID (3ull)              /* Inv qualifier */
+
+/****** CXL_PSL_AFUSEL ******************************************************/
+#define CXL_PSL_AFUSEL_A (1ull << (63-55)) /* Adapter wide invalidates affect all AFUs */
 
 /****** CXL_PSL_DSISR_An ****************************************************/
 #define CXL_PSL_DSISR_An_DS (1ull << (63-0))  /* Segment not found */
@@ -596,7 +599,10 @@ struct cxl_backend_ops {
 
 	int (*check_error)(struct cxl_afu_t *afu);
 	int (*slbia)(struct cxl_afu_t *afu);
+	int (*adapter_tslbia)(struct cxl_t *adapter);
+	int (*afu_disable)(struct cxl_afu_t *afu);
 	int (*afu_reset)(struct cxl_afu_t *afu);
+	int (*psl_purge)(struct cxl_afu_t *afu);
 };
 extern const struct cxl_backend_ops *cxl_ops;
 

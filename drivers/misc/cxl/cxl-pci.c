@@ -566,9 +566,54 @@ static int cxl_afu_descriptor_looks_ok(struct cxl_afu_t *afu)
 
 static int sanitise_afu_regs(struct cxl_afu_t *afu)
 {
-	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
+	u64 reg;
+
+	/* Clear out any regs that contain either an IVTE or address or may be
+	 * waiting on an acknowledgement to try to be a bit safer as we bring
+	 * it online */
+	reg = cxl_p2n_read(afu, CXL_AFU_Cntl_An);
+	if ((reg & CXL_AFU_Cntl_An_ES_MASK) != CXL_AFU_Cntl_An_ES_Disabled) {
+		dev_warn(&afu->dev, "WARNING: AFU was not disabled: %#.16llx\n", reg);
+		if (cxl_ops->afu_reset(afu))
+			return -EIO;
+		if (cxl_ops->afu_disable(afu))
+			return -EIO;
+		if (cxl_ops->psl_purge(afu))
+			return -EIO;
+	}
+	cxl_p1n_write(afu, CXL_PSL_SPAP_An, 0x0000000000000000);
+	cxl_p1n_write(afu, CXL_PSL_IVTE_Limit_An, 0x0000000000000000);
 	cxl_p1n_write(afu, CXL_PSL_IVTE_Offset_An, 0x0000000000000000);
-	return cxl_ops->slbia(afu);
+	cxl_p1n_write(afu, CXL_PSL_AMBAR_An, 0x0000000000000000);
+	cxl_p1n_write(afu, CXL_PSL_SPOffset_An, 0x0000000000000000);
+	cxl_p1n_write(afu, CXL_HAURP_An, 0x0000000000000000);
+	cxl_p2n_write(afu, CXL_CSRP_An, 0x0000000000000000);
+	cxl_p2n_write(afu, CXL_AURP1_An, 0x0000000000000000);
+	cxl_p2n_write(afu, CXL_AURP0_An, 0x0000000000000000);
+	cxl_p2n_write(afu, CXL_SSTP1_An, 0x0000000000000000);
+	cxl_p2n_write(afu, CXL_SSTP0_An, 0x0000000000000000);
+	cxl_p2n_write(afu, CXL_PSL_TFC_An, 0x0000000000000000);
+	reg = cxl_p2n_read(afu, CXL_PSL_DSISR_An);
+	if (reg) {
+		dev_warn(&afu->dev, "AFU had pending DSISR: %#.16llx\n", reg);
+		if (reg & CXL_PSL_DSISR_TRANS)
+			cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_AE);
+		else
+			cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_A);
+	}
+	reg = cxl_p1n_read(afu, CXL_PSL_SERR_An);
+	if (reg) {
+		if (reg & ~0xffff)
+			dev_warn(&afu->dev, "AFU had pending SERR: %#.16llx\n", reg);
+		cxl_p1n_write(afu, CXL_PSL_SERR_An, reg & ~0xffff);
+	}
+	reg = cxl_p2n_read(afu, CXL_PSL_ErrStat_An);
+	if (reg) {
+		dev_warn(&afu->dev, "AFU had pending error status: %#.16llx\n", reg);
+		cxl_p2n_write(afu, CXL_PSL_ErrStat_An, reg);
+	}
+
+	return 0;
 }
 
 static int cxl_init_afu(struct cxl_t *adapter, int slice, struct pci_dev *dev)
@@ -817,8 +862,7 @@ static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 static int sanitise_adapter_regs(struct cxl_t *adapter)
 {
 	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
-
-	return 0;
+	return cxl_ops->adapter_tslbia(adapter);
 }
 
 static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)

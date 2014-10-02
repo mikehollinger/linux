@@ -189,13 +189,41 @@ static void release_spa(struct cxl_afu_t *afu)
 	free_pages((unsigned long) afu->spa, afu->spa_order);
 }
 
+static int adapter_tslbia(struct cxl_t *adapter)
+{
+	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
+
+	pr_devel("CXL adapter wide TSLBIA & SLBIA\n");
+
+	cxl_p1_write(adapter, CXL_PSL_AFUSEL, CXL_PSL_AFUSEL_A);
+
+	cxl_p1_write(adapter, CXL_PSL_TLBIA, CXL_TSLBI_IQ_ALL);
+	while (cxl_p1_read(adapter, CXL_PSL_TLBIA) & CXL_TSLBIA_P) {
+		if (time_after_eq(jiffies, timeout)) {
+			dev_warn(&adapter->dev, "WARNING: CXL adapter wide TLBIA timed out!\n");
+			return -EBUSY;
+		}
+		cpu_relax();
+	}
+
+	cxl_p1_write(adapter, CXL_PSL_SLBIA, CXL_TSLBI_IQ_ALL);
+	while (cxl_p1_read(adapter, CXL_PSL_SLBIA) & CXL_TSLBIA_P) {
+		if (time_after_eq(jiffies, timeout)) {
+			dev_warn(&adapter->dev, "WARNING: CXL adapter wide SLBIA timed out!\n");
+			return -EBUSY;
+		}
+		cpu_relax();
+	}
+	return 0;
+}
+
 static int afu_slbia_native(struct cxl_afu_t *afu)
 {
 	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
 
 	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
-	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_SLBI_IQ_ALL);
-	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_SLBIA_P) {
+	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_TSLBI_IQ_ALL);
+	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_TSLBIA_P) {
 		if (time_after_eq(jiffies, timeout)) {
 			dev_warn(&afu->dev, "WARNING: CXL AFU SLBIA timed out!\n");
 			return -EBUSY;
@@ -236,11 +264,11 @@ static void slb_invalid(struct cxl_context_t *ctx)
 	cxl_p1_write(adapter, CXL_PSL_LBISEL,
 			((u64)be32_to_cpu(ctx->elem->common.pid) << 32) |
 			be32_to_cpu(ctx->elem->lpid));
-	cxl_p1_write(adapter, CXL_PSL_SLBIA, CXL_SLBI_IQ_LPIDPID);
+	cxl_p1_write(adapter, CXL_PSL_SLBIA, CXL_TSLBI_IQ_LPIDPID);
 
 	while (1) {
 		slbia = cxl_p1_read(adapter, CXL_PSL_SLBIA);
-		if (!(slbia & CXL_SLBIA_P))
+		if (!(slbia & CXL_TSLBIA_P))
 			break;
 		cpu_relax();
 	}
@@ -665,7 +693,10 @@ static const struct cxl_backend_ops cxl_native_ops = {
 	.ack_irq = ack_irq_native,
 	.check_error = check_error,
 	.slbia = afu_slbia_native,
+	.adapter_tslbia = adapter_tslbia,
+	.afu_disable = afu_disable,
 	.afu_reset = afu_reset_and_disable,
+	.psl_purge = psl_purge,
 };
 
 void init_cxl_native(void)
