@@ -274,26 +274,23 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 
 	spin_lock_irqsave(&ctx->lock, flags);
 
-	while (1) {
-		if (ctx_event_pending(ctx))
-			break;
+	prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
 
+	while (!ctx_event_pending(ctx)) {
 		spin_unlock_irqrestore(&ctx->lock, flags);
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
 
-		prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
-		if (!(ctx_event_pending(ctx))) {
-			pr_devel("afu_read going to sleep...\n");
-			schedule();
-			pr_devel("afu_read woken up\n");
-		}
-		finish_wait(&ctx->wq, &wait);
-
 		if (signal_pending(current))
 			return -ERESTARTSYS;
+
+		pr_devel("afu_read going to sleep...\n");
+		schedule();
+		pr_devel("afu_read woken up\n");
 		spin_lock_irqsave(&ctx->lock, flags);
 	}
+
+	finish_wait(&ctx->wq, &wait);
 
 	memset(&event, 0, sizeof(event));
 	event.header.process_element = ctx->ph;
@@ -327,9 +324,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
 	size = min_t(size_t, count, event.header.size);
-	copy_to_user(buf, &event, size);
-
-	return size;
+	return copy_to_user(buf, &event, size);
 }
 
 static const struct file_operations afu_fops = {
