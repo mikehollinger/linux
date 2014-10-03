@@ -254,6 +254,12 @@ static unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 	return mask;
 }
 
+static inline int ctx_event_pending(struct cxl_context *ctx)
+{
+	return (ctx->pending_irq || ctx->pending_fault ||
+	    ctx->pending_afu_err || (ctx->status == CLOSED));
+}
+
 static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 			loff_t *off)
 {
@@ -268,8 +274,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 
 	while (1) {
 		spin_lock_irqsave(&ctx->lock, flags);
-		if (ctx->pending_irq || ctx->pending_fault ||
-		    ctx->pending_afu_err || (ctx->status == CLOSED))
+		if (ctx_event_pending(ctx))
 			break;
 		spin_unlock_irqrestore(&ctx->lock, flags);
 
@@ -277,8 +282,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 			return -EAGAIN;
 
 		prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
-		if (!(ctx->pending_irq || ctx->pending_fault ||
-		      ctx->pending_afu_err || (ctx->status == CLOSED))) {
+		if (!(ctx_event_pending(ctx))) {
 			pr_devel("afu_read going to sleep...\n");
 			schedule();
 			pr_devel("afu_read woken up\n");
@@ -296,31 +300,21 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 		event.header.size = sizeof(struct cxl_event_afu_interrupt);
 		event.header.type = CXL_EVENT_AFU_INTERRUPT;
 		event.irq.irq = find_first_bit(ctx->irq_bitmap, ctx->irq_count) + 1;
-
-		/* Only clear the IRQ if we can send the whole event: */
-		if (count >= event.header.size) {
-			clear_bit(event.irq.irq - 1, ctx->irq_bitmap);
-			if (bitmap_empty(ctx->irq_bitmap, ctx->irq_count))
-				ctx->pending_irq = false;
-		}
+		clear_bit(event.irq.irq - 1, ctx->irq_bitmap);
+		if (bitmap_empty(ctx->irq_bitmap, ctx->irq_count))
+			ctx->pending_irq = false;
 	} else if (ctx->pending_fault) {
 		pr_devel("afu_read delivering data storage fault\n");
 		event.header.size = sizeof(struct cxl_event_data_storage);
 		event.header.type = CXL_EVENT_DATA_STORAGE;
 		event.fault.addr = ctx->fault_addr;
-
-		/* Only clear the fault if we can send the whole event: */
-		if (count >= event.header.size)
-			ctx->pending_fault = false;
+		ctx->pending_fault = false;
 	} else if (ctx->pending_afu_err) {
 		pr_devel("afu_read delivering afu error\n");
 		event.header.size = sizeof(struct cxl_event_afu_error);
 		event.header.type = CXL_EVENT_AFU_ERROR;
 		event.afu_err.err = ctx->afu_err;
-
-		/* Only clear the fault if we can send the whole event: */
-		if (count >= event.header.size)
-			ctx->pending_afu_err = false;
+		ctx->pending_afu_err = false;
 	} else if (ctx->status == CLOSED) {
 		pr_devel("afu_read fatal error\n");
 		spin_unlock_irqrestore(&ctx->lock, flags);
