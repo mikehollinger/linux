@@ -416,7 +416,6 @@ struct cxl {
 	void __iomem *p2_mmio;
 	irq_hw_number_t err_hwirq;
 	unsigned int err_virq;
-	struct cxl_driver_ops *driver;
 	spinlock_t afu_list_lock;
 	struct cxl_afu *afu[CXL_MAX_SLICES];
 	struct device dev;
@@ -441,14 +440,11 @@ struct cxl {
 	bool perst_select_user;
 };
 
-struct cxl_driver_ops {
-	struct module *module;
-	int (*alloc_one_irq)(struct cxl *adapter);
-	void (*release_one_irq)(struct cxl *adapter, int hwirq);
-	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num);
-	void (*release_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl *adapter);
-	int (*setup_irq)(struct cxl *adapter, unsigned int hwirq, unsigned int virq);
-};
+int cxl_alloc_one_irq(struct cxl *adapter);
+void cxl_release_one_irq(struct cxl *adapter, int hwirq);
+int cxl_alloc_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num);
+void cxl_release_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter);
+int cxl_setup_irq(struct cxl *adapter, unsigned int hwirq, unsigned int virq);
 
 /* common == phyp + powernv */
 struct cxl_process_element_common {

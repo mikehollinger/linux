@@ -355,7 +355,7 @@ static int init_implementation_afu_regs(struct cxl_afu *afu)
 	return 0;
 }
 
-static int setup_cxl_msi(struct cxl *adapter, unsigned int hwirq,
+int cxl_setup_irq(struct cxl *adapter, unsigned int hwirq,
 			 unsigned int virq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
@@ -363,44 +363,33 @@ static int setup_cxl_msi(struct cxl *adapter, unsigned int hwirq,
 	return pnv_cxl_ioda_msi_setup(dev, hwirq, virq);
 }
 
-static int alloc_one_hwirq(struct cxl *adapter)
+int cxl_alloc_one_irq(struct cxl *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_alloc_hwirqs(dev, 1);
 }
 
-static void release_one_hwirq(struct cxl *adapter, int hwirq)
+void cxl_release_one_irq(struct cxl *adapter, int hwirq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_release_hwirqs(dev, hwirq, 1);
 }
 
-static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num)
+int cxl_alloc_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_alloc_hwirq_ranges(irqs, dev, num);
 }
 
-static void release_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter)
+void cxl_release_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	pnv_cxl_release_hwirq_ranges(irqs, dev);
-
 }
-
-
-static struct cxl_driver_ops cxl_pci_driver_ops = {
-	.module = THIS_MODULE,
-	.alloc_one_irq = alloc_one_hwirq,
-	.release_one_irq = release_one_hwirq,
-	.alloc_irq_ranges = alloc_hwirq_ranges,
-	.release_irq_ranges = release_hwirq_ranges,
-	.setup_irq = setup_cxl_msi,
-};
 
 static int setup_cxl_bars(struct pci_dev *dev)
 {
@@ -851,7 +840,6 @@ static struct cxl *cxl_alloc_adapter(struct pci_dev *dev)
 
 	adapter->dev.parent = &dev->dev;
 	adapter->dev.release = cxl_release_adapter;
-	adapter->driver = &cxl_pci_driver_ops;
 	pci_set_drvdata(dev, adapter);
 	spin_lock_init(&adapter->afu_list_lock);
 

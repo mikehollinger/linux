@@ -251,8 +251,7 @@ unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 		return 0;
 	}
 
-	if (adapter->driver->setup_irq)
-		adapter->driver->setup_irq(adapter, hwirq, virq);
+	cxl_setup_irq(adapter, hwirq, virq);
 
 	pr_devel("hwirq %#lx mapped to virq %u\n", hwirq, virq);
 
@@ -279,7 +278,7 @@ static int cxl_register_one_irq(struct cxl *adapter,
 {
 	int hwirq, virq;
 
-	if ((hwirq = adapter->driver->alloc_one_irq(adapter)) < 0)
+	if ((hwirq = cxl_alloc_one_irq(adapter)) < 0)
 		return hwirq;
 
 	if (!(virq = cxl_map_irq(adapter, hwirq, handler, cookie)))
@@ -291,7 +290,7 @@ static int cxl_register_one_irq(struct cxl *adapter,
 	return 0;
 
 err:
-	adapter->driver->release_one_irq(adapter, hwirq);
+	cxl_release_one_irq(adapter, hwirq);
 	return -ENOMEM;
 }
 
@@ -314,7 +313,7 @@ void cxl_release_psl_err_irq(struct cxl *adapter)
 {
 	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
 	cxl_unmap_irq(adapter->err_virq, adapter);
-	adapter->driver->release_one_irq(adapter, adapter->err_hwirq);
+	cxl_release_one_irq(adapter, adapter->err_hwirq);
 }
 EXPORT_SYMBOL(cxl_release_psl_err_irq);
 
@@ -340,7 +339,7 @@ void cxl_release_serr_irq(struct cxl_afu *afu)
 {
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
 	cxl_unmap_irq(afu->serr_virq, afu);
-	afu->adapter->driver->release_one_irq(afu->adapter, afu->serr_hwirq);
+	cxl_release_one_irq(afu->adapter, afu->serr_hwirq);
 }
 EXPORT_SYMBOL(cxl_release_serr_irq);
 
@@ -354,7 +353,7 @@ EXPORT_SYMBOL(cxl_register_psl_irq);
 void cxl_release_psl_irq(struct cxl_afu *afu)
 {
 	cxl_unmap_irq(afu->psl_virq, afu);
-	afu->adapter->driver->release_one_irq(afu->adapter, afu->psl_hwirq);
+	cxl_release_one_irq(afu->adapter, afu->psl_hwirq);
 }
 EXPORT_SYMBOL(cxl_release_psl_irq);
 
@@ -363,7 +362,7 @@ int afu_register_irqs(struct cxl_context *ctx, u32 count)
 	irq_hw_number_t hwirq;
 	int rc, r, i;
 
-	if ((rc = ctx->afu->adapter->driver->alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter, count)))
+	if ((rc = cxl_alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter, count)))
 		return rc;
 
 	/* Multiplexed PSL Interrupt */
@@ -401,5 +400,5 @@ void afu_release_irqs(struct cxl_context *ctx)
 		}
 	}
 
-	ctx->afu->adapter->driver->release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
+	cxl_release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
 }

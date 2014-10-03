@@ -16,11 +16,3 @@ config CXL
 	  Select this option to enable userspace driver support for IBM
 	  Coherent Accelerators (CXL).  CXL is otherwise known as Coherent
 	  Accelerator Processor Interface (CAPI).
-
-config CXL_PCI
-	tristate "Support for CXL devices via PCI"
-	depends on CXL && PPC_POWERNV
-	default y
-	help
-	  Select this option to support CXL devices detected via PCI, e.g.
-	  when running under powernv/OPAL.

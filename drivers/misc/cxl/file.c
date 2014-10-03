@@ -63,9 +63,6 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 	if (!(adapter = get_cxl_adapter(adapter_num)))
 		return -ENODEV;
 
-	if (!try_module_get(adapter->driver->module))
-		goto err_put_adapter;
-
 	if (slice > adapter->slices)
 		goto err_put_module;
 
@@ -100,8 +97,6 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 err_put_afu:
 	put_device(&afu->dev);
 err_put_module:
-	module_put(adapter->driver->module);
-err_put_adapter:
 	put_device(&adapter->dev);
 	return rc;
 }
@@ -122,8 +117,6 @@ static int afu_release(struct inode *inode, struct file *file)
 	pr_devel("%s: closing cxl file descriptor. pe: %i\n",
 		 __func__, ctx->ph);
 	cxl_context_detach(ctx);
-
-	module_put(ctx->afu->adapter->driver->module);
 
 	put_device(&ctx->afu->dev);
 
