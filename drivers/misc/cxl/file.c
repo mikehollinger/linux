@@ -272,12 +272,13 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	if (count < sizeof(struct cxl_event_header))
 		return -EINVAL;
 
+	spin_lock_irqsave(&ctx->lock, flags);
+
 	while (1) {
-		spin_lock_irqsave(&ctx->lock, flags);
 		if (ctx_event_pending(ctx))
 			break;
-		spin_unlock_irqrestore(&ctx->lock, flags);
 
+		spin_unlock_irqrestore(&ctx->lock, flags);
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
 
@@ -291,6 +292,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 
 		if (signal_pending(current))
 			return -ERESTARTSYS;
+		spin_lock_irqsave(&ctx->lock, flags);
 	}
 
 	memset(&event, 0, sizeof(event));
