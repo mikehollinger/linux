@@ -21,7 +21,7 @@ static ssize_t caia_version_show(struct device *device,
 				 struct device_attribute *attr,
 				 char *buf)
 {
-	struct cxl_t *adapter = to_cxl_adapter(device);
+	struct cxl *adapter = to_cxl_adapter(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%i.%i\n", adapter->caia_major,
 			 adapter->caia_minor);
@@ -31,7 +31,7 @@ static ssize_t psl_revision_show(struct device *device,
 				 struct device_attribute *attr,
 				 char *buf)
 {
-	struct cxl_t *adapter = to_cxl_adapter(device);
+	struct cxl *adapter = to_cxl_adapter(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%i\n", adapter->psl_rev);
 }
@@ -40,7 +40,7 @@ static ssize_t base_image_show(struct device *device,
 			       struct device_attribute *attr,
 			       char *buf)
 {
-	struct cxl_t *adapter = to_cxl_adapter(device);
+	struct cxl *adapter = to_cxl_adapter(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%i\n", adapter->base_image);
 }
@@ -49,7 +49,7 @@ static ssize_t image_loaded_show(struct device *device,
 				 struct device_attribute *attr,
 				 char *buf)
 {
-	struct cxl_t *adapter = to_cxl_adapter(device);
+	struct cxl *adapter = to_cxl_adapter(device);
 
 	if (adapter->user_image_loaded)
 		return scnprintf(buf, PAGE_SIZE, "user\n");
@@ -72,7 +72,7 @@ static ssize_t mmio_size_show_master(struct device *device,
 				     struct device_attribute *attr,
 				     char *buf)
 {
-	struct cxl_afu_t *afu = to_afu_chardev_m(device);
+	struct cxl_afu *afu = to_afu_chardev_m(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->adapter->ps_size);
 }
@@ -81,7 +81,7 @@ static ssize_t pp_mmio_off_show(struct device *device,
 				struct device_attribute *attr,
 				char *buf)
 {
-	struct cxl_afu_t *afu = to_afu_chardev_m(device);
+	struct cxl_afu *afu = to_afu_chardev_m(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_offset);
 }
@@ -90,7 +90,7 @@ static ssize_t pp_mmio_len_show(struct device *device,
 				struct device_attribute *attr,
 				char *buf)
 {
-	struct cxl_afu_t *afu = to_afu_chardev_m(device);
+	struct cxl_afu *afu = to_afu_chardev_m(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_size);
 }
@@ -108,7 +108,7 @@ static ssize_t mmio_size_show(struct device *device,
 			      struct device_attribute *attr,
 			      char *buf)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 
 	if (afu->pp_size)
 		return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_size);
@@ -119,7 +119,7 @@ static ssize_t reset_store_afu(struct device *device,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 	int rc;
 
 	if ((rc = cxl_ops->afu_reset(afu)))
@@ -131,7 +131,7 @@ static ssize_t irqs_min_show(struct device *device,
 			     struct device_attribute *attr,
 			     char *buf)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->pp_irqs);
 }
@@ -140,7 +140,7 @@ static ssize_t irqs_max_show(struct device *device,
 				  struct device_attribute *attr,
 				  char *buf)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 
 	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->irqs_max);
 }
@@ -149,7 +149,7 @@ static ssize_t irqs_max_store(struct device *device,
 				  struct device_attribute *attr,
 				  const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 	ssize_t ret;
 	int irqs_max;
 
@@ -171,7 +171,7 @@ static ssize_t models_supported_show(struct device *device,
 				    struct device_attribute *attr,
 				    char *buf)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 	char *p = buf, *end = buf + PAGE_SIZE;
 
 	if (afu->models_supported & CXL_MODEL_DEDICATED)
@@ -185,7 +185,7 @@ static ssize_t prefault_mode_show(struct device *device,
 				  struct device_attribute *attr,
 				  char *buf)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 
 	switch (afu->prefault_mode) {
 	case CXL_PREFAULT_WED:
@@ -201,7 +201,7 @@ static ssize_t prefault_mode_store(struct device *device,
 			  struct device_attribute *attr,
 			  const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 	enum prefault_modes mode = -1;
 
 	if (!strncmp(buf, "wed", 3))
@@ -222,7 +222,7 @@ static ssize_t model_show(struct device *device,
 			 struct device_attribute *attr,
 			 char *buf)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 
 	if (afu->current_model == CXL_MODEL_DEDICATED)
 		return scnprintf(buf, PAGE_SIZE, "dedicated_process\n");
@@ -235,7 +235,7 @@ static ssize_t model_store(struct device *device,
 			   struct device_attribute *attr,
 			   const char *buf, size_t count)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(device);
+	struct cxl_afu *afu = to_cxl_afu(device);
 	int old_model, model = -1;
 	int rc = -EBUSY;
 
@@ -287,7 +287,7 @@ static struct device_attribute afu_attrs[] = {
 
 
 
-int cxl_sysfs_adapter_add(struct cxl_t *adapter)
+int cxl_sysfs_adapter_add(struct cxl *adapter)
 {
 	int i, rc;
 
@@ -302,7 +302,7 @@ err:
 	return rc;
 }
 EXPORT_SYMBOL(cxl_sysfs_adapter_add);
-void cxl_sysfs_adapter_remove(struct cxl_t *adapter)
+void cxl_sysfs_adapter_remove(struct cxl *adapter)
 {
 	int i;
 
@@ -311,7 +311,7 @@ void cxl_sysfs_adapter_remove(struct cxl_t *adapter)
 }
 EXPORT_SYMBOL(cxl_sysfs_adapter_remove);
 
-int cxl_sysfs_afu_add(struct cxl_afu_t *afu)
+int cxl_sysfs_afu_add(struct cxl_afu *afu)
 {
 	int afu_attr, mstr_attr, rc = 0;
 
@@ -336,7 +336,7 @@ err:
 }
 EXPORT_SYMBOL(cxl_sysfs_afu_add);
 
-void cxl_sysfs_afu_remove(struct cxl_afu_t *afu)
+void cxl_sysfs_afu_remove(struct cxl_afu *afu)
 {
 	int i;
 

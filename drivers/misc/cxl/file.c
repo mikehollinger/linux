@@ -51,9 +51,9 @@ EXPORT_SYMBOL(cxl_class);
 
 static int __afu_open(struct inode *inode, struct file *file, bool master)
 {
-	struct cxl_t *adapter;
-	struct cxl_afu_t *afu;
-	struct cxl_context_t *ctx;
+	struct cxl *adapter;
+	struct cxl_afu *afu;
+	struct cxl_context *ctx;
 	int adapter_num = CXL_DEVT_ADAPTER(inode->i_rdev);
 	int slice = CXL_DEVT_AFU(inode->i_rdev);
 	int rc = -ENODEV;
@@ -117,7 +117,7 @@ static int afu_master_open(struct inode *inode, struct file *file)
 
 static int afu_release(struct inode *inode, struct file *file)
 {
-	struct cxl_context_t *ctx = file->private_data;
+	struct cxl_context *ctx = file->private_data;
 
 	pr_devel("%s: closing cxl file descriptor. pe: %i\n",
 		 __func__, ctx->ph);
@@ -134,7 +134,7 @@ static int afu_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static long afu_ioctl_start_work(struct cxl_context_t *ctx,
+static long afu_ioctl_start_work(struct cxl_context *ctx,
 		     struct cxl_ioctl_start_work __user *uwork)
 {
 	struct cxl_ioctl_start_work work;
@@ -179,7 +179,7 @@ static long afu_ioctl_start_work(struct cxl_context_t *ctx,
 	return 0;
 }
 
-static long afu_ioctl_check_error(struct cxl_context_t *ctx)
+static long afu_ioctl_check_error(struct cxl_context *ctx)
 {
 	if (ctx->status != STARTED)
 		return -EIO;
@@ -195,7 +195,7 @@ static long afu_ioctl_check_error(struct cxl_context_t *ctx)
 
 static long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct cxl_context_t *ctx = file->private_data;
+	struct cxl_context *ctx = file->private_data;
 
 	if (ctx->status == CLOSED)
 		return -EIO;
@@ -219,7 +219,7 @@ static long afu_compat_ioctl(struct file *file, unsigned int cmd,
 
 static int afu_mmap(struct file *file, struct vm_area_struct *vm)
 {
-	struct cxl_context_t *ctx = file->private_data;
+	struct cxl_context *ctx = file->private_data;
 
 	/* AFU must be started before we can MMIO */
 	if (ctx->status != STARTED)
@@ -230,7 +230,7 @@ static int afu_mmap(struct file *file, struct vm_area_struct *vm)
 
 static unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 {
-	struct cxl_context_t *ctx = file->private_data;
+	struct cxl_context *ctx = file->private_data;
 	int mask = 0;
 	unsigned long flags;
 
@@ -257,7 +257,7 @@ static unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 			loff_t *off)
 {
-	struct cxl_context_t *ctx = file->private_data;
+	struct cxl_context *ctx = file->private_data;
 	struct cxl_event event;
 	unsigned long flags;
 	ssize_t size;
@@ -361,7 +361,7 @@ static const struct file_operations afu_master_fops = {
 
 static char *cxl_devnode(struct device *dev, umode_t *mode)
 {
-	struct cxl_afu_t *afu;
+	struct cxl_afu *afu;
 
 	if (CXL_DEVT_IS_CARD(dev->devt)) {
 		/* These minor numbers will eventually be used to program the
@@ -383,7 +383,7 @@ static char *cxl_devnode(struct device *dev, umode_t *mode)
 
 extern struct class *cxl_class;
 
-int cxl_chardev_m_afu_add(struct cxl_afu_t *afu)
+int cxl_chardev_m_afu_add(struct cxl_afu *afu)
 {
 	struct device *dev;
 	int rc;
@@ -410,7 +410,7 @@ err:
 	return rc;
 }
 
-int cxl_chardev_s_afu_add(struct cxl_afu_t *afu)
+int cxl_chardev_s_afu_add(struct cxl_afu *afu)
 {
 	struct device *dev;
 	int rc;
@@ -437,7 +437,7 @@ err:
 	return rc;
 }
 
-void cxl_chardev_afu_remove(struct cxl_afu_t *afu)
+void cxl_chardev_afu_remove(struct cxl_afu *afu)
 {
 	if (afu->chardev_m) {
 		cdev_del(&afu->afu_cdev_m);
@@ -449,7 +449,7 @@ void cxl_chardev_afu_remove(struct cxl_afu_t *afu)
 	}
 }
 
-int cxl_register_afu(struct cxl_afu_t *afu)
+int cxl_register_afu(struct cxl_afu *afu)
 {
 	afu->dev.class = cxl_class;
 
@@ -457,7 +457,7 @@ int cxl_register_afu(struct cxl_afu_t *afu)
 }
 EXPORT_SYMBOL(cxl_register_afu);
 
-int cxl_register_adapter(struct cxl_t *adapter)
+int cxl_register_adapter(struct cxl *adapter)
 {
 	adapter->dev.class = cxl_class;
 

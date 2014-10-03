@@ -28,15 +28,15 @@
 /*
  * Allocates space for a CXL context.
  */
-struct cxl_context_t *cxl_context_alloc(void)
+struct cxl_context *cxl_context_alloc(void)
 {
-	return kzalloc(sizeof(struct cxl_context_t), GFP_KERNEL);
+	return kzalloc(sizeof(struct cxl_context), GFP_KERNEL);
 }
 
 /*
  * Initialises a CXL context.
  */
-int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool master)
+int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 {
 	int i;
 
@@ -76,7 +76,7 @@ int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool mast
 /*
  * Map a per-context mmio space into the given vma.
  */
-int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
+int cxl_context_iomap(struct cxl_context *ctx, struct vm_area_struct *vma)
 {
 	u64 len = vma->vm_end - vma->vm_start;
 	len = min(len, ctx->psn_size);
@@ -108,7 +108,7 @@ int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma)
  * return until all outstanding interrupts for this context have completed. The
  * hardware should no longer access *ctx after this has returned.
  */
-static void __detach_context(struct cxl_context_t *ctx)
+static void __detach_context(struct cxl_context *ctx)
 {
 	unsigned long flags;
 	enum cxl_context_status status;
@@ -132,7 +132,7 @@ static void __detach_context(struct cxl_context_t *ctx)
  * (ie. prevent this context from generating any further interrupts
  * so that it can be freed).
  */
-void cxl_context_detach(struct cxl_context_t *ctx)
+void cxl_context_detach(struct cxl_context *ctx)
 {
 	__detach_context(ctx);
 }
@@ -140,9 +140,9 @@ void cxl_context_detach(struct cxl_context_t *ctx)
 /*
  * Detach all contexts on the given AFU.
  */
-void cxl_context_detach_all(struct cxl_afu_t *afu)
+void cxl_context_detach_all(struct cxl_afu *afu)
 {
-	struct cxl_context_t *ctx;
+	struct cxl_context *ctx;
 	int tmp;
 
 	rcu_read_lock();
@@ -152,7 +152,7 @@ void cxl_context_detach_all(struct cxl_afu_t *afu)
 }
 EXPORT_SYMBOL(cxl_context_detach_all);
 
-void cxl_context_free(struct cxl_context_t *ctx)
+void cxl_context_free(struct cxl_context *ctx)
 {
 	unsigned long flags;
 

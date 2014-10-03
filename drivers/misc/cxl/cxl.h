@@ -321,10 +321,10 @@ struct cxl_sste {
 	__be64 vsid_data;
 };
 
-#define to_cxl_adapter(d) container_of(d, struct cxl_t, dev)
-#define to_cxl_afu(d) container_of(d, struct cxl_afu_t, dev)
+#define to_cxl_adapter(d) container_of(d, struct cxl, dev)
+#define to_cxl_afu(d) container_of(d, struct cxl_afu, dev)
 
-struct cxl_afu_t {
+struct cxl_afu {
 	irq_hw_number_t psl_hwirq;
 	irq_hw_number_t serr_hwirq;
 	unsigned int serr_virq;
@@ -334,7 +334,7 @@ struct cxl_afu_t {
 	u64 pp_offset;
 	u64 pp_size;
 	void __iomem *afu_desc_mmio;
-	struct cxl_t *adapter;
+	struct cxl *adapter;
 	struct device dev;
 	struct cdev afu_cdev_s, afu_cdev_m;
 	struct device *chardev_s, *chardev_m;
@@ -370,8 +370,8 @@ struct cxl_afu_t {
 
 /* This is a cxl context.  If the PSL is in dedicated model, there will be one
  * of these per AFU.  If in AFU directed there can be lots of these. */
-struct cxl_context_t {
-	struct cxl_afu_t *afu;
+struct cxl_context {
+	struct cxl_afu *afu;
 
 	/* Problem state MMIO */
 	phys_addr_t psn_phys;
@@ -411,14 +411,14 @@ struct cxl_context_t {
 	bool pending_afu_err;
 };
 
-struct cxl_t {
+struct cxl {
 	void __iomem *p1_mmio;
 	void __iomem *p2_mmio;
 	irq_hw_number_t err_hwirq;
 	unsigned int err_virq;
 	struct cxl_driver_ops *driver;
 	spinlock_t afu_list_lock;
-	struct cxl_afu_t *afu[CXL_MAX_SLICES];
+	struct cxl_afu *afu[CXL_MAX_SLICES];
 	struct device dev;
 	struct dentry *trace;
 	struct dentry *psl_err_chk;
@@ -443,11 +443,11 @@ struct cxl_t {
 
 struct cxl_driver_ops {
 	struct module *module;
-	int (*alloc_one_irq)(struct cxl_t *adapter);
-	void (*release_one_irq)(struct cxl_t *adapter, int hwirq);
-	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num);
-	void (*release_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl_t *adapter);
-	int (*setup_irq)(struct cxl_t *adapter, unsigned int hwirq, unsigned int virq);
+	int (*alloc_one_irq)(struct cxl *adapter);
+	void (*release_one_irq)(struct cxl *adapter, int hwirq);
+	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num);
+	void (*release_irq_ranges)(struct cxl_irq_ranges *irqs, struct cxl *adapter);
+	int (*setup_irq)(struct cxl *adapter, unsigned int hwirq, unsigned int virq);
 };
 
 /* common == phyp + powernv */
@@ -483,7 +483,7 @@ struct cxl_process_element {
 #define _cxl_reg_read(addr) \
 	in_be64((u64 __iomem *)(addr))
 
-static inline void __iomem *_cxl_p1_addr(struct cxl_t *cxl, cxl_p1_reg_t reg)
+static inline void __iomem *_cxl_p1_addr(struct cxl *cxl, cxl_p1_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
 	return cxl->p1_mmio + cxl_reg_off(reg);
@@ -493,7 +493,7 @@ static inline void __iomem *_cxl_p1_addr(struct cxl_t *cxl, cxl_p1_reg_t reg)
 #define cxl_p1_read(cxl, reg) \
 	_cxl_reg_read(_cxl_p1_addr(cxl, reg))
 
-static inline void __iomem *_cxl_p1n_addr(struct cxl_afu_t *afu, cxl_p1n_reg_t reg)
+static inline void __iomem *_cxl_p1n_addr(struct cxl_afu *afu, cxl_p1n_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
 	return afu->p1n_mmio + cxl_reg_off(reg);
@@ -503,7 +503,7 @@ static inline void __iomem *_cxl_p1n_addr(struct cxl_afu_t *afu, cxl_p1n_reg_t r
 #define cxl_p1n_read(afu, reg) \
 	_cxl_reg_read(_cxl_p1n_addr(afu, reg))
 
-static inline void __iomem *_cxl_p2n_addr(struct cxl_afu_t *afu, cxl_p2n_reg_t reg)
+static inline void __iomem *_cxl_p2n_addr(struct cxl_afu *afu, cxl_p2n_reg_t reg)
 {
 	return afu->p2n_mmio + cxl_reg_off(reg);
 }
@@ -519,63 +519,63 @@ struct cxl_calls {
 int register_cxl_calls(struct cxl_calls *calls);
 void unregister_cxl_calls(struct cxl_calls *calls);
 
-int cxl_alloc_adapter_nr(struct cxl_t *adapter);
-void cxl_remove_adapter_nr(struct cxl_t *adapter);
+int cxl_alloc_adapter_nr(struct cxl *adapter);
+void cxl_remove_adapter_nr(struct cxl *adapter);
 
 int cxl_file_init(void);
 void cxl_file_exit(void);
-int cxl_register_adapter(struct cxl_t *adapter);
-int cxl_register_afu(struct cxl_afu_t *afu);
-int cxl_chardev_m_afu_add(struct cxl_afu_t *afu);
-int cxl_chardev_s_afu_add(struct cxl_afu_t *afu);
-void cxl_chardev_afu_remove(struct cxl_afu_t *afu);
+int cxl_register_adapter(struct cxl *adapter);
+int cxl_register_afu(struct cxl_afu *afu);
+int cxl_chardev_m_afu_add(struct cxl_afu *afu);
+int cxl_chardev_s_afu_add(struct cxl_afu *afu);
+void cxl_chardev_afu_remove(struct cxl_afu *afu);
 
-void cxl_context_detach_all(struct cxl_afu_t *afu);
-void cxl_context_free(struct cxl_context_t *ctx);
-void cxl_context_detach(struct cxl_context_t *ctx);
+void cxl_context_detach_all(struct cxl_afu *afu);
+void cxl_context_free(struct cxl_context *ctx);
+void cxl_context_detach(struct cxl_context *ctx);
 
-int cxl_sysfs_adapter_add(struct cxl_t *adapter);
-void cxl_sysfs_adapter_remove(struct cxl_t *adapter);
-int cxl_sysfs_afu_add(struct cxl_afu_t *afu);
-void cxl_sysfs_afu_remove(struct cxl_afu_t *afu);
+int cxl_sysfs_adapter_add(struct cxl *adapter);
+void cxl_sysfs_adapter_remove(struct cxl *adapter);
+int cxl_sysfs_afu_add(struct cxl_afu *afu);
+void cxl_sysfs_afu_remove(struct cxl_afu *afu);
 
-int cxl_afu_activate_model(struct cxl_afu_t *afu, int model);
-int _cxl_afu_deactivate_model(struct cxl_afu_t *afu, int model);
-int cxl_afu_deactivate_model(struct cxl_afu_t *afu);
-int cxl_afu_select_best_model(struct cxl_afu_t *afu);
+int cxl_afu_activate_model(struct cxl_afu *afu, int model);
+int _cxl_afu_deactivate_model(struct cxl_afu *afu, int model);
+int cxl_afu_deactivate_model(struct cxl_afu *afu);
+int cxl_afu_select_best_model(struct cxl_afu *afu);
 
-unsigned int cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
+unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 		         irq_handler_t handler, void *cookie);
 void cxl_unmap_irq(unsigned int virq, void *cookie);
-int cxl_register_psl_irq(struct cxl_afu_t *afu);
-void cxl_release_psl_irq(struct cxl_afu_t *afu);
-int cxl_register_psl_err_irq(struct cxl_t *adapter);
-void cxl_release_psl_err_irq(struct cxl_t *adapter);
-int cxl_register_serr_irq(struct cxl_afu_t *afu);
-void cxl_release_serr_irq(struct cxl_afu_t *afu);
-int afu_register_irqs(struct cxl_context_t *ctx, u32 count);
-void afu_release_irqs(struct cxl_context_t *ctx);
+int cxl_register_psl_irq(struct cxl_afu *afu);
+void cxl_release_psl_irq(struct cxl_afu *afu);
+int cxl_register_psl_err_irq(struct cxl *adapter);
+void cxl_release_psl_err_irq(struct cxl *adapter);
+int cxl_register_serr_irq(struct cxl_afu *afu);
+void cxl_release_serr_irq(struct cxl_afu *afu);
+int afu_register_irqs(struct cxl_context *ctx, u32 count);
+void afu_release_irqs(struct cxl_context *ctx);
 irqreturn_t cxl_slice_irq_err(int irq, void *data);
 
 int cxl_debugfs_init(void);
 void cxl_debugfs_exit(void);
-int cxl_debugfs_adapter_add(struct cxl_t *adapter);
-void cxl_debugfs_adapter_remove(struct cxl_t *adapter);
-int cxl_debugfs_afu_add(struct cxl_afu_t *afu);
-void cxl_debugfs_afu_remove(struct cxl_afu_t *afu);
+int cxl_debugfs_adapter_add(struct cxl *adapter);
+void cxl_debugfs_adapter_remove(struct cxl *adapter);
+int cxl_debugfs_afu_add(struct cxl_afu *afu);
+void cxl_debugfs_afu_remove(struct cxl_afu *afu);
 
 void cxl_handle_fault(struct work_struct *work);
-void cxl_prefault(struct cxl_context_t *ctx, u64 wed);
+void cxl_prefault(struct cxl_context *ctx, u64 wed);
 
-struct cxl_t *get_cxl_adapter(int num);
-int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1);
+struct cxl *get_cxl_adapter(int num);
+int cxl_alloc_sst(struct cxl_context *ctx, u64 *sstp0, u64 *sstp1);
 
 void init_cxl_native(void);
 
-struct cxl_context_t *cxl_context_alloc(void);
-int cxl_context_init(struct cxl_context_t *ctx, struct cxl_afu_t *afu, bool master);
-void cxl_context_free(struct cxl_context_t *ctx);
-int cxl_context_iomap(struct cxl_context_t *ctx, struct vm_area_struct *vma);
+struct cxl_context *cxl_context_alloc(void);
+int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master);
+void cxl_context_free(struct cxl_context *ctx);
+int cxl_context_iomap(struct cxl_context *ctx, struct vm_area_struct *vma);
 
 /* This matches the layout of the H_COLLECT_CA_INT_INFO retbuf */
 struct cxl_irq_info {
@@ -590,22 +590,22 @@ struct cxl_irq_info {
 };
 
 struct cxl_backend_ops {
-	int (*attach_process)(struct cxl_context_t *ctx, bool kernel, u64 wed,
+	int (*attach_process)(struct cxl_context *ctx, bool kernel, u64 wed,
 			    u64 amr);
-	int (*detach_process)(struct cxl_context_t *ctx);
+	int (*detach_process)(struct cxl_context *ctx);
 
-	int (*get_irq)(struct cxl_context_t *ctx, struct cxl_irq_info *info);
-	int (*ack_irq)(struct cxl_context_t *ctx, u64 tfc, u64 psl_reset_mask);
+	int (*get_irq)(struct cxl_context *ctx, struct cxl_irq_info *info);
+	int (*ack_irq)(struct cxl_context *ctx, u64 tfc, u64 psl_reset_mask);
 
-	int (*check_error)(struct cxl_afu_t *afu);
-	int (*slbia)(struct cxl_afu_t *afu);
-	int (*adapter_tslbia)(struct cxl_t *adapter);
-	int (*afu_disable)(struct cxl_afu_t *afu);
-	int (*afu_reset)(struct cxl_afu_t *afu);
-	int (*psl_purge)(struct cxl_afu_t *afu);
+	int (*check_error)(struct cxl_afu *afu);
+	int (*slbia)(struct cxl_afu *afu);
+	int (*adapter_tslbia)(struct cxl *adapter);
+	int (*afu_disable)(struct cxl_afu *afu);
+	int (*afu_reset)(struct cxl_afu *afu);
+	int (*psl_purge)(struct cxl_afu *afu);
 };
 extern const struct cxl_backend_ops *cxl_ops;
 
-void cxl_stop_trace(struct cxl_t *cxl);
+void cxl_stop_trace(struct cxl *cxl);
 
 #endif

@@ -21,7 +21,7 @@
 
 #include "cxl.h"
 
-static int afu_control(struct cxl_afu_t *afu, u64 command,
+static int afu_control(struct cxl_afu *afu, u64 command,
 		       u64 result, u64 mask, bool enabled)
 {
 	u64 AFU_Cntl = cxl_p2n_read(afu, CXL_AFU_Cntl_An);
@@ -51,7 +51,7 @@ static int afu_control(struct cxl_afu_t *afu, u64 command,
 	return 0;
 }
 
-static int afu_enable(struct cxl_afu_t *afu)
+static int afu_enable(struct cxl_afu *afu)
 {
 	pr_devel("AFU enable request\n");
 
@@ -60,7 +60,7 @@ static int afu_enable(struct cxl_afu_t *afu)
 			   CXL_AFU_Cntl_An_ES_MASK, true);
 }
 
-static int afu_disable(struct cxl_afu_t *afu)
+static int afu_disable(struct cxl_afu *afu)
 {
 	pr_devel("AFU disable request\n");
 
@@ -69,7 +69,7 @@ static int afu_disable(struct cxl_afu_t *afu)
 }
 
 /* We have to disable when we reset */
-static int afu_reset_and_disable(struct cxl_afu_t *afu)
+static int afu_reset_and_disable(struct cxl_afu *afu)
 {
 	pr_devel("AFU reset request\n");
 
@@ -79,14 +79,14 @@ static int afu_reset_and_disable(struct cxl_afu_t *afu)
 			   false);
 }
 
-static int afu_check_and_enable(struct cxl_afu_t *afu)
+static int afu_check_and_enable(struct cxl_afu *afu)
 {
 	if (afu->enabled)
 		return 0;
 	return afu_enable(afu);
 }
 
-static int psl_purge(struct cxl_afu_t *afu)
+static int psl_purge(struct cxl_afu *afu)
 {
 	u64 PSL_CNTL = cxl_p1n_read(afu, CXL_PSL_SCNTL_An);
 	u64 AFU_Cntl = cxl_p2n_read(afu, CXL_AFU_Cntl_An);
@@ -150,7 +150,7 @@ static int spa_max_procs(int spa_size)
 	return ((spa_size / 8) - 96) / 17;
 }
 
-static int alloc_spa(struct cxl_afu_t *afu)
+static int alloc_spa(struct cxl_afu *afu)
 {
 	u64 spap;
 
@@ -184,12 +184,12 @@ static int alloc_spa(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static void release_spa(struct cxl_afu_t *afu)
+static void release_spa(struct cxl_afu *afu)
 {
 	free_pages((unsigned long) afu->spa, afu->spa_order);
 }
 
-static int adapter_tslbia(struct cxl_t *adapter)
+static int adapter_tslbia(struct cxl *adapter)
 {
 	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
 
@@ -217,7 +217,7 @@ static int adapter_tslbia(struct cxl_t *adapter)
 	return 0;
 }
 
-static int afu_slbia_native(struct cxl_afu_t *afu)
+static int afu_slbia_native(struct cxl_afu *afu)
 {
 	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
 
@@ -233,7 +233,7 @@ static int afu_slbia_native(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
+static int cxl_write_sstp(struct cxl_afu *afu, u64 sstp0, u64 sstp1)
 {
 	int rc;
 
@@ -254,9 +254,9 @@ static int cxl_write_sstp(struct cxl_afu_t *afu, u64 sstp0, u64 sstp1)
 }
 
 /* Using per slice version may improve performance here. (ie. SLBIA_An) */
-static void slb_invalid(struct cxl_context_t *ctx)
+static void slb_invalid(struct cxl_context *ctx)
 {
-	struct cxl_t *adapter = ctx->afu->adapter;
+	struct cxl *adapter = ctx->afu->adapter;
 	u64 slbia;
 
 	WARN_ON(!mutex_is_locked(&ctx->afu->spa_mutex));
@@ -274,7 +274,7 @@ static void slb_invalid(struct cxl_context_t *ctx)
 	}
 }
 
-static int do_process_element_cmd(struct cxl_context_t *ctx,
+static int do_process_element_cmd(struct cxl_context *ctx,
 				  u64 cmd, u64 pe_state)
 {
 	u64 state;
@@ -307,7 +307,7 @@ static int do_process_element_cmd(struct cxl_context_t *ctx,
 	return 0;
 }
 
-static int add_process_element(struct cxl_context_t *ctx)
+static int add_process_element(struct cxl_context *ctx)
 {
 	int rc = 0;
 
@@ -320,7 +320,7 @@ static int add_process_element(struct cxl_context_t *ctx)
 	return rc;
 }
 
-static int terminate_process_element(struct cxl_context_t *ctx)
+static int terminate_process_element(struct cxl_context *ctx)
 {
 	int rc = 0;
 
@@ -338,7 +338,7 @@ static int terminate_process_element(struct cxl_context_t *ctx)
 	return rc;
 }
 
-static int remove_process_element(struct cxl_context_t *ctx)
+static int remove_process_element(struct cxl_context *ctx)
 {
 	int rc = 0;
 
@@ -354,7 +354,7 @@ static int remove_process_element(struct cxl_context_t *ctx)
 }
 
 
-static void assign_psn_space(struct cxl_context_t *ctx)
+static void assign_psn_space(struct cxl_context *ctx)
 {
 	if (!ctx->afu->pp_size || ctx->master) {
 		ctx->psn_phys = ctx->afu->psn_phys;
@@ -366,7 +366,7 @@ static void assign_psn_space(struct cxl_context_t *ctx)
 	}
 }
 
-static int activate_afu_directed(struct cxl_afu_t *afu)
+static int activate_afu_directed(struct cxl_afu *afu)
 {
 	int rc;
 
@@ -400,7 +400,7 @@ err:
 #define set_endian(sr) ((sr) &= ~(CXL_PSL_SR_An_LE))
 #endif
 
-static int attach_afu_directed(struct cxl_context_t *ctx, u64 wed, u64 amr)
+static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 {
 
 	u64 sr, sstp0, sstp1;
@@ -459,7 +459,7 @@ static int attach_afu_directed(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	return 0;
 }
 
-static int deactivate_afu_directed(struct cxl_afu_t *afu)
+static int deactivate_afu_directed(struct cxl_afu *afu)
 {
 	dev_info(&afu->dev, "Deactivating AFU directed model\n");
 
@@ -477,7 +477,7 @@ static int deactivate_afu_directed(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int activate_dedicated_process(struct cxl_afu_t *afu)
+static int activate_dedicated_process(struct cxl_afu *afu)
 {
 	dev_info(&afu->dev, "Activating dedicated process model\n");
 
@@ -500,9 +500,9 @@ static int activate_dedicated_process(struct cxl_afu_t *afu)
 	return cxl_chardev_m_afu_add(afu);
 }
 
-static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
+static int attach_dedicated(struct cxl_context *ctx, u64 wed, u64 amr)
 {
-	struct cxl_afu_t *afu = ctx->afu;
+	struct cxl_afu *afu = ctx->afu;
 	u64 sr, sstp0, sstp1;
 	int rc;
 
@@ -550,7 +550,7 @@ static int attach_dedicated(struct cxl_context_t *ctx, u64 wed, u64 amr)
 	return afu_enable(afu);
 }
 
-static int deactivate_dedicated_process(struct cxl_afu_t *afu)
+static int deactivate_dedicated_process(struct cxl_afu *afu)
 {
 	dev_info(&afu->dev, "Deactivating dedicated process model\n");
 
@@ -562,7 +562,7 @@ static int deactivate_dedicated_process(struct cxl_afu_t *afu)
 	return 0;
 }
 
-int _cxl_afu_deactivate_model(struct cxl_afu_t *afu, int model)
+int _cxl_afu_deactivate_model(struct cxl_afu *afu, int model)
 {
 	if (model == CXL_MODEL_DIRECTED)
 		return deactivate_afu_directed(afu);
@@ -571,13 +571,13 @@ int _cxl_afu_deactivate_model(struct cxl_afu_t *afu, int model)
 	return 0;
 }
 
-int cxl_afu_deactivate_model(struct cxl_afu_t *afu)
+int cxl_afu_deactivate_model(struct cxl_afu *afu)
 {
 	return _cxl_afu_deactivate_model(afu, afu->current_model);
 }
 EXPORT_SYMBOL(cxl_afu_deactivate_model);
 
-int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
+int cxl_afu_activate_model(struct cxl_afu *afu, int model)
 {
 	if (!model)
 		return 0;
@@ -593,7 +593,7 @@ int cxl_afu_activate_model(struct cxl_afu_t *afu, int model)
 }
 EXPORT_SYMBOL(cxl_afu_activate_model);
 
-static int attach_process_native(struct cxl_context_t *ctx, bool kernel,
+static int attach_process_native(struct cxl_context *ctx, bool kernel,
 			       u64 wed, u64 amr)
 {
 	ctx->kernel = kernel;
@@ -606,7 +606,7 @@ static int attach_process_native(struct cxl_context_t *ctx, bool kernel,
 	return -EINVAL;
 }
 
-static inline int detach_process_native_dedicated(struct cxl_context_t *ctx)
+static inline int detach_process_native_dedicated(struct cxl_context *ctx)
 {
 	afu_reset_and_disable(ctx->afu);
 	afu_disable(ctx->afu);
@@ -620,7 +620,7 @@ static inline int detach_process_native_dedicated(struct cxl_context_t *ctx)
  * May need to write do_process_element_cmd() that handles outstanding page
  * faults synchronously.
  */
-static inline int detach_process_native_afu_directed(struct cxl_context_t *ctx)
+static inline int detach_process_native_afu_directed(struct cxl_context *ctx)
 {
 	if (!ctx->pe_inserted)
 		return 0;
@@ -632,7 +632,7 @@ static inline int detach_process_native_afu_directed(struct cxl_context_t *ctx)
 	return 0;
 }
 
-static int detach_process_native(struct cxl_context_t *ctx)
+static int detach_process_native(struct cxl_context *ctx)
 {
 	if (ctx->afu->current_model == CXL_MODEL_DEDICATED)
 		return detach_process_native_dedicated(ctx);
@@ -640,7 +640,7 @@ static int detach_process_native(struct cxl_context_t *ctx)
 	return detach_process_native_afu_directed(ctx);
 }
 
-static int get_irq_native(struct cxl_context_t *ctx, struct cxl_irq_info *info)
+static int get_irq_native(struct cxl_context *ctx, struct cxl_irq_info *info)
 {
 	u64 pidtid;
 
@@ -656,7 +656,7 @@ static int get_irq_native(struct cxl_context_t *ctx, struct cxl_irq_info *info)
 	return 0;
 }
 
-static void recover_psl_err(struct cxl_afu_t *afu, u64 errstat)
+static void recover_psl_err(struct cxl_afu *afu, u64 errstat)
 {
 	u64 dsisr;
 
@@ -670,7 +670,7 @@ static void recover_psl_err(struct cxl_afu_t *afu, u64 errstat)
 	cxl_p2n_write(afu, CXL_PSL_ErrStat_An, errstat);
 }
 
-static int ack_irq_native(struct cxl_context_t *ctx, u64 tfc,
+static int ack_irq_native(struct cxl_context *ctx, u64 tfc,
 			  u64 psl_reset_mask)
 {
 	if (tfc)
@@ -681,7 +681,7 @@ static int ack_irq_native(struct cxl_context_t *ctx, u64 tfc,
 	return 0;
 }
 
-static int check_error(struct cxl_afu_t *afu)
+static int check_error(struct cxl_afu *afu)
 {
 	return (cxl_p1n_read(afu, CXL_PSL_SCNTL_An) == ~0ULL);
 }

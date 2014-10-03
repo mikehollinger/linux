@@ -265,7 +265,7 @@ static void dump_cxl_config_space(struct pci_dev *dev)
 #undef show_reg
 }
 
-static void dump_afu_descriptor(struct cxl_afu_t *afu)
+static void dump_afu_descriptor(struct cxl_afu *afu)
 {
 	u64 val;
 
@@ -311,7 +311,7 @@ static void dump_afu_descriptor(struct cxl_afu_t *afu)
 
 extern struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev);
 
-static int init_implementation_adapter_regs(struct cxl_t *adapter, struct pci_dev *dev)
+static int init_implementation_adapter_regs(struct cxl *adapter, struct pci_dev *dev)
 {
 	struct device_node *np;
 	const __be32 *prop;
@@ -342,7 +342,7 @@ static int init_implementation_adapter_regs(struct cxl_t *adapter, struct pci_de
 	return 0;
 }
 
-static int init_implementation_afu_regs(struct cxl_afu_t *afu)
+static int init_implementation_afu_regs(struct cxl_afu *afu)
 {
 	/* read/write masks for this slice */
 	cxl_p1n_write(afu, CXL_PSL_APCALLOC_A, 0xFFFFFFFEFEFEFEFEULL);
@@ -355,7 +355,7 @@ static int init_implementation_afu_regs(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq,
+static int setup_cxl_msi(struct cxl *adapter, unsigned int hwirq,
 			 unsigned int virq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
@@ -363,28 +363,28 @@ static int setup_cxl_msi(struct cxl_t *adapter, unsigned int hwirq,
 	return pnv_cxl_ioda_msi_setup(dev, hwirq, virq);
 }
 
-static int alloc_one_hwirq(struct cxl_t *adapter)
+static int alloc_one_hwirq(struct cxl *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_alloc_hwirqs(dev, 1);
 }
 
-static void release_one_hwirq(struct cxl_t *adapter, int hwirq)
+static void release_one_hwirq(struct cxl *adapter, int hwirq)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_release_hwirqs(dev, hwirq, 1);
 }
 
-static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter, unsigned int num)
+static int alloc_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
 	return pnv_cxl_alloc_hwirq_ranges(irqs, dev, num);
 }
 
-static void release_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl_t *adapter)
+static void release_hwirq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter)
 {
 	struct pci_dev *dev = to_pci_dev(adapter->dev.parent);
 
@@ -456,7 +456,7 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 	return 0;
 }
 
-static int cxl_map_slice_regs(struct cxl_afu_t *afu, struct cxl_t *adapter, struct pci_dev *dev)
+static int cxl_map_slice_regs(struct cxl_afu *afu, struct cxl *adapter, struct pci_dev *dev)
 {
 	u64 p1n_base, p2n_base, afu_desc;
 	const u64 p1n_size = 0x100;
@@ -486,7 +486,7 @@ err:
 	return -ENOMEM;
 }
 
-static void cxl_unmap_slice_regs(struct cxl_afu_t *afu)
+static void cxl_unmap_slice_regs(struct cxl_afu *afu)
 {
 	if (afu->p1n_mmio)
 		iounmap(afu->p2n_mmio);
@@ -496,18 +496,18 @@ static void cxl_unmap_slice_regs(struct cxl_afu_t *afu)
 
 static void cxl_release_afu(struct device *dev)
 {
-	struct cxl_afu_t *afu = to_cxl_afu(dev);
+	struct cxl_afu *afu = to_cxl_afu(dev);
 
 	pr_devel("cxl_release_afu\n");
 
 	kfree(afu);
 }
 
-static struct cxl_afu_t *cxl_alloc_afu(struct cxl_t *adapter, int slice)
+static struct cxl_afu *cxl_alloc_afu(struct cxl *adapter, int slice)
 {
-	struct cxl_afu_t *afu;
+	struct cxl_afu *afu;
 
-	if (!(afu = kzalloc(sizeof(struct cxl_afu_t), GFP_KERNEL)))
+	if (!(afu = kzalloc(sizeof(struct cxl_afu), GFP_KERNEL)))
 		return NULL;
 
 	afu->adapter = adapter;
@@ -526,7 +526,7 @@ static struct cxl_afu_t *cxl_alloc_afu(struct cxl_t *adapter, int slice)
 }
 
 /* Expects AFU struct to have recently been zeroed out */
-static int cxl_read_afu_descriptor(struct cxl_afu_t *afu)
+static int cxl_read_afu_descriptor(struct cxl_afu *afu)
 {
 	u64 val;
 
@@ -550,7 +550,7 @@ static int cxl_read_afu_descriptor(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int cxl_afu_descriptor_looks_ok(struct cxl_afu_t *afu)
+static int cxl_afu_descriptor_looks_ok(struct cxl_afu *afu)
 {
 	if (afu->psa && afu->adapter->ps_size <
 			(afu->pp_offset + afu->pp_size*afu->max_procs_virtualised)) {
@@ -564,7 +564,7 @@ static int cxl_afu_descriptor_looks_ok(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int sanitise_afu_regs(struct cxl_afu_t *afu)
+static int sanitise_afu_regs(struct cxl_afu *afu)
 {
 	u64 reg;
 
@@ -615,9 +615,9 @@ static int sanitise_afu_regs(struct cxl_afu_t *afu)
 	return 0;
 }
 
-static int cxl_init_afu(struct cxl_t *adapter, int slice, struct pci_dev *dev)
+static int cxl_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 {
-	struct cxl_afu_t *afu;
+	struct cxl_afu *afu;
 	bool free = true;
 	int rc;
 
@@ -691,7 +691,7 @@ err1:
 	return rc;
 }
 
-static void cxl_remove_afu(struct cxl_afu_t *afu)
+static void cxl_remove_afu(struct cxl_afu *afu)
 {
 	pr_devel("cxl_remove_afu\n");
 
@@ -716,7 +716,7 @@ static void cxl_remove_afu(struct cxl_afu_t *afu)
 }
 
 
-static int cxl_map_adapter_regs(struct cxl_t *adapter, struct pci_dev *dev)
+static int cxl_map_adapter_regs(struct cxl *adapter, struct pci_dev *dev)
 {
 	if (pci_request_region(dev, 2, "priv 2 regs"))
 		goto err1;
@@ -745,7 +745,7 @@ err1:
 	return -ENOMEM;
 }
 
-static void cxl_unmap_adapter_regs(struct cxl_t *adapter)
+static void cxl_unmap_adapter_regs(struct cxl *adapter)
 {
 	if (adapter->p1_mmio)
 		iounmap(adapter->p1_mmio);
@@ -753,7 +753,7 @@ static void cxl_unmap_adapter_regs(struct cxl_t *adapter)
 		iounmap(adapter->p2_mmio);
 }
 
-static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
+static int cxl_read_vsec(struct cxl *adapter, struct pci_dev *dev)
 {
 	int vsec;
 	u32 afu_desc_off, afu_desc_size;
@@ -801,7 +801,7 @@ static int cxl_read_vsec(struct cxl_t *adapter, struct pci_dev *dev)
 	return 0;
 }
 
-static int cxl_vsec_looks_ok(struct cxl_t *adapter, struct pci_dev *dev)
+static int cxl_vsec_looks_ok(struct cxl *adapter, struct pci_dev *dev)
 {
 	if (adapter->vsec_status & CXL_STATUS_SECOND_PORT)
 		return -EBUSY;
@@ -835,18 +835,18 @@ static int cxl_vsec_looks_ok(struct cxl_t *adapter, struct pci_dev *dev)
 
 static void cxl_release_adapter(struct device *dev)
 {
-	struct cxl_t *adapter = to_cxl_adapter(dev);
+	struct cxl *adapter = to_cxl_adapter(dev);
 
 	pr_devel("cxl_release_adapter\n");
 
 	kfree(adapter);
 }
 
-static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
+static struct cxl *cxl_alloc_adapter(struct pci_dev *dev)
 {
-	struct cxl_t *adapter;
+	struct cxl *adapter;
 
-	if (!(adapter = kzalloc(sizeof(struct cxl_t), GFP_KERNEL)))
+	if (!(adapter = kzalloc(sizeof(struct cxl), GFP_KERNEL)))
 		return NULL;
 
 	adapter->dev.parent = &dev->dev;
@@ -858,15 +858,15 @@ static struct cxl_t *cxl_alloc_adapter(struct pci_dev *dev)
 	return adapter;
 }
 
-static int sanitise_adapter_regs(struct cxl_t *adapter)
+static int sanitise_adapter_regs(struct cxl *adapter)
 {
 	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
 	return cxl_ops->adapter_tslbia(adapter);
 }
 
-static struct cxl_t *cxl_init_adapter(struct pci_dev *dev)
+static struct cxl *cxl_init_adapter(struct pci_dev *dev)
 {
-	struct cxl_t *adapter;
+	struct cxl *adapter;
 	bool free = true;
 	int rc;
 
@@ -932,7 +932,7 @@ err1:
 	return ERR_PTR(rc);
 }
 
-static void cxl_remove_adapter(struct cxl_t *adapter)
+static void cxl_remove_adapter(struct cxl *adapter)
 {
 	struct pci_dev *pdev = to_pci_dev(adapter->dev.parent);
 
@@ -953,7 +953,7 @@ static void cxl_remove_adapter(struct cxl_t *adapter)
 
 static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	struct cxl_t *adapter;
+	struct cxl *adapter;
 	int slice;
 	int rc;
 
@@ -986,7 +986,7 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 static void cxl_remove(struct pci_dev *dev)
 {
-	struct cxl_t *adapter = pci_get_drvdata(dev);
+	struct cxl *adapter = pci_get_drvdata(dev);
 	int afu;
 
 	dev_warn(&dev->dev, "pci remove\n");

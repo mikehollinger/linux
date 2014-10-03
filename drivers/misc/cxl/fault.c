@@ -53,7 +53,7 @@ static struct cxl_sste* find_free_sste(struct cxl_sste *primary_group,
 	return sste;
 }
 
-static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data,
+static void cxl_load_segment(struct cxl_context *ctx, u64 esid_data,
 			     u64 vsid_data)
 {
 	/* mask is the group index, we search primary and secondary here. */
@@ -81,7 +81,7 @@ static void cxl_load_segment(struct cxl_context_t *ctx, u64 esid_data,
 	sste->esid_data = cpu_to_be64(esid_data);
 }
 
-static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm,
+static int cxl_fault_segment(struct cxl_context *ctx, struct mm_struct *mm,
 			     u64 ea)
 {
 	u64 vsid_data = 0, esid_data = 0;
@@ -97,7 +97,7 @@ static int cxl_fault_segment(struct cxl_context_t *ctx, struct mm_struct *mm,
 	return rc;
 }
 
-static void cxl_ack_ae(struct cxl_context_t *ctx)
+static void cxl_ack_ae(struct cxl_context *ctx)
 {
 	unsigned long flags;
 
@@ -111,7 +111,7 @@ static void cxl_ack_ae(struct cxl_context_t *ctx)
 	wake_up_all(&ctx->wq);
 }
 
-static int cxl_handle_segment_miss(struct cxl_context_t *ctx,
+static int cxl_handle_segment_miss(struct cxl_context *ctx,
 				   struct mm_struct *mm, u64 ea)
 {
 	int rc;
@@ -129,7 +129,7 @@ static int cxl_handle_segment_miss(struct cxl_context_t *ctx,
 	return IRQ_HANDLED;
 }
 
-static void cxl_handle_page_fault(struct cxl_context_t *ctx,
+static void cxl_handle_page_fault(struct cxl_context *ctx,
 				  struct mm_struct *mm, u64 dsisr, u64 dar)
 {
 	unsigned flt = 0;
@@ -160,8 +160,8 @@ static void cxl_handle_page_fault(struct cxl_context_t *ctx,
 
 void cxl_handle_fault(struct work_struct *fault_work)
 {
-	struct cxl_context_t *ctx =
-		container_of(fault_work, struct cxl_context_t, fault_work);
+	struct cxl_context *ctx =
+		container_of(fault_work, struct cxl_context, fault_work);
 	u64 dsisr = ctx->dsisr;
 	u64 dar = ctx->dar;
 	struct task_struct *task;
@@ -205,7 +205,7 @@ out:
 	put_task_struct(task);
 }
 
-static void cxl_prefault_one(struct cxl_context_t *ctx, u64 ea)
+static void cxl_prefault_one(struct cxl_context *ctx, u64 ea)
 {
 	int rc;
 	struct task_struct *task;
@@ -239,7 +239,7 @@ static u64 next_segment(u64 ea, u64 vsid_data)
 	return ea + 1;
 }
 
-static void cxl_prefault_vma(struct cxl_context_t *ctx)
+static void cxl_prefault_vma(struct cxl_context *ctx)
 {
 	u64 ea, vsid_data, esid_data, last_esid_data = 0;
 	struct vm_area_struct *vma;
@@ -283,7 +283,7 @@ out1:
 	put_task_struct(task);
 }
 
-void cxl_prefault(struct cxl_context_t *ctx, u64 wed)
+void cxl_prefault(struct cxl_context *ctx, u64 wed)
 {
 	switch (ctx->afu->prefault_mode) {
 	case CXL_PREFAULT_WED:

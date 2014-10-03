@@ -38,9 +38,9 @@ MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
 
 static inline void cxl_slbia_core(struct mm_struct *mm)
 {
-	struct cxl_t *adapter;
-	struct cxl_afu_t *afu;
-	struct cxl_context_t *ctx;
+	struct cxl *adapter;
+	struct cxl_afu *afu;
+	struct cxl_context *ctx;
 	struct task_struct *task;
 	unsigned long flags;
 	int card, slice, id;
@@ -93,7 +93,7 @@ struct cxl_calls cxl_calls = {
 	.owner = THIS_MODULE,
 };
 
-int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
+int cxl_alloc_sst(struct cxl_context *ctx, u64 *sstp0, u64 *sstp1)
 {
 	unsigned long vsid;
 	u64 ea_mask;
@@ -140,9 +140,9 @@ int cxl_alloc_sst(struct cxl_context_t *ctx, u64 *sstp0, u64 *sstp1)
 }
 
 /* Find a CXL adapter by it's number and increase it's refcount */
-struct cxl_t *get_cxl_adapter(int num)
+struct cxl *get_cxl_adapter(int num)
 {
-	struct cxl_t *adapter;
+	struct cxl *adapter;
 
 	spin_lock(&adapter_idr_lock);
 	if ((adapter = idr_find(&cxl_adapter_idr, num)))
@@ -152,7 +152,7 @@ struct cxl_t *get_cxl_adapter(int num)
 	return adapter;
 }
 
-int cxl_alloc_adapter_nr(struct cxl_t *adapter)
+int cxl_alloc_adapter_nr(struct cxl *adapter)
 {
 	int i;
 
@@ -170,13 +170,13 @@ int cxl_alloc_adapter_nr(struct cxl_t *adapter)
 }
 EXPORT_SYMBOL(cxl_alloc_adapter_nr);
 
-void cxl_remove_adapter_nr(struct cxl_t *adapter)
+void cxl_remove_adapter_nr(struct cxl *adapter)
 {
 	idr_remove(&cxl_adapter_idr, adapter->adapter_num);
 }
 EXPORT_SYMBOL(cxl_remove_adapter_nr);
 
-int cxl_afu_select_best_model(struct cxl_afu_t *afu)
+int cxl_afu_select_best_model(struct cxl_afu *afu)
 {
 	if (afu->models_supported & CXL_MODEL_DIRECTED)
 		return cxl_afu_activate_model(afu, CXL_MODEL_DIRECTED);

@@ -21,7 +21,7 @@
 #include "cxl.h"
 
 /* XXX: This is implementation specific */
-static irqreturn_t handle_psl_slice_error(struct cxl_context_t *ctx, u64 dsisr, u64 errstat)
+static irqreturn_t handle_psl_slice_error(struct cxl_context *ctx, u64 dsisr, u64 errstat)
 {
 	u64 fir1, fir2, fir_slice, serr, afu_debug;
 
@@ -46,7 +46,7 @@ static irqreturn_t handle_psl_slice_error(struct cxl_context_t *ctx, u64 dsisr, 
 
 irqreturn_t cxl_slice_irq_err(int irq, void *data)
 {
-	struct cxl_afu_t *afu = data;
+	struct cxl_afu *afu = data;
 	u64 fir_slice, errstat, serr, afu_debug;
 
 	WARN(irq, "CXL SLICE ERROR interrupt %i\n", irq);
@@ -67,7 +67,7 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data)
 
 irqreturn_t cxl_irq_err(int irq, void *data)
 {
-	struct cxl_t *adapter = data;
+	struct cxl *adapter = data;
 	u64 fir1, fir2, err_ivte;
 
 	WARN(1, "CXL ERROR interrupt %i\n", irq);
@@ -86,7 +86,7 @@ irqreturn_t cxl_irq_err(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t schedule_cxl_fault(struct cxl_context_t *ctx, u64 dsisr, u64 dar)
+static irqreturn_t schedule_cxl_fault(struct cxl_context *ctx, u64 dsisr, u64 dar)
 {
 	ctx->dsisr = dsisr;
 	ctx->dar = dar;
@@ -96,7 +96,7 @@ static irqreturn_t schedule_cxl_fault(struct cxl_context_t *ctx, u64 dsisr, u64 
 
 static irqreturn_t cxl_irq(int irq, void *data)
 {
-	struct cxl_context_t *ctx = data;
+	struct cxl_context *ctx = data;
 	struct cxl_irq_info irq_info;
 	u64 dsisr, dar;
 	int result;
@@ -180,8 +180,8 @@ static irqreturn_t cxl_irq(int irq, void *data)
 
 static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 {
-	struct cxl_afu_t *afu = data;
-	struct cxl_context_t *ctx;
+	struct cxl_afu *afu = data;
+	struct cxl_context *ctx;
 	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
 	int ret;
 
@@ -200,7 +200,7 @@ static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
 
 static irqreturn_t cxl_irq_afu(int irq, void *data)
 {
-	struct cxl_context_t *ctx = data;
+	struct cxl_context *ctx = data;
 	irq_hw_number_t hwirq = irqd_to_hwirq(irq_get_irq_data(irq));
 	int irq_off, afu_irq = 1;
 	__u16 range;
@@ -238,7 +238,7 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-unsigned int cxl_map_irq(struct cxl_t *adapter, irq_hw_number_t hwirq,
+unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 			 irq_handler_t handler, void *cookie)
 {
 	unsigned int virq;
@@ -271,7 +271,7 @@ void cxl_unmap_irq(unsigned int virq, void *cookie)
 	irq_dispose_mapping(virq);
 }
 
-static int cxl_register_one_irq(struct cxl_t *adapter,
+static int cxl_register_one_irq(struct cxl *adapter,
 				irq_handler_t handler,
 				void *cookie,
 				irq_hw_number_t *dest_hwirq,
@@ -295,7 +295,7 @@ err:
 	return -ENOMEM;
 }
 
-int cxl_register_psl_err_irq(struct cxl_t *adapter)
+int cxl_register_psl_err_irq(struct cxl *adapter)
 {
 	int rc;
 
@@ -310,7 +310,7 @@ int cxl_register_psl_err_irq(struct cxl_t *adapter)
 }
 EXPORT_SYMBOL(cxl_register_psl_err_irq);
 
-void cxl_release_psl_err_irq(struct cxl_t *adapter)
+void cxl_release_psl_err_irq(struct cxl *adapter)
 {
 	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
 	cxl_unmap_irq(adapter->err_virq, adapter);
@@ -318,7 +318,7 @@ void cxl_release_psl_err_irq(struct cxl_t *adapter)
 }
 EXPORT_SYMBOL(cxl_release_psl_err_irq);
 
-int cxl_register_serr_irq(struct cxl_afu_t *afu)
+int cxl_register_serr_irq(struct cxl_afu *afu)
 {
 	u64 serr;
 	int rc;
@@ -336,7 +336,7 @@ int cxl_register_serr_irq(struct cxl_afu_t *afu)
 }
 EXPORT_SYMBOL(cxl_register_serr_irq);
 
-void cxl_release_serr_irq(struct cxl_afu_t *afu)
+void cxl_release_serr_irq(struct cxl_afu *afu)
 {
 	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
 	cxl_unmap_irq(afu->serr_virq, afu);
@@ -344,21 +344,21 @@ void cxl_release_serr_irq(struct cxl_afu_t *afu)
 }
 EXPORT_SYMBOL(cxl_release_serr_irq);
 
-int cxl_register_psl_irq(struct cxl_afu_t *afu)
+int cxl_register_psl_irq(struct cxl_afu *afu)
 {
 	return cxl_register_one_irq(afu->adapter, cxl_irq_multiplexed, afu,
 			&afu->psl_hwirq, &afu->psl_virq);
 }
 EXPORT_SYMBOL(cxl_register_psl_irq);
 
-void cxl_release_psl_irq(struct cxl_afu_t *afu)
+void cxl_release_psl_irq(struct cxl_afu *afu)
 {
 	cxl_unmap_irq(afu->psl_virq, afu);
 	afu->adapter->driver->release_one_irq(afu->adapter, afu->psl_hwirq);
 }
 EXPORT_SYMBOL(cxl_release_psl_irq);
 
-int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
+int afu_register_irqs(struct cxl_context *ctx, u32 count)
 {
 	irq_hw_number_t hwirq;
 	int rc, r, i;
@@ -386,7 +386,7 @@ int afu_register_irqs(struct cxl_context_t *ctx, u32 count)
 	return 0;
 }
 
-void afu_release_irqs(struct cxl_context_t *ctx)
+void afu_release_irqs(struct cxl_context *ctx)
 {
 	irq_hw_number_t hwirq;
 	unsigned int virq;

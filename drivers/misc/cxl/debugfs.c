@@ -15,7 +15,7 @@
 
 struct dentry *cxl_debugfs;
 
-void cxl_stop_trace(struct cxl_t *adapter)
+void cxl_stop_trace(struct cxl *adapter)
 {
 	int slice;
 
@@ -31,7 +31,7 @@ void cxl_stop_trace(struct cxl_t *adapter)
 	spin_unlock(&adapter->afu_list_lock);
 }
 
-int cxl_debugfs_adapter_add(struct cxl_t *adapter)
+int cxl_debugfs_adapter_add(struct cxl *adapter)
 {
 	struct dentry *dir;
 	char buf[32];
@@ -56,13 +56,13 @@ int cxl_debugfs_adapter_add(struct cxl_t *adapter)
 }
 EXPORT_SYMBOL(cxl_debugfs_adapter_add);
 
-void cxl_debugfs_adapter_remove(struct cxl_t *adapter)
+void cxl_debugfs_adapter_remove(struct cxl *adapter)
 {
 	debugfs_remove_recursive(adapter->debugfs);
 }
 EXPORT_SYMBOL(cxl_debugfs_adapter_remove);
 
-int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
+int cxl_debugfs_afu_add(struct cxl_afu *afu)
 {
 	struct dentry *dir;
 	char buf[32];
@@ -93,7 +93,7 @@ int cxl_debugfs_afu_add(struct cxl_afu_t *afu)
 }
 EXPORT_SYMBOL(cxl_debugfs_afu_add);
 
-void cxl_debugfs_afu_remove(struct cxl_afu_t *afu)
+void cxl_debugfs_afu_remove(struct cxl_afu *afu)
 {
 	debugfs_remove_recursive(afu->debugfs);
 }
