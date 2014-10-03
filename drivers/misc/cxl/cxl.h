@@ -239,13 +239,13 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_SLBIE_MAX      PPC_BITMASK(24, 31)
 #define CXL_SLBIE_PENDING  PPC_BITMASK(56, 63)
 
-/****** Common to all CXL_(T|S)LBIA_[An] registers **************************/
-#define CXL_TSLBIA_P         (1ull) /* Pending (read) */
+/****** Common to all CXL_TLBIA/SLBIA_[An] **********************************/
+#define CXL_TLB_SLB_P          (1ull) /* Pending (read) */
 
-/****** Common to all CXL_(T|S)LBI(E|A)_[An] registers **********************/
-#define CXL_TSLBI_IQ_ALL     (0ull)              /* Inv qualifier */
-#define CXL_TSLBI_IQ_LPID    (1ull)              /* Inv qualifier */
-#define CXL_TSLBI_IQ_LPIDPID (3ull)              /* Inv qualifier */
+/****** Common to all CXL_TLB/SLB_IA/IE_[An] registers **********************/
+#define CXL_TLB_SLB_IQ_ALL     (0ull) /* Inv qualifier */
+#define CXL_TLB_SLB_IQ_LPID    (1ull) /* Inv qualifier */
+#define CXL_TLB_SLB_IQ_LPIDPID (3ull) /* Inv qualifier */
 
 /****** CXL_PSL_AFUSEL ******************************************************/
 #define CXL_PSL_AFUSEL_A (1ull << (63-55)) /* Adapter wide invalidates affect all AFUs */
@@ -599,7 +599,7 @@ struct cxl_backend_ops {
 
 	int (*check_error)(struct cxl_afu *afu);
 	int (*slbia)(struct cxl_afu *afu);
-	int (*adapter_tslbia)(struct cxl *adapter);
+	int (*tlb_slb_invalidate)(struct cxl *adapter);
 	int (*afu_disable)(struct cxl_afu *afu);
 	int (*afu_reset)(struct cxl_afu *afu);
 	int (*psl_purge)(struct cxl_afu *afu);

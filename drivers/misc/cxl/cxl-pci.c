@@ -861,7 +861,7 @@ static struct cxl *cxl_alloc_adapter(struct pci_dev *dev)
 static int sanitise_adapter_regs(struct cxl *adapter)
 {
 	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
-	return cxl_ops->adapter_tslbia(adapter);
+	return cxl_ops->tlb_slb_invalidate(adapter);
 }
 
 static struct cxl *cxl_init_adapter(struct pci_dev *dev)
