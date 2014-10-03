@@ -269,7 +269,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	ssize_t size;
 	DEFINE_WAIT(wait);
 
-	if (count < sizeof(struct cxl_event_header))
+	if (count < CXL_READ_MIN_SIZE)
 		return -EINVAL;
 
 	spin_lock_irqsave(&ctx->lock, flags);

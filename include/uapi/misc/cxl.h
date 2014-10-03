@@ -33,6 +33,8 @@ struct cxl_ioctl_start_work {
 
 /* events from read() */
 
+#define CXL_READ_MIN_SIZE 0x1000 /* 4K */
+
 enum cxl_event_type {
 	CXL_EVENT_RESERVED      = 0,
 	CXL_EVENT_AFU_INTERRUPT = 1,
