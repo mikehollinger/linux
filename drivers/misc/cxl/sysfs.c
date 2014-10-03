@@ -122,7 +122,7 @@ static ssize_t reset_store_afu(struct device *device,
 	struct cxl_afu *afu = to_cxl_afu(device);
 	int rc;
 
-	if ((rc = cxl_ops->afu_reset(afu)))
+	if ((rc = cxl_afu_reset(afu)))
 		return rc;
 	return count;
 }

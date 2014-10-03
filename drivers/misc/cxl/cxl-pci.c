@@ -574,11 +574,11 @@ static int sanitise_afu_regs(struct cxl_afu *afu)
 	reg = cxl_p2n_read(afu, CXL_AFU_Cntl_An);
 	if ((reg & CXL_AFU_Cntl_An_ES_MASK) != CXL_AFU_Cntl_An_ES_Disabled) {
 		dev_warn(&afu->dev, "WARNING: AFU was not disabled: %#.16llx\n", reg);
-		if (cxl_ops->afu_reset(afu))
+		if (cxl_afu_reset(afu))
 			return -EIO;
-		if (cxl_ops->afu_disable(afu))
+		if (cxl_afu_disable(afu))
 			return -EIO;
-		if (cxl_ops->psl_purge(afu))
+		if (cxl_psl_purge(afu))
 			return -EIO;
 	}
 	cxl_p1n_write(afu, CXL_PSL_SPAP_An, 0x0000000000000000);
@@ -634,7 +634,7 @@ static int cxl_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 		goto err2;
 
 	/* We need to reset the AFU before we can read the AFU descriptor */
-	if ((rc = cxl_ops->afu_reset(afu)))
+	if ((rc = cxl_afu_reset(afu)))
 		goto err2;
 
 	if (cxl_verbose)
@@ -861,7 +861,7 @@ static struct cxl *cxl_alloc_adapter(struct pci_dev *dev)
 static int sanitise_adapter_regs(struct cxl *adapter)
 {
 	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
-	return cxl_ops->tlb_slb_invalidate(adapter);
+	return cxl_tlb_slb_invalidate(adapter);
 }
 
 static struct cxl *cxl_init_adapter(struct pci_dev *dev)

@@ -171,7 +171,7 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 			 sizeof(struct cxl_ioctl_start_work)))
 		return -EFAULT;
 
-	if ((rc = cxl_ops->attach_process(ctx, false, work.wed, amr)))
+	if ((rc = cxl_attach_process(ctx, false, work.wed, amr)))
 		return rc;
 
 	ctx->status = STARTED;
@@ -184,11 +184,11 @@ static long afu_ioctl_check_error(struct cxl_context *ctx)
 	if (ctx->status != STARTED)
 		return -EIO;
 
-	if (cxl_ops->check_error && cxl_ops->check_error(ctx->afu)) {
+	if (cxl_check_error(ctx->afu)) {
 		/* This may not be enough for some errors.  May need to PERST
 		 * the card in some cases if it's very broken.
 		 */
-		return cxl_ops->afu_reset(ctx->afu);
+		return cxl_afu_reset(ctx->afu);
 	}
 	return -EPERM;
 }

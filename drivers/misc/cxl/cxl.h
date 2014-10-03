@@ -589,22 +589,19 @@ struct cxl_irq_info {
 	u64 padding[3]; /* to match the expected retbuf size for plpar_hcall9 */
 };
 
-struct cxl_backend_ops {
-	int (*attach_process)(struct cxl_context *ctx, bool kernel, u64 wed,
+int cxl_attach_process(struct cxl_context *ctx, bool kernel, u64 wed,
 			    u64 amr);
-	int (*detach_process)(struct cxl_context *ctx);
+int cxl_detach_process(struct cxl_context *ctx);
 
-	int (*get_irq)(struct cxl_context *ctx, struct cxl_irq_info *info);
-	int (*ack_irq)(struct cxl_context *ctx, u64 tfc, u64 psl_reset_mask);
+int cxl_get_irq(struct cxl_context *ctx, struct cxl_irq_info *info);
+int cxl_ack_irq(struct cxl_context *ctx, u64 tfc, u64 psl_reset_mask);
 
-	int (*check_error)(struct cxl_afu *afu);
-	int (*slbia)(struct cxl_afu *afu);
-	int (*tlb_slb_invalidate)(struct cxl *adapter);
-	int (*afu_disable)(struct cxl_afu *afu);
-	int (*afu_reset)(struct cxl_afu *afu);
-	int (*psl_purge)(struct cxl_afu *afu);
-};
-extern const struct cxl_backend_ops *cxl_ops;
+int cxl_check_error(struct cxl_afu *afu);
+int cxl_afu_slbia(struct cxl_afu *afu);
+int cxl_tlb_slb_invalidate(struct cxl *adapter);
+int cxl_afu_disable(struct cxl_afu *afu);
+int cxl_afu_reset(struct cxl_afu *afu);
+int cxl_psl_purge(struct cxl_afu *afu);
 
 void cxl_stop_trace(struct cxl *cxl);
 

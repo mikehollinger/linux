@@ -60,7 +60,7 @@ static int afu_enable(struct cxl_afu *afu)
 			   CXL_AFU_Cntl_An_ES_MASK, true);
 }
 
-static int afu_disable(struct cxl_afu *afu)
+int cxl_afu_disable(struct cxl_afu *afu)
 {
 	pr_devel("AFU disable request\n");
 
@@ -68,8 +68,8 @@ static int afu_disable(struct cxl_afu *afu)
 			   CXL_AFU_Cntl_An_ES_MASK, false);
 }
 
-/* We have to disable when we reset */
-static int afu_reset_and_disable(struct cxl_afu *afu)
+/* This will disable as well as reset */
+int cxl_afu_reset(struct cxl_afu *afu)
 {
 	pr_devel("AFU reset request\n");
 
@@ -86,7 +86,7 @@ static int afu_check_and_enable(struct cxl_afu *afu)
 	return afu_enable(afu);
 }
 
-static int psl_purge(struct cxl_afu *afu)
+int cxl_psl_purge(struct cxl_afu *afu)
 {
 	u64 PSL_CNTL = cxl_p1n_read(afu, CXL_PSL_SCNTL_An);
 	u64 AFU_Cntl = cxl_p2n_read(afu, CXL_AFU_Cntl_An);
@@ -98,7 +98,7 @@ static int psl_purge(struct cxl_afu *afu)
 
 	if ((AFU_Cntl & CXL_AFU_Cntl_An_ES_MASK) != CXL_AFU_Cntl_An_ES_Disabled) {
 		WARN(1, "psl_purge request while AFU not disabled!\n");
-		afu_disable(afu);
+		cxl_afu_disable(afu);
 	}
 
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An,
@@ -189,7 +189,7 @@ static void release_spa(struct cxl_afu *afu)
 	free_pages((unsigned long) afu->spa, afu->spa_order);
 }
 
-static int cxl_tlb_slb_invalidate(struct cxl *adapter)
+int cxl_tlb_slb_invalidate(struct cxl *adapter)
 {
 	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
 
@@ -217,7 +217,7 @@ static int cxl_tlb_slb_invalidate(struct cxl *adapter)
 	return 0;
 }
 
-static int afu_slbia_native(struct cxl_afu *afu)
+int cxl_afu_slbia(struct cxl_afu *afu)
 {
 	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
 
@@ -241,7 +241,7 @@ static int cxl_write_sstp(struct cxl_afu *afu, u64 sstp0, u64 sstp1)
 	cxl_p2n_write(afu, CXL_SSTP1_An, 0);
 
 	/* 2. Invalidate all SLB entries */
-	if ((rc = afu_slbia_native(afu)))
+	if ((rc = cxl_afu_slbia(afu)))
 		return rc;
 
 	/* 3. Set SSTP0_An */
@@ -468,9 +468,9 @@ static int deactivate_afu_directed(struct cxl_afu *afu)
 
 	cxl_chardev_afu_remove(afu);
 
-	afu_reset_and_disable(afu);
-	afu_disable(afu);
-	psl_purge(afu);
+	cxl_afu_reset(afu);
+	cxl_afu_disable(afu);
+	cxl_psl_purge(afu);
 
 	release_spa(afu);
 
@@ -542,7 +542,7 @@ static int attach_dedicated(struct cxl_context *ctx, u64 wed, u64 amr)
 	/* master only context for dedicated */
 	assign_psn_space(ctx);
 
-	if ((rc = afu_reset_and_disable(afu)))
+	if ((rc = cxl_afu_reset(afu)))
 		return rc;
 
 	cxl_p2n_write(afu, CXL_PSL_WED_An, wed);
@@ -593,8 +593,7 @@ int cxl_afu_activate_model(struct cxl_afu *afu, int model)
 }
 EXPORT_SYMBOL(cxl_afu_activate_model);
 
-static int attach_process_native(struct cxl_context *ctx, bool kernel,
-			       u64 wed, u64 amr)
+int cxl_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
 {
 	ctx->kernel = kernel;
 	if (ctx->afu->current_model == CXL_MODEL_DIRECTED)
@@ -608,9 +607,9 @@ static int attach_process_native(struct cxl_context *ctx, bool kernel,
 
 static inline int detach_process_native_dedicated(struct cxl_context *ctx)
 {
-	afu_reset_and_disable(ctx->afu);
-	afu_disable(ctx->afu);
-	psl_purge(ctx->afu);
+	cxl_afu_reset(ctx->afu);
+	cxl_afu_disable(ctx->afu);
+	cxl_psl_purge(ctx->afu);
 	return 0;
 }
 
@@ -632,7 +631,7 @@ static inline int detach_process_native_afu_directed(struct cxl_context *ctx)
 	return 0;
 }
 
-static int detach_process_native(struct cxl_context *ctx)
+int cxl_detach_process(struct cxl_context *ctx)
 {
 	if (ctx->afu->current_model == CXL_MODEL_DEDICATED)
 		return detach_process_native_dedicated(ctx);
@@ -640,7 +639,7 @@ static int detach_process_native(struct cxl_context *ctx)
 	return detach_process_native_afu_directed(ctx);
 }
 
-static int get_irq_native(struct cxl_context *ctx, struct cxl_irq_info *info)
+int cxl_get_irq(struct cxl_context *ctx, struct cxl_irq_info *info)
 {
 	u64 pidtid;
 
@@ -670,8 +669,7 @@ static void recover_psl_err(struct cxl_afu *afu, u64 errstat)
 	cxl_p2n_write(afu, CXL_PSL_ErrStat_An, errstat);
 }
 
-static int ack_irq_native(struct cxl_context *ctx, u64 tfc,
-			  u64 psl_reset_mask)
+int cxl_ack_irq(struct cxl_context *ctx, u64 tfc, u64 psl_reset_mask)
 {
 	if (tfc)
 		cxl_p2n_write(ctx->afu, CXL_PSL_TFC_An, tfc);
@@ -681,25 +679,7 @@ static int ack_irq_native(struct cxl_context *ctx, u64 tfc,
 	return 0;
 }
 
-static int check_error(struct cxl_afu *afu)
+int cxl_check_error(struct cxl_afu *afu)
 {
 	return (cxl_p1n_read(afu, CXL_PSL_SCNTL_An) == ~0ULL);
-}
-
-static const struct cxl_backend_ops cxl_native_ops = {
-	.attach_process = attach_process_native,
-	.detach_process = detach_process_native,
-	.get_irq = get_irq_native,
-	.ack_irq = ack_irq_native,
-	.check_error = check_error,
-	.slbia = afu_slbia_native,
-	.tlb_slb_invalidate = cxl_tlb_slb_invalidate,
-	.afu_disable = afu_disable,
-	.afu_reset = afu_reset_and_disable,
-	.psl_purge = psl_purge,
-};
-
-void init_cxl_native(void)
-{
-	cxl_ops = &cxl_native_ops;
 }

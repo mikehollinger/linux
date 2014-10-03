@@ -101,7 +101,7 @@ static void cxl_ack_ae(struct cxl_context *ctx)
 {
 	unsigned long flags;
 
-	cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_AE, 0);
+	cxl_ack_irq(ctx, CXL_PSL_TFC_An_AE, 0);
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	ctx->pending_fault = true;
@@ -123,7 +123,7 @@ static int cxl_handle_segment_miss(struct cxl_context *ctx,
 	else {
 
 		mb(); /* Order seg table write to TFC MMIO write */
-		cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
+		cxl_ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
 	}
 
 	return IRQ_HANDLED;
@@ -155,7 +155,7 @@ static void cxl_handle_page_fault(struct cxl_context *ctx,
 	local_irq_restore(flags);
 
 	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
-	cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
+	cxl_ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
 }
 
 void cxl_handle_fault(struct work_struct *fault_work)

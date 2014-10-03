@@ -41,7 +41,7 @@ static irqreturn_t handle_psl_slice_error(struct cxl_context *ctx, u64 dsisr, u6
 	dev_crit(&ctx->afu->dev, "STOPPING CXL TRACE\n");
 	cxl_stop_trace(ctx->afu->adapter);
 
-	return cxl_ops->ack_irq(ctx, 0, errstat);
+	return cxl_ack_irq(ctx, 0, errstat);
 }
 
 irqreturn_t cxl_slice_irq_err(int irq, void *data)
@@ -101,7 +101,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 	u64 dsisr, dar;
 	int result;
 
-	if ((result = cxl_ops->get_irq(ctx, &irq_info))) {
+	if ((result = cxl_get_irq(ctx, &irq_info))) {
 		WARN(1, "Unable to get CXL IRQ Info: %i\n", result);
 		return IRQ_HANDLED;
 	}
@@ -169,7 +169,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 			wake_up_all(&ctx->wq);
 		}
 
-		cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_A, 0);
+		cxl_ack_irq(ctx, CXL_PSL_TFC_An_A, 0);
 	}
 	if (dsisr & CXL_PSL_DSISR_An_OC)
 		pr_devel("CXL interrupt: OS Context Warning\n");

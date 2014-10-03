@@ -120,7 +120,7 @@ static void __detach_context(struct cxl_context *ctx)
 	if (status != STARTED)
 		return;
 
-	WARN_ON(cxl_ops->detach_process(ctx));
+	WARN_ON(cxl_detach_process(ctx));
 	afu_release_irqs(ctx);
 	flush_work(&ctx->fault_work); /* Only needed for dedicated process */
 	wake_up_all(&ctx->wq);

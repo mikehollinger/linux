@@ -28,9 +28,6 @@
 static DEFINE_SPINLOCK(adapter_idr_lock);
 static DEFINE_IDR(cxl_adapter_idr);
 
-const struct cxl_backend_ops *cxl_ops;
-EXPORT_SYMBOL(cxl_ops);
-
 uint cxl_verbose;
 EXPORT_SYMBOL(cxl_verbose);
 module_param_named(verbose, cxl_verbose, uint, 0600);
@@ -74,7 +71,7 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 					goto next_unlock;
 				memset(ctx->sstp, 0, ctx->sst_size);
 				mb();
-				cxl_ops->slbia(afu);
+				cxl_afu_slbia(afu);
 
 next_unlock:
 				spin_unlock_irqrestore(&ctx->sst_lock, flags);
@@ -201,7 +198,6 @@ static int __init init_cxl(void)
 		return rc;
 
 	cxl_debugfs_init();
-	init_cxl_native();
 
 	if ((rc = register_cxl_calls(&cxl_calls)))
 		goto err;
