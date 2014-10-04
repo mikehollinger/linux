@@ -160,7 +160,7 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 		return rc;
 
 	amr = mfspr(SPRN_UAMOR);
-	if (work.flags & CXL_START_WORK_AMR))
+	if (work.flags & CXL_START_WORK_AMR)
 		amr &= work.amr;
 
 	if ((rc = cxl_attach_process(ctx, false, work.wed, amr)))
@@ -174,8 +174,6 @@ static long afu_ioctl_get_info(struct cxl_context *ctx,
 			       struct cxl_ioctl_get_info __user *uinfo)
 {
 	struct cxl_ioctl_get_info info;
-	u64 amr;
-	int rc;
 
 	pr_devel("afu_ioctl: pe: %i CXL_GET_INFO\n", ctx->ph);
 
@@ -287,6 +285,15 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	ssize_t size;
 	DEFINE_WAIT(wait);
 
+	/*
+	 * If these change we really need to update API.  Either change some
+	 * flags or update API version numbers.
+	 */
+	BUILD_BUG_ON(sizeof(struct cxl_event_header) != 8);
+	BUILD_BUG_ON(sizeof(struct cxl_event_afu_interrupt) != 8);
+	BUILD_BUG_ON(sizeof(struct cxl_event_data_storage) != 32);
+	BUILD_BUG_ON(sizeof(struct cxl_event_afu_error) != 16);
+
 	if (count < CXL_READ_MIN_SIZE)
 		return -EINVAL;
 
@@ -312,7 +319,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 
 	memset(&event, 0, sizeof(event));
 	event.header.process_element = ctx->ph;
-	event.header.size = sizeof(struct cxl_event_header)
+	event.header.size = sizeof(struct cxl_event_header);
 	if (ctx->pending_irq) {
 		pr_devel("afu_read delivering AFU interrupt\n");
 		event.header.size += sizeof(struct cxl_event_afu_interrupt);

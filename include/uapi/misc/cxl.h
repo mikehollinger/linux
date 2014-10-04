@@ -26,10 +26,10 @@ struct cxl_ioctl_start_work {
 	__u64 reserved5;
 	__u64 reserved6;
 };
-#define CXL_START_WORK_AMR		0x0000000000000001UUL
-#define CXL_START_WORK_NUM_IRQS		0x0000000000000002UUL
+#define CXL_START_WORK_AMR		0x0000000000000001ULL
+#define CXL_START_WORK_NUM_IRQS		0x0000000000000002ULL
 #define CXL_START_WORK_ALL		(CXL_START_WORK_AMR |\
-					CXL_START_WORK_NUM_IRQS
+					 CXL_START_WORK_NUM_IRQS)
 
 struct cxl_ioctl_get_info {
 	__u64 flags;
@@ -74,7 +74,7 @@ struct cxl_event_data_storage {
 	__u32 reserved1;
 	__u64 addr;
 	__u64 dsisr;
-	__u64 reserved1;
+	__u64 reserved2;
 };
 
 struct cxl_event_afu_error {
@@ -92,17 +92,5 @@ struct cxl_event {
 		struct cxl_event_afu_error afu_err;
 	};
 };
-
-#ifdef __KERNEL__
-/*
- * If these change we really need to update API.  Either change some
- * flags or update API version numbers.
- */
-BUILD_BUG_ON(sizeof(struct cxl_event_header) == 64);
-BUILD_BUG_ON(sizeof(struct cxl_event_afu_interrupt) == 64);
-BUILD_BUG_ON(sizeof(struct cxl_event_data_storage) == 256);
-BUILD_BUG_ON(sizeof(struct cxl_event_afu_error) == 128);
-
-#endif
 
 #endif
