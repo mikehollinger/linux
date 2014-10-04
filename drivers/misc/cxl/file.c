@@ -128,7 +128,7 @@ static int afu_release(struct inode *inode, struct file *file)
 }
 
 static long afu_ioctl_start_work(struct cxl_context *ctx,
-		     struct cxl_ioctl_start_work __user *uwork)
+				 struct cxl_ioctl_start_work __user *uwork)
 {
 	struct cxl_ioctl_start_work work;
 	u64 amr;
@@ -143,11 +143,15 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 			   sizeof(struct cxl_ioctl_start_work)))
 		return -EFAULT;
 
+	/* if any of the reserved fields are set or any of the unused
+	 * flags are set it's invalid
+	 */
 	if (work.reserved1 || work.reserved2 || work.reserved3 ||
-	    work.reserved4 || work.reserved5 || work.reserved6)
+	    work.reserved4 || work.reserved5 || work.reserved6 ||
+	    (work.flags & ~CXL_START_WORK_ALL))
 		return -EINVAL;
 
-	if (work.num_interrupts == -1)
+	if (!(work.flags & CXL_START_WORK_NUM_IRQS))
 		work.num_interrupts = ctx->afu->pp_irqs;
 	else if ((work.num_interrupts < ctx->afu->pp_irqs) ||
 		 (work.num_interrupts > ctx->afu->irqs_max))
@@ -155,19 +159,37 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
 		return rc;
 
-	amr = work.amr & mfspr(SPRN_UAMOR);
-
-	work.process_element = ctx->ph;
-
-	/* Returns PE and number of interrupts */
-	if (copy_to_user(uwork, &work,
-			 sizeof(struct cxl_ioctl_start_work)))
-		return -EFAULT;
+	amr = mfspr(SPRN_UAMOR);
+	if (work.flags & CXL_START_WORK_AMR))
+		amr &= work.amr;
 
 	if ((rc = cxl_attach_process(ctx, false, work.wed, amr)))
 		return rc;
 
 	ctx->status = STARTED;
+
+	return 0;
+}
+static long afu_ioctl_get_info(struct cxl_context *ctx,
+			       struct cxl_ioctl_get_info __user *uinfo)
+{
+	struct cxl_ioctl_get_info info;
+	u64 amr;
+	int rc;
+
+	pr_devel("afu_ioctl: pe: %i CXL_GET_INFO\n", ctx->ph);
+
+	if (ctx->status != OPENED)
+		return -EIO;
+
+	info.flags = 0; /* all fields are manditory */
+	info.api_version_compatible = 1;
+	info.api_version = 1;
+	info.process_element = ctx->ph;
+
+	if (copy_to_user(uinfo, &info,
+			 sizeof(struct cxl_ioctl_get_info)))
+		return -EFAULT;
 
 	return 0;
 }
@@ -198,6 +220,9 @@ static long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case CXL_IOCTL_START_WORK:
 		return afu_ioctl_start_work(ctx,
 			(struct cxl_ioctl_start_work __user *)arg);
+	case CXL_IOCTL_GET_INFO:
+		return afu_ioctl_get_info(ctx,
+			(struct cxl_ioctl_get_info __user *)arg);
 	case CXL_IOCTL_CHECK_ERROR:
 		return afu_ioctl_check_error(ctx);
 	}
