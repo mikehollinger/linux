@@ -47,8 +47,8 @@ struct cxl_ioctl_get_info {
 #define CXL_IOCTL_GET_INFO	  _IOR(CXL_MAGIC, 0x01, struct cxl_ioctl_get_info)
 #define CXL_IOCTL_CHECK_ERROR     _IO(CXL_MAGIC, 0x02)
 
-
 /* Events from read() */
+#define CXL_READ_MIN_SIZE 0x1000 /* 4K */
 enum cxl_event_type {
 	CXL_EVENT_RESERVED      = 0,
 	CXL_EVENT_AFU_INTERRUPT = 1,
