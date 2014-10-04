@@ -70,19 +70,12 @@ struct cxl_event_afu_interrupt {
 };
 
 struct cxl_event_data_storage {
-	__u16 flags;
-	__u16 dsisr;
+	__u32 flags;
 	__u32 reserved1;
 	__u64 addr;
+	__u64 dsisr;
+	__u64 reserved1;
 };
-#define CXL_EVENT_DSISR_STORAGE_RW	0x0001
-#define CXL_EVENT_DSISR_SEGMENT		0x0002
-#define CXL_EVENT_DSISR_PAGE		0x0004
-#define CXL_EVENT_DSISR_PROTECTION	0x0008
-#define CXL_EVENT_DSISR_MANDITORY	(CXL_EVENT_DSISR_RW |\
-					 CXL_EVENT_DSISR_SEGMENT |\
-					 CXL_EVENT_DSISR_PAGE |
-					 CXL_EVENT_DSISR_PROTECTION)
 
 struct cxl_event_afu_error {
 	__u16 flags;
@@ -107,7 +100,7 @@ struct cxl_event {
  */
 BUILD_BUG_ON(sizeof(struct cxl_event_header) == 64);
 BUILD_BUG_ON(sizeof(struct cxl_event_afu_interrupt) == 64);
-BUILD_BUG_ON(sizeof(struct cxl_event_data_storage) == 128);
+BUILD_BUG_ON(sizeof(struct cxl_event_data_storage) == 256);
 BUILD_BUG_ON(sizeof(struct cxl_event_afu_error) == 128);
 
 #endif

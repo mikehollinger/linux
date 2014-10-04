@@ -329,19 +329,21 @@ User API
 
         If an data storage event is received, the full structure received is:
 		struct cxl_event_data_storage {
-			__u16 flags;
-			__u16 dsisr;
+			__u32 flags;
 			__u32 reserved1;
 			__u64 addr;
+			__u64 dsisr;
+			__u64 reserved1;
 		};
 
 	    flags: Mandatory
 	        These flags indicate which optional fields are present
 	        in this struct.  Currently all fields are Mandatory.
 
-	    dsisr: bottom 4 bits Mandatory.  Remainder OPTIONAL
-	        These fields give information on the type of fault.
-	        These are define CXL_EVENT_DSISR_*
+	    dsisr: Manditory
+	        These fields give information on the type of
+	        fault. Copy of the DSISR from PSL hardware when
+	        address fault occured.
 
             address: Mandatory
                 Address of the data storage trying to be accessed by

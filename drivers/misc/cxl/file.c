@@ -312,9 +312,10 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 
 	memset(&event, 0, sizeof(event));
 	event.header.process_element = ctx->ph;
+	event.header.size = sizeof(struct cxl_event_header)
 	if (ctx->pending_irq) {
 		pr_devel("afu_read delivering AFU interrupt\n");
-		event.header.size = sizeof(struct cxl_event_afu_interrupt);
+		event.header.size += sizeof(struct cxl_event_afu_interrupt);
 		event.header.type = CXL_EVENT_AFU_INTERRUPT;
 		event.irq.irq = find_first_bit(ctx->irq_bitmap, ctx->irq_count) + 1;
 		clear_bit(event.irq.irq - 1, ctx->irq_bitmap);
@@ -322,13 +323,14 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 			ctx->pending_irq = false;
 	} else if (ctx->pending_fault) {
 		pr_devel("afu_read delivering data storage fault\n");
-		event.header.size = sizeof(struct cxl_event_data_storage);
+		event.header.size += sizeof(struct cxl_event_data_storage);
 		event.header.type = CXL_EVENT_DATA_STORAGE;
 		event.fault.addr = ctx->fault_addr;
+		event.fault.dsisr = ctx->fault_dsisr;
 		ctx->pending_fault = false;
 	} else if (ctx->pending_afu_err) {
 		pr_devel("afu_read delivering afu error\n");
-		event.header.size = sizeof(struct cxl_event_afu_error);
+		event.header.size += sizeof(struct cxl_event_afu_error);
 		event.header.type = CXL_EVENT_AFU_ERROR;
 		event.afu_err.err = ctx->afu_err;
 		ctx->pending_afu_err = false;

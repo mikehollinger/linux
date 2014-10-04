@@ -390,6 +390,7 @@ struct cxl_context {
 	unsigned long *irq_bitmap; /* Accessed from IRQ context */
 	struct cxl_irq_ranges irqs;
 	u64 fault_addr;
+	u64 fault_dsisr;
 	u64 afu_err;
 	enum cxl_context_status status;
 

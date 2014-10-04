@@ -106,6 +106,7 @@ static void cxl_ack_ae(struct cxl_context *ctx)
 	spin_lock_irqsave(&ctx->lock, flags);
 	ctx->pending_fault = true;
 	ctx->fault_addr = ctx->dar;
+	ctx->fault_dsisr = ctx->dsisr;
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
 	wake_up_all(&ctx->wq);
