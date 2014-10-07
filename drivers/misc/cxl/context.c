@@ -113,7 +113,6 @@ int cxl_context_iomap(struct cxl_context *ctx, struct vm_area_struct *vma)
  */
 static void __detach_context(struct cxl_context *ctx)
 {
-	unsigned long flags;
 	enum cxl_context_status status;
 
 	mutex_lock(&ctx->status_mutex);
