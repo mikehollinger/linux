@@ -275,6 +275,20 @@ err:
 	return rc;
 }
 
+static ssize_t api_version_show(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%i\n", CXL_API_VERSION);
+}
+
+static ssize_t api_version_compatible_show(struct device *device,
+					   struct device_attribute *attr,
+					   char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%i\n", CXL_API_VERSION_COMPATIBLE);
+}
+
 static struct device_attribute afu_attrs[] = {
 	__ATTR_RO(mmio_size),
 	__ATTR_RO(irqs_min),
@@ -282,6 +296,8 @@ static struct device_attribute afu_attrs[] = {
 	__ATTR_RO(models_supported),
 	__ATTR_RW(model),
 	__ATTR_RW(prefault_mode),
+	__ATTR_RO(api_version),
+	__ATTR_RO(api_version_compatible),
 	__ATTR(reset, S_IWUSR, NULL, reset_store_afu),
 };
 

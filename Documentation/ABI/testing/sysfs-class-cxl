@@ -63,6 +63,22 @@ Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 Description:	write only
 		Reset the AFU.
 
+What:		/sys/class/cxl/<afu>/api_version
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		List the current version of the kernel/user API.
+
+What:		/sys/class/cxl/<afu>/api_version_com
+Date:		September 2014
+Contact:	Ian Munsie <imunsie@au1.ibm.com>,
+		Michael Neuling <mikey@neuling.org>
+Description:	read only
+		List the lowest version the kernel/user API this
+		kernel is compatible with.
+
+
 
 Master contexts (eg. /sys/class/cxl/afu0.0m)
 

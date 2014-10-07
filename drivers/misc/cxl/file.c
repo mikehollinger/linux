@@ -134,7 +134,7 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 	u64 amr;
 	int rc;
 
-	pr_devel("afu_ioctl: pe: %i CXL_START_WORK\n", ctx->ph);
+	pr_devel("%s: pe: %i\n", __func__, ctx->ph);
 
 	if (ctx->status != OPENED)
 		return -EIO;
@@ -170,40 +170,18 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 
 	return 0;
 }
-static long afu_ioctl_get_info(struct cxl_context *ctx,
-			       struct cxl_ioctl_get_info __user *uinfo)
+static long afu_ioctl_process_element(struct cxl_context *ctx,
+				      int __user *upe)
 {
-	struct cxl_ioctl_get_info info;
-
-	pr_devel("afu_ioctl: pe: %i CXL_GET_INFO\n", ctx->ph);
+	pr_devel("%s: pe: %i\n", __func__, ctx->ph);
 
 	if (ctx->status != OPENED)
 		return -EIO;
 
-	info.flags = 0; /* all fields are manditory */
-	info.api_version_compatible = 1;
-	info.api_version = 1;
-	info.process_element = ctx->ph;
-
-	if (copy_to_user(uinfo, &info,
-			 sizeof(struct cxl_ioctl_get_info)))
+	if (copy_to_user(upe, &ctx->ph, sizeof(int)))
 		return -EFAULT;
 
 	return 0;
-}
-
-static long afu_ioctl_check_error(struct cxl_context *ctx)
-{
-	if (ctx->status != STARTED)
-		return -EIO;
-
-	if (cxl_check_error(ctx->afu)) {
-		/* This may not be enough for some errors.  May need to PERST
-		 * the card in some cases if it's very broken.
-		 */
-		return cxl_afu_reset(ctx->afu);
-	}
-	return -EPERM;
 }
 
 static long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
@@ -216,13 +194,9 @@ static long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	pr_devel("afu_ioctl\n");
 	switch (cmd) {
 	case CXL_IOCTL_START_WORK:
-		return afu_ioctl_start_work(ctx,
-			(struct cxl_ioctl_start_work __user *)arg);
-	case CXL_IOCTL_GET_INFO:
-		return afu_ioctl_get_info(ctx,
-			(struct cxl_ioctl_get_info __user *)arg);
-	case CXL_IOCTL_CHECK_ERROR:
-		return afu_ioctl_check_error(ctx);
+		return afu_ioctl_start_work(ctx, (struct cxl_ioctl_start_work __user *)arg);
+	case CXL_IOCTL_GET_PROCESS_ELEMENT:
+		return afu_ioctl_process_element(ctx, (int __user *)arg);
 	}
 	return -EINVAL;
 }
@@ -284,15 +258,6 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	unsigned long flags;
 	ssize_t size;
 	DEFINE_WAIT(wait);
-
-	/*
-	 * If these change we really need to update API.  Either change some
-	 * flags or update API version numbers.
-	 */
-	BUILD_BUG_ON(sizeof(struct cxl_event_header) != 8);
-	BUILD_BUG_ON(sizeof(struct cxl_event_afu_interrupt) != 8);
-	BUILD_BUG_ON(sizeof(struct cxl_event_data_storage) != 32);
-	BUILD_BUG_ON(sizeof(struct cxl_event_afu_error) != 16);
 
 	if (count < CXL_READ_MIN_SIZE)
 		return -EINVAL;
@@ -491,6 +456,16 @@ EXPORT_SYMBOL(cxl_register_adapter);
 int __init cxl_file_init(void)
 {
 	int rc;
+
+	/* If these change we really need to update API.  Either change some
+	 * flags or update API version number CXL_API_VERSION.
+	 */
+	BUILD_BUG_ON(CXL_API_VERSION != 1);
+	BUILD_BUG_ON(sizeof(struct cxl_ioctl_start_work) != 64);
+	BUILD_BUG_ON(sizeof(struct cxl_event_header) != 8);
+	BUILD_BUG_ON(sizeof(struct cxl_event_afu_interrupt) != 8);
+	BUILD_BUG_ON(sizeof(struct cxl_event_data_storage) != 32);
+	BUILD_BUG_ON(sizeof(struct cxl_event_afu_error) != 16);
 
 	if ((rc = alloc_chrdev_region(&cxl_dev, 0, CXL_NUM_MINORS, "cxl"))) {
 		pr_err("Unable to allocate CXL major number: %i\n", rc);

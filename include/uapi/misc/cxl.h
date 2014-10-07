@@ -13,7 +13,7 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
-/* structs for IOCTLS for userspace to talk to the kernel */
+/* Structs for IOCTLS for userspace to talk to the kernel */
 struct cxl_ioctl_start_work {
 	__u64 flags;
 	__u64 wed;
@@ -31,21 +31,10 @@ struct cxl_ioctl_start_work {
 #define CXL_START_WORK_ALL		(CXL_START_WORK_AMR |\
 					 CXL_START_WORK_NUM_IRQS)
 
-struct cxl_ioctl_get_info {
-	__u64 flags;
-	__u32 api_version_compatible;
-	__u32 api_version;
-	__u16 process_element;
-	__s16 reserved1;
-	__s32 reserved2;
-	__u64 reserved3;
-};
-
 /* IOCTL numbers */
 #define CXL_MAGIC 0xCA
 #define CXL_IOCTL_START_WORK      _IOW(CXL_MAGIC, 0x00, struct cxl_ioctl_start_work)
-#define CXL_IOCTL_GET_INFO	  _IOR(CXL_MAGIC, 0x01, struct cxl_ioctl_get_info)
-#define CXL_IOCTL_CHECK_ERROR     _IO(CXL_MAGIC, 0x02)
+#define CXL_IOCTL_GET_PROCESS_ELEMENT _IOR(CXL_MAGIC, 0x01, int)
 
 /* Events from read() */
 #define CXL_READ_MIN_SIZE 0x1000 /* 4K */

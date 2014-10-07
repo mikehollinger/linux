@@ -28,6 +28,12 @@ extern uint cxl_verbose;
 
 #define CXL_TIMEOUT 5
 
+/* Bump version each time a user API change is made, whether it is
+ * backwards compatible ot not.
+ */
+#define CXL_API_VERSION 1
+#define CXL_API_VERSION_COMPATIBLE 1
+
 /* Opaque types to avoid accidentally passing registers for the wrong MMIO
  *
  * At the end of the day, I'm not married to using typedef here, but it might
