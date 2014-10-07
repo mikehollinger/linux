@@ -178,8 +178,7 @@ User API
 
                 amr:
                     Authority Mask Register (AMR), same as the powerpc
-                    AMR.  If not specified this will be inherited from
-                    userspace.
+                    AMR.
 
                 num_interrupt:
                     Number of userspace interrupts to request.  If not

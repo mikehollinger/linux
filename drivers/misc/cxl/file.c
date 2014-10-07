@@ -131,7 +131,7 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 				 struct cxl_ioctl_start_work __user *uwork)
 {
 	struct cxl_ioctl_start_work work;
-	u64 amr;
+	u64 amr = 0;
 	int rc;
 
 	pr_devel("%s: pe: %i\n", __func__, ctx->pe);
@@ -159,9 +159,8 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
 		return rc;
 
-	amr = mfspr(SPRN_UAMOR);
 	if (work.flags & CXL_START_WORK_AMR)
-		amr &= work.amr;
+		amr = work.amr & mfspr(SPRN_UAMOR);
 
 	if ((rc = cxl_attach_process(ctx, false, work.wed, amr)))
 		return rc;
