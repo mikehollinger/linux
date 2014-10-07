@@ -109,7 +109,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 	dsisr = irq_info.dsisr;
 	dar = irq_info.dar;
 
-	pr_devel("CXL interrupt %i for afu pe: %i DSISR: %#llx DAR: %#llx\n", irq, ctx->ph, dsisr, dar);
+	pr_devel("CXL interrupt %i for afu pe: %i DSISR: %#llx DAR: %#llx\n", irq, ctx->pe, dsisr, dar);
 
 	if (dsisr & CXL_PSL_DSISR_An_DS) {
 		/* We don't inherently need to sleep to handle this, but we do
@@ -120,7 +120,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 		 * but to do that we need to solve the issue where we hold a
 		 * ref to the mm, but the mm can hold a ref to the fd after an
 		 * mmap preventing anything from being cleaned up. */
-		pr_devel("Scheduling segment miss handling for later pe: %i\n", ctx->ph);
+		pr_devel("Scheduling segment miss handling for later pe: %i\n", ctx->pe);
 		return schedule_cxl_fault(ctx, dsisr, dar);
 	}
 
@@ -139,7 +139,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 		/* In some cases we might be able to handle the fault
 		 * immediately if hash_page would succeed, but we still need
 		 * the task's mm, which as above we can't get without a lock */
-		pr_devel("Scheduling page fault handling for later pe: %i\n", ctx->ph);
+		pr_devel("Scheduling page fault handling for later pe: %i\n", ctx->pe);
 		return schedule_cxl_fault(ctx, dsisr, dar);
 	}
 	if (dsisr & CXL_PSL_DSISR_An_ST)
@@ -159,7 +159,7 @@ static irqreturn_t cxl_irq(int irq, void *data)
 			 * probably best that we log them somewhere: */
 			dev_err_ratelimited(&ctx->afu->dev, "CXL AFU Error "
 					    "undelivered to pe %i: %.llx\n",
-					    ctx->ph, irq_info.afu_err);
+					    ctx->pe, irq_info.afu_err);
 		} else {
 			spin_lock(&ctx->lock);
 			ctx->afu_err = irq_info.afu_err;
@@ -217,12 +217,12 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 	}
 	if (unlikely(r >= CXL_IRQ_RANGES)) {
 		WARN(1, "Recieved AFU IRQ out of range for pe %i (virq %i hwirq %lx)\n",
-		     ctx->ph, irq, hwirq);
+		     ctx->pe, irq, hwirq);
 		return IRQ_HANDLED;
 	}
 
 	pr_devel("Received AFU interrupt %i for pe: %i (virq %i hwirq %lx)\n",
-	       afu_irq, ctx->ph, irq, hwirq);
+	       afu_irq, ctx->pe, irq, hwirq);
 
 	if (unlikely(!ctx->irq_bitmap)) {
 		WARN(1, "Recieved AFU IRQ for context with no IRQ bitmap\n");

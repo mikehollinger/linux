@@ -85,7 +85,7 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 	if ((rc = cxl_context_init(ctx, afu, master)))
 		goto err_put_afu;
 
-	pr_devel("afu_open pe: %i\n", ctx->ph);
+	pr_devel("afu_open pe: %i\n", ctx->pe);
 	file->private_data = ctx;
 	cxl_ctx_get();
 
@@ -115,7 +115,7 @@ static int afu_release(struct inode *inode, struct file *file)
 	struct cxl_context *ctx = file->private_data;
 
 	pr_devel("%s: closing cxl file descriptor. pe: %i\n",
-		 __func__, ctx->ph);
+		 __func__, ctx->pe);
 	cxl_context_detach(ctx);
 
 	put_device(&ctx->afu->dev);
@@ -134,7 +134,7 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 	u64 amr;
 	int rc;
 
-	pr_devel("%s: pe: %i\n", __func__, ctx->ph);
+	pr_devel("%s: pe: %i\n", __func__, ctx->pe);
 
 	if (ctx->status != OPENED)
 		return -EIO;
@@ -173,9 +173,9 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 static long afu_ioctl_process_element(struct cxl_context *ctx,
 				      int __user *upe)
 {
-	pr_devel("%s: pe: %i\n", __func__, ctx->ph);
+	pr_devel("%s: pe: %i\n", __func__, ctx->pe);
 
-	if (copy_to_user(upe, &ctx->ph, sizeof(int)))
+	if (copy_to_user(upe, &ctx->pe, sizeof(int)))
 		return -EFAULT;
 
 	return 0;
@@ -224,7 +224,7 @@ static unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 
 	poll_wait(file, &ctx->wq, poll);
 
-	pr_devel("afu_poll wait done pe: %i\n", ctx->ph);
+	pr_devel("afu_poll wait done pe: %i\n", ctx->pe);
 
 	spin_lock_irqsave(&ctx->lock, flags);
 	if (ctx->pending_irq || ctx->pending_fault ||
@@ -236,7 +236,7 @@ static unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 		mask |= POLLERR;
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
-	pr_devel("afu_poll pe: %i returning %#x\n", ctx->ph, mask);
+	pr_devel("afu_poll pe: %i returning %#x\n", ctx->pe, mask);
 
 	return mask;
 }
@@ -280,7 +280,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	finish_wait(&ctx->wq, &wait);
 
 	memset(&event, 0, sizeof(event));
-	event.header.process_element = ctx->ph;
+	event.header.process_element = ctx->pe;
 	event.header.size = sizeof(struct cxl_event_header);
 	if (ctx->pending_irq) {
 		pr_devel("afu_read delivering AFU interrupt\n");

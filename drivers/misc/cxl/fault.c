@@ -117,7 +117,7 @@ static int cxl_handle_segment_miss(struct cxl_context *ctx,
 {
 	int rc;
 
-	pr_devel("CXL interrupt: Segment fault pe: %i ea: %#llx\n", ctx->ph, ea);
+	pr_devel("CXL interrupt: Segment fault pe: %i ea: %#llx\n", ctx->pe, ea);
 
 	if ((rc = cxl_fault_segment(ctx, mm, ea)))
 		cxl_ack_ae(ctx);
@@ -155,7 +155,7 @@ static void cxl_handle_page_fault(struct cxl_context *ctx,
 	hash_page_mm(mm, dar, access, 0x300);
 	local_irq_restore(flags);
 
-	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->ph);
+	pr_devel("Page fault successfully handled for pe: %i!\n", ctx->pe);
 	cxl_ack_irq(ctx, CXL_PSL_TFC_An_R, 0);
 }
 
@@ -170,7 +170,7 @@ void cxl_handle_fault(struct work_struct *fault_work)
 
 	if (cxl_p2n_read(ctx->afu, CXL_PSL_DSISR_An) != dsisr ||
 	    cxl_p2n_read(ctx->afu, CXL_PSL_DAR_An) != dar ||
-	    cxl_p2n_read(ctx->afu, CXL_PSL_PEHandle_An) != ctx->ph) {
+	    cxl_p2n_read(ctx->afu, CXL_PSL_PEHandle_An) != ctx->pe) {
 		/* Most likely explanation is harmless - a dedicated process
 		 * has detached and these were cleared by the PSL purge, but
 		 * warn about it just in case */
@@ -179,7 +179,7 @@ void cxl_handle_fault(struct work_struct *fault_work)
 	}
 
 	pr_devel("CXL BOTTOM HALF handling fault for afu pe: %i. "
-		"DSISR: %#llx DAR: %#llx\n", ctx->ph, dsisr, dar);
+		"DSISR: %#llx DAR: %#llx\n", ctx->pe, dsisr, dar);
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 		pr_devel("cxl_handle_fault unable to get task %i\n",

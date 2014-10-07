@@ -64,7 +64,7 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 					goto next;
 
 				pr_devel("%s matched mm - card: %i afu: %i pe: %i\n",
-					 __func__, adapter->adapter_num, slice, ctx->ph);
+					 __func__, adapter->adapter_num, slice, ctx->pe);
 
 				spin_lock_irqsave(&ctx->sst_lock, flags);
 				if (!ctx->sstp)

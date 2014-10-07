@@ -408,7 +408,7 @@ struct cxl_context {
 
 	struct cxl_process_element *elem;
 
-	int ph; /* process handle/process element index */
+	int pe; /* process element handle */
 	u32 irq_count;
 	bool pe_inserted;
 	bool master;

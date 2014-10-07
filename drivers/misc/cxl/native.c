@@ -283,9 +283,9 @@ static int do_process_element_cmd(struct cxl_context *ctx,
 
 	ctx->elem->software_state = cpu_to_be32(pe_state);
 	smp_wmb();
-	*(ctx->afu->sw_command_status) = cpu_to_be64(cmd | 0 | ctx->ph);
+	*(ctx->afu->sw_command_status) = cpu_to_be64(cmd | 0 | ctx->pe);
 	smp_mb();
-	cxl_p1n_write(ctx->afu, CXL_PSL_LLCMD_An, cmd | ctx->ph);
+	cxl_p1n_write(ctx->afu, CXL_PSL_LLCMD_An, cmd | ctx->pe);
 	while (1) {
 		state = be64_to_cpup(ctx->afu->sw_command_status);
 		if (state == ~0ULL) {
@@ -293,7 +293,7 @@ static int do_process_element_cmd(struct cxl_context *ctx,
 			return -1;
 		}
 		if ((state & (CXL_SPA_SW_CMD_MASK | CXL_SPA_SW_STATE_MASK  | CXL_SPA_SW_LINK_MASK)) ==
-		    (cmd | (cmd >> 16) | ctx->ph))
+		    (cmd | (cmd >> 16) | ctx->pe))
 			break;
 		/* The command won't finish in the PSL if there are
 		 * outstanding DSIs.  Hence we need to yield here in
@@ -312,10 +312,10 @@ static int add_process_element(struct cxl_context *ctx)
 	int rc = 0;
 
 	mutex_lock(&ctx->afu->spa_mutex);
-	pr_devel("%s Adding pe: %i started\n", __func__, ctx->ph);
+	pr_devel("%s Adding pe: %i started\n", __func__, ctx->pe);
 	if (!(rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_ADD, CXL_PE_SOFTWARE_STATE_V)))
 		ctx->pe_inserted = true;
-	pr_devel("%s Adding pe: %i finished\n", __func__, ctx->ph);
+	pr_devel("%s Adding pe: %i finished\n", __func__, ctx->pe);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
@@ -329,11 +329,11 @@ static int terminate_process_element(struct cxl_context *ctx)
 		return rc;
 
 	mutex_lock(&ctx->afu->spa_mutex);
-	pr_devel("%s Terminate pe: %i started\n", __func__, ctx->ph);
+	pr_devel("%s Terminate pe: %i started\n", __func__, ctx->pe);
 	rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_TERMINATE,
 				    CXL_PE_SOFTWARE_STATE_V | CXL_PE_SOFTWARE_STATE_T);
 	ctx->elem->software_state = 0;	/* Remove Valid bit */
-	pr_devel("%s Terminate pe: %i finished\n", __func__, ctx->ph);
+	pr_devel("%s Terminate pe: %i finished\n", __func__, ctx->pe);
 	mutex_unlock(&ctx->afu->spa_mutex);
 	return rc;
 }
@@ -343,11 +343,11 @@ static int remove_process_element(struct cxl_context *ctx)
 	int rc = 0;
 
 	mutex_lock(&ctx->afu->spa_mutex);
-	pr_devel("%s Remove pe: %i started\n", __func__, ctx->ph);
+	pr_devel("%s Remove pe: %i started\n", __func__, ctx->pe);
 	if (!(rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_REMOVE, 0)))
 		ctx->pe_inserted = false;
 	slb_invalid(ctx);
-	pr_devel("%s Remove pe: %i finished\n", __func__, ctx->ph);
+	pr_devel("%s Remove pe: %i finished\n", __func__, ctx->pe);
 	mutex_unlock(&ctx->afu->spa_mutex);
 
 	return rc;
@@ -361,7 +361,7 @@ static void assign_psn_space(struct cxl_context *ctx)
 		ctx->psn_size = ctx->afu->adapter->ps_size;
 	} else {
 		ctx->psn_phys = ctx->afu->psn_phys +
-			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->ph);
+			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->pe);
 		ctx->psn_size = ctx->afu->pp_size;
 	}
 }

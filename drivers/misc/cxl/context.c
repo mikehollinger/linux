@@ -67,7 +67,7 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 	if (i < 0)
 		return i;
 
-	ctx->ph = i;
+	ctx->pe = i;
 	ctx->elem = &ctx->afu->spa[i];
 	ctx->pe_inserted = false;
 	return 0;
@@ -97,7 +97,7 @@ int cxl_context_iomap(struct cxl_context *ctx, struct vm_area_struct *vma)
 		return -EBUSY;
 
 	pr_devel("%s: mmio physical: %llx pe: %i master:%i\n", __func__,
-		 ctx->psn_phys, ctx->ph , ctx->master);
+		 ctx->psn_phys, ctx->pe , ctx->master);
 
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 	return vm_iomap_memory(vma, ctx->psn_phys, len);
@@ -157,7 +157,7 @@ void cxl_context_free(struct cxl_context *ctx)
 	unsigned long flags;
 
 	spin_lock(&ctx->afu->contexts_lock);
-	idr_remove(&ctx->afu->contexts_idr, ctx->ph);
+	idr_remove(&ctx->afu->contexts_idr, ctx->pe);
 	spin_unlock(&ctx->afu->contexts_lock);
 	synchronize_rcu();
 
