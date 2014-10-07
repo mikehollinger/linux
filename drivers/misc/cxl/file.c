@@ -175,9 +175,6 @@ static long afu_ioctl_process_element(struct cxl_context *ctx,
 {
 	pr_devel("%s: pe: %i\n", __func__, ctx->ph);
 
-	if (ctx->status != OPENED)
-		return -EIO;
-
 	if (copy_to_user(upe, &ctx->ph, sizeof(int)))
 		return -EFAULT;
 
