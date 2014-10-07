@@ -17,6 +17,7 @@
 #include <linux/cdev.h>
 #include <linux/pid.h>
 #include <linux/io.h>
+#include <linux/pci.h>
 #include <asm/cputable.h>
 #include <asm/mmu.h>
 #include <asm/reg.h>
@@ -607,5 +608,7 @@ int cxl_afu_reset(struct cxl_afu *afu);
 int cxl_psl_purge(struct cxl_afu *afu);
 
 void cxl_stop_trace(struct cxl *cxl);
+
+extern struct pci_driver cxl_pci_driver;
 
 #endif

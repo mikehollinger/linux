@@ -986,15 +986,9 @@ static void cxl_remove(struct pci_dev *dev)
 	cxl_remove_adapter(adapter);
 }
 
-static struct pci_driver cxl_pci_driver = {
+struct pci_driver cxl_pci_driver = {
 	.name = "cxl-pci",
 	.id_table = cxl_pci_tbl,
 	.probe = cxl_probe,
 	.remove = cxl_remove,
 };
-
-module_driver(cxl_pci_driver, pci_register_driver, pci_unregister_driver);
-
-MODULE_DESCRIPTION("IBM Coherent Accelerator");
-MODULE_AUTHOR("Ian Munsie <imunsie@au1.ibm.com>");
-MODULE_LICENSE("GPL");

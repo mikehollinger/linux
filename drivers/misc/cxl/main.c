@@ -20,6 +20,7 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/idr.h>
+#include <linux/pci.h>
 #include <asm/cputable.h>
 #include <misc/cxl.h>
 
@@ -207,8 +208,12 @@ static int __init init_cxl(void)
 	if ((rc = register_cxl_calls(&cxl_calls)))
 		goto err;
 
-	return 0;
+	if ((rc = pci_register_driver(&cxl_pci_driver)))
+		goto err1;
 
+	return 0;
+err1:
+	unregister_cxl_calls(&cxl_calls);
 err:
 	cxl_debugfs_exit();
 	cxl_file_exit();
@@ -218,6 +223,8 @@ err:
 
 static void exit_cxl(void)
 {
+	pci_unregister_driver(&cxl_pci_driver);
+
 	cxl_debugfs_exit();
 	cxl_file_exit();
 	unregister_cxl_calls(&cxl_calls);
