@@ -253,7 +253,6 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	struct cxl_context *ctx = file->private_data;
 	struct cxl_event event;
 	unsigned long flags;
-	ssize_t size;
 	DEFINE_WAIT(wait);
 
 	if (count < CXL_READ_MIN_SIZE)
@@ -314,8 +313,9 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 
 	spin_unlock_irqrestore(&ctx->lock, flags);
 
-	size = min_t(size_t, count, event.header.size);
-	return copy_to_user(buf, &event, size);
+	if (copy_to_user(buf, &event, event.header.size))
+		return -EFAULT;
+	return event.header.size;
 }
 
 static const struct file_operations afu_fops = {
