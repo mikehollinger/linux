@@ -136,39 +136,48 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 	pr_devel("%s: pe: %i\n", __func__, ctx->pe);
 
 	mutex_lock(&ctx->status_mutex);
-	if (ctx->status != OPENED)
-		return -EIO;
+	if (ctx->status != OPENED) {
+		rc = -EIO;
+		goto out;
+	}
 
 	if (copy_from_user(&work, uwork,
-			   sizeof(struct cxl_ioctl_start_work)))
-		return -EFAULT;
+			   sizeof(struct cxl_ioctl_start_work))) {
+		rc = -EFAULT;
+		goto out;
+	}
 
 	/* if any of the reserved fields are set or any of the unused
 	 * flags are set it's invalid
 	 */
 	if (work.reserved1 || work.reserved2 || work.reserved3 ||
 	    work.reserved4 || work.reserved5 || work.reserved6 ||
-	    (work.flags & ~CXL_START_WORK_ALL))
-		return -EINVAL;
+	    (work.flags & ~CXL_START_WORK_ALL)) {
+		rc = -EINVAL;
+		goto out;
+	}
 
 	if (!(work.flags & CXL_START_WORK_NUM_IRQS))
 		work.num_interrupts = ctx->afu->pp_irqs;
 	else if ((work.num_interrupts < ctx->afu->pp_irqs) ||
-		 (work.num_interrupts > ctx->afu->irqs_max))
-		return -EINVAL;
+		 (work.num_interrupts > ctx->afu->irqs_max)) {
+		rc =  -EINVAL;
+		goto out;
+	}
 	if ((rc = afu_register_irqs(ctx, work.num_interrupts)))
-		return rc;
+		goto out;
 
 	if (work.flags & CXL_START_WORK_AMR)
 		amr = work.amr & mfspr(SPRN_UAMOR);
 
 	if ((rc = cxl_attach_process(ctx, false, work.wed, amr)))
-		return rc;
+		goto out;
 
 	ctx->status = STARTED;
+	rc = 0;
+out:
 	mutex_unlock(&ctx->status_mutex);
-
-	return 0;
+	return rc;
 }
 static long afu_ioctl_process_element(struct cxl_context *ctx,
 				      int __user *upe)
