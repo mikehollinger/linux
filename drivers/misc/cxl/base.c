@@ -61,7 +61,9 @@ void cxl_slbia(struct mm_struct *mm)
 	if (!calls)
 		return;
 
-	calls->cxl_slbia(mm);
+	if (cxl_ctx_in_use())
+	    calls->cxl_slbia(mm);
+
 	cxl_calls_put(calls);
 }
 EXPORT_SYMBOL(cxl_slbia);
