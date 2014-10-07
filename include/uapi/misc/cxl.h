@@ -59,11 +59,12 @@ struct cxl_event_afu_interrupt {
 };
 
 struct cxl_event_data_storage {
-	__u32 flags;
-	__u32 reserved1;
+	__u16 flags;
+	__u16 reserved1;
+	__u32 reserved2;
 	__u64 addr;
 	__u64 dsisr;
-	__u64 reserved2;
+	__u64 reserved3;
 };
 
 struct cxl_event_afu_error {
