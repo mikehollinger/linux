@@ -4,20 +4,21 @@ What:		/sys/class/cxl/<afu>/irqs_max
 Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
-Description:	read/write
+Description:	read only
 		Maximum number of interrupts that can be requested by userspace.
 		The default on probe is the maximum that hardware can support
-		(eg. 2037).  Write values will limit userspace applications to
-		that many userspace interrupts.  Must be >= irqs_min.
+		(eg. 2037). Write values will limit userspace applications to
+		that many userspace interrupts. Must be >= irqs_min.
 
 What:		/sys/class/cxl/<afu>/irqs_min
 Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
-Description:	read_only
+Description:	read only
 		The minimum number of interrupts that userspace must request
-		on a CXL_START_WORK ioctl.  Userspace may request -1 in the
-		START_WORK IOCTL to get this minimum automatically.
+		on a CXL_START_WORK ioctl. Userspace may omit the
+		num_interrupts field in the START_WORK IOCTL to get this
+		minimum automatically.
 
 What:		/sys/class/cxl/<afu>/mmio_size
 Date:		September 2014
@@ -40,9 +41,9 @@ Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read/write
-		The current model the AFU is using.  Will be one of the models
-		given in models_supported.  Writing will change the model but
-		no user contexts can be attached at this point.
+		The current model the AFU is using. Will be one of the models
+		given in models_supported. Writing will change the model
+		provided that no user contexts are attached.
 
 
 What:		/sys/class/cxl/<afu>/prefault_mode
@@ -51,9 +52,9 @@ Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read/write
 		Set the mode for prefaulting in segments into the segment table
-		when performing the START_WORK ioctl.  Possible values:
+		when performing the START_WORK ioctl. Possible values:
 			none: No prefaulting (default)
-			wed: Just prefault in the wed
+			wed: Treat the wed as an effective address and prefault it
 			all: all segments this process currently maps
 
 What:		/sys/class/cxl/<afu>/reset
@@ -87,7 +88,7 @@ Date:		September 2014
 Contact:	Ian Munsie <imunsie@au1.ibm.com>,
 		Michael Neuling <mikey@neuling.org>
 Description:	read only
-		Size of the MMIO space that may be mmaped by userspace.  This
+		Size of the MMIO space that may be mmaped by userspace. This
 		includes all slave contexts space also.
 
 What:		/sys/class/cxl/<afu>m/pp_mmio_len
