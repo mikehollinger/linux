@@ -354,7 +354,8 @@ struct cxl_afu {
 	/* Only the first part of the SPA is used for the process element
 	 * linked list. The only other part that software needs to worry about
 	 * is sw_command_status, which we store a separate pointer to.
-	 * Everything else in the SPA is only used by hardware */
+	 * Everything else in the SPA is only used by hardware
+	 */
 	struct cxl_process_element *spa;
 	__be64 *sw_command_status;
 	unsigned int spa_size;
@@ -376,7 +377,8 @@ struct cxl_afu {
 };
 
 /* This is a cxl context.  If the PSL is in dedicated model, there will be one
- * of these per AFU.  If in AFU directed there can be lots of these. */
+ * of these per AFU.  If in AFU directed there can be lots of these.
+ */
 struct cxl_context {
 	struct cxl_afu *afu;
 
