@@ -33,13 +33,41 @@ EXPORT_SYMBOL(cxl_verbose);
 module_param_named(verbose, cxl_verbose, uint, 0600);
 MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
 
+static inline void _cxl_slbia(struct cxl_context *ctx, struct mm_struct *mm)
+{
+	struct task_struct *task;
+	unsigned long flags;
+
+	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
+		pr_devel("%s unable to get task %i\n",
+			 __func__, pid_nr(ctx->pid));
+		return;
+	}
+
+	if (task->mm != mm)
+		goto out_put;
+
+	pr_devel("%s matched mm - card: %i afu: %i pe: %i\n", __func__,
+		 ctx->afu->adapter->adapter_num, ctx->afu->slice, ctx->pe);
+
+	spin_lock_irqsave(&ctx->sst_lock, flags);
+	if (!ctx->sstp)
+		goto out_unlock;
+	memset(ctx->sstp, 0, ctx->sst_size);
+	mb();
+	cxl_afu_slbia(ctx->afu);
+
+out_unlock:
+	spin_unlock_irqrestore(&ctx->sst_lock, flags);
+out_put:
+	put_task_struct(task);
+}
+
 static inline void cxl_slbia_core(struct mm_struct *mm)
 {
 	struct cxl *adapter;
 	struct cxl_afu *afu;
 	struct cxl_context *ctx;
-	struct task_struct *task;
-	unsigned long flags;
 	int card, slice, id;
 
 	pr_devel("%s called\n", __func__);
@@ -53,31 +81,8 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 			if (!afu->enabled)
 				continue;
 			rcu_read_lock();
-			idr_for_each_entry(&afu->contexts_idr, ctx, id) {
-				if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
-					pr_devel("%s unable to get task %i\n",
-						 __func__, pid_nr(ctx->pid));
-					continue;
-				}
-
-				if (task->mm != mm)
-					goto next;
-
-				pr_devel("%s matched mm - card: %i afu: %i pe: %i\n",
-					 __func__, adapter->adapter_num, slice, ctx->pe);
-
-				spin_lock_irqsave(&ctx->sst_lock, flags);
-				if (!ctx->sstp)
-					goto next_unlock;
-				memset(ctx->sstp, 0, ctx->sst_size);
-				mb();
-				cxl_afu_slbia(afu);
-
-next_unlock:
-				spin_unlock_irqrestore(&ctx->sst_lock, flags);
-next:
-				put_task_struct(task);
-			}
+			idr_for_each_entry(&afu->contexts_idr, ctx, id)
+				_cxl_slbia(ctx, mm);
 			rcu_read_unlock();
 		}
 		spin_unlock(&adapter->afu_list_lock);
