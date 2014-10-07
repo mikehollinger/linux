@@ -1007,7 +1007,6 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
  	switch (REGION_ID(ea)) {
 	case USER_REGION_ID:
 		user_region = 1;
-		mm = current->mm;
 		if (! mm) {
 			DBG_LOW(" user region with no mm !\n");
 			rc = 1;
@@ -1018,7 +1017,6 @@ int hash_page_mm(struct mm_struct *mm, unsigned long ea, unsigned long access, u
 		vsid = get_vsid(mm->context.id, ea, ssize);
 		break;
 	case VMALLOC_REGION_ID:
-		mm = &init_mm;
 		vsid = get_kernel_vsid(ea, mmu_kernel_ssize);
 		if (ea < VMALLOC_END)
 			psize = mmu_vmalloc_psize;
