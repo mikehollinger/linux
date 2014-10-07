@@ -64,12 +64,12 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 		return -ENODEV;
 
 	if (slice > adapter->slices)
-		goto err_put_module;
+		goto err_put_adapter;
 
 	spin_lock(&adapter->afu_list_lock);
 	if (!(afu = adapter->afu[slice])) {
 		spin_unlock(&adapter->afu_list_lock);
-		goto err_put_module;
+		goto err_put_adapter;
 	}
 	get_device(&afu->dev);
 	spin_unlock(&adapter->afu_list_lock);
@@ -96,7 +96,7 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 
 err_put_afu:
 	put_device(&afu->dev);
-err_put_module:
+err_put_adapter:
 	put_device(&adapter->dev);
 	return rc;
 }
