@@ -24,6 +24,7 @@
 #include <linux/mm.h>
 #include <linux/export.h>
 #include <asm/reg.h>
+#include <asm/copro.h>
 #include <asm/spu.h>
 #include <misc/cxl.h>
 
