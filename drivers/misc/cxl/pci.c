@@ -309,8 +309,6 @@ static void dump_afu_descriptor(struct cxl_afu *afu)
 #undef show_reg
 }
 
-extern struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev);
-
 static int init_implementation_adapter_regs(struct cxl *adapter, struct pci_dev *dev)
 {
 	struct device_node *np;

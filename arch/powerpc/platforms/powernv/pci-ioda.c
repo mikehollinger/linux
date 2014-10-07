@@ -37,6 +37,7 @@
 #include <asm/xics.h>
 #include <asm/debug.h>
 #include <asm/firmware.h>
+#include <asm/pnv-pci.h>
 
 #include <misc/cxl.h>
 

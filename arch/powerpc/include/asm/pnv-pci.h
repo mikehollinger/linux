@@ -23,5 +23,6 @@ int pnv_cxl_alloc_hwirq_ranges(struct cxl_irq_ranges *irqs,
 void pnv_cxl_release_hwirq_ranges(struct cxl_irq_ranges *irqs,
 				  struct pci_dev *dev);
 int pnv_cxl_get_irq_count(struct pci_dev *dev);
+struct device_node *pnv_pci_to_phb_node(struct pci_dev *dev);
 
 #endif
