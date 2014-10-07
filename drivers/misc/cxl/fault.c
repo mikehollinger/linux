@@ -53,8 +53,7 @@ static struct cxl_sste* find_free_sste(struct cxl_sste *primary_group,
 	return sste;
 }
 
-static void cxl_load_segment(struct cxl_context *ctx, u64 esid_data,
-			     u64 vsid_data)
+static void cxl_load_segment(struct cxl_context *ctx, struct copro_slb *slb)
 {
 	/* mask is the group index, we search primary and secondary here. */
 	unsigned int mask = (ctx->sst_size >> 7)-1; /* SSTP0[SegTableSize] */
@@ -66,31 +65,31 @@ static void cxl_load_segment(struct cxl_context *ctx, u64 esid_data,
 
 	sec_hash = !!(cxl_p1n_read(ctx->afu, CXL_PSL_SR_An) & CXL_PSL_SR_An_SC);
 
-	if (vsid_data & SLB_VSID_B_1T)
-		hash = (esid_data >> SID_SHIFT_1T) & mask;
+	if (slb->vsid & SLB_VSID_B_1T)
+		hash = (slb->esid >> SID_SHIFT_1T) & mask;
 	else /* 256M */
-		hash = (esid_data >> SID_SHIFT) & mask;
+		hash = (slb->esid >> SID_SHIFT) & mask;
 
 	sste = find_free_sste(ctx->sstp + (hash << 3), sec_hash,
 			      ctx->sstp + ((~hash & mask) << 3), &ctx->sst_lru);
 
 	pr_devel("CXL Populating SST[%li]: %#llx %#llx\n",
-			sste - ctx->sstp, vsid_data, esid_data);
+			sste - ctx->sstp, slb->vsid, slb->esid);
 
-	sste->vsid_data = cpu_to_be64(vsid_data);
-	sste->esid_data = cpu_to_be64(esid_data);
+	sste->vsid_data = cpu_to_be64(slb->vsid);
+	sste->esid_data = cpu_to_be64(slb->esid);
 }
 
 static int cxl_fault_segment(struct cxl_context *ctx, struct mm_struct *mm,
 			     u64 ea)
 {
-	u64 vsid_data = 0, esid_data = 0;
+	struct copro_slb slb = {0,0};
 	unsigned long flags;
 	int rc;
 
 	spin_lock_irqsave(&ctx->sst_lock, flags);
-	if (!(rc = copro_calc_full_va(mm, ea, &esid_data, &vsid_data))) {
-		cxl_load_segment(ctx, esid_data, vsid_data);
+	if (!(rc = copro_calc_slb(mm, ea, &slb))) {
+		cxl_load_segment(ctx, &slb);
 	}
 	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
@@ -230,9 +229,9 @@ static void cxl_prefault_one(struct cxl_context *ctx, u64 ea)
 	put_task_struct(task);
 }
 
-static u64 next_segment(u64 ea, u64 vsid_data)
+static u64 next_segment(u64 ea, u64 vsid)
 {
-	if (vsid_data & SLB_VSID_B_1T)
+	if (vsid & SLB_VSID_B_1T)
 		ea |= (1ULL << 40) - 1;
 	else
 		ea |= (1ULL << 28) - 1;
@@ -242,7 +241,8 @@ static u64 next_segment(u64 ea, u64 vsid_data)
 
 static void cxl_prefault_vma(struct cxl_context *ctx)
 {
-	u64 ea, vsid_data, esid_data, last_esid_data = 0;
+	u64 ea, last_esid = 0;
+	struct copro_slb slb;
 	struct vm_area_struct *vma;
 	int rc;
 	struct task_struct *task;
@@ -264,16 +264,16 @@ static void cxl_prefault_vma(struct cxl_context *ctx)
 	down_read(&mm->mmap_sem);
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		for (ea = vma->vm_start; ea < vma->vm_end;
-				ea = next_segment(ea, vsid_data)) {
-			rc = copro_calc_full_va(mm, ea, &esid_data, &vsid_data);
+				ea = next_segment(ea, slb.vsid)) {
+			rc = copro_calc_slb(mm, ea, &slb);
 			if (rc)
 				continue;
 
-			if (last_esid_data == esid_data)
+			if (last_esid == slb.esid)
 				continue;
 
-			cxl_load_segment(ctx, esid_data, vsid_data);
-			last_esid_data = esid_data;
+			cxl_load_segment(ctx, &slb);
+			last_esid = slb.esid;
 		}
 	}
 	up_read(&mm->mmap_sem);

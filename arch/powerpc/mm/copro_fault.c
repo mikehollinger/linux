@@ -93,23 +93,26 @@ out_unlock:
 }
 EXPORT_SYMBOL_GPL(copro_handle_mm_fault);
 
-int copro_calc_full_va(struct mm_struct *mm, u64 ea, u64 *esid, u64 *vsid)
+int copro_calc_slb(struct mm_struct *mm, u64 ea, struct copro_slb *slb)
 {
+	u64 vsid;
 	int psize, ssize, rc;
 
-	*esid = (ea & ESID_MASK) | SLB_ESID_V;
+	slb->esid = (ea & ESID_MASK) | SLB_ESID_V;
 
-	rc = calculate_vsid(mm, ea, vsid, &psize, &ssize);
+	rc = calculate_vsid(mm, ea, &vsid, &psize, &ssize);
 	if (rc)
 		return rc;
-	*vsid = (*vsid << slb_vsid_shift(ssize)) | SLB_VSID_USER;
+	vsid = (vsid << slb_vsid_shift(ssize)) | SLB_VSID_USER;
 
-	*vsid |= mmu_psize_defs[psize].sllp |
+	vsid |= mmu_psize_defs[psize].sllp |
 		((ssize == MMU_SEGSIZE_1T) ? SLB_VSID_B_1T : 0);
+
+	slb->vsid = vsid;
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(copro_calc_full_va);
+EXPORT_SYMBOL_GPL(copro_calc_slb);
 
 void copro_flush_all_slbs(struct mm_struct *mm)
 {

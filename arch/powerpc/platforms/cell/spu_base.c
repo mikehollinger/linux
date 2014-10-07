@@ -76,10 +76,6 @@ static LIST_HEAD(spu_full_list);
 static DEFINE_SPINLOCK(spu_full_list_lock);
 static DEFINE_MUTEX(spu_full_list_mutex);
 
-struct spu_slb {
-	u64 esid, vsid;
-};
-
 void spu_invalidate_slbs(struct spu *spu)
 {
 	struct spu_priv2 __iomem *priv2 = spu->priv2;
@@ -149,7 +145,7 @@ static void spu_restart_dma(struct spu *spu)
 	}
 }
 
-static inline void spu_load_slb(struct spu *spu, int slbe, struct spu_slb *slb)
+static inline void spu_load_slb(struct spu *spu, int slbe, struct copro_slb *slb)
 {
 	struct spu_priv2 __iomem *priv2 = spu->priv2;
 
@@ -167,10 +163,10 @@ static inline void spu_load_slb(struct spu *spu, int slbe, struct spu_slb *slb)
 
 static int __spu_trap_data_seg(struct spu *spu, unsigned long ea)
 {
-	struct spu_slb slb;
+	struct copro_slb slb;
 	int ret;
 
-	ret = copro_calc_full_va(spu->mm, ea, &slb.esid, &slb.vsid);
+	ret = copro_calc_slb(spu->mm, ea, &slb);
 	if (ret)
 		return ret;
 
@@ -220,7 +216,7 @@ static int __spu_trap_data_map(struct spu *spu, unsigned long ea, u64 dsisr)
 	return 0;
 }
 
-static void __spu_kernel_slb(void *addr, struct spu_slb *slb)
+static void __spu_kernel_slb(void *addr, struct copro_slb *slb)
 {
 	unsigned long ea = (unsigned long)addr;
 	u64 llp;
@@ -239,7 +235,7 @@ static void __spu_kernel_slb(void *addr, struct spu_slb *slb)
  * Given an array of @nr_slbs SLB entries, @slbs, return non-zero if the
  * address @new_addr is present.
  */
-static inline int __slb_present(struct spu_slb *slbs, int nr_slbs,
+static inline int __slb_present(struct copro_slb *slbs, int nr_slbs,
 		void *new_addr)
 {
 	unsigned long ea = (unsigned long)new_addr;
@@ -264,7 +260,7 @@ static inline int __slb_present(struct spu_slb *slbs, int nr_slbs,
 void spu_setup_kernel_slbs(struct spu *spu, struct spu_lscsa *lscsa,
 		void *code, int code_size)
 {
-	struct spu_slb slbs[4];
+	struct copro_slb slbs[4];
 	int i, nr_slbs = 0;
 	/* start and end addresses of both mappings */
 	void *addrs[] = {
