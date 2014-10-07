@@ -107,13 +107,19 @@ Work Element Descriptor (WED)
 User API
 ========
 
-    The driver will create two character devices per AFU under
-    /dev/cxl. One for master and one for slave contexts.
+    For AFUs operating in the AFU directed model, the driver will
+    create two character devices per AFU under /dev/cxl. One for
+    master and one for slave contexts.
 
     The master context (eg. /dev/cxl/afu0.0m), has access to all of
     the MMIO space that an AFU provides. The slave context
     (eg. /dev/cxl/afu0.0) has access to only the per process MMIO
     space an AFU provides (AFU directed only).
+
+    For AFUs operating in the dedicated process model, the driver will
+    only create a single character device per AFU (e.g.
+    /dev/cxl/afu0.0), which has access to the entire MMIO space that
+    the AFU provides.
 
     The following file operations are supported on both slave and
     master devices:
@@ -165,10 +171,8 @@ User API
                     };
 
                 flags:
-                    User specified flags for the kernel to ignore
-                    these fields. The amr and num_interrupts field
-                    will be ignored by the kernel unless the
-                    respective CXL_START_WORK_* flags are set.
+                    Indicates which optional fields (e.g. amr,
+                    num_interrupts) in the structure are valid.
 
                 wed:
                     The Work Element Descriptor (WED) is a 64bit
@@ -202,13 +206,12 @@ User API
         An AFU may have a MMIO space to facilitate communication with
         the AFU and mmap allows access to this. The size and contents
         of this area are specific to the particular AFU. The size can
-        be discovered via sysfs. A read of all ones indicates the AFU
-        has encountered an error and CXL_IOCTL_CHECK_ERROR should be
-        used to recover the AFU.
+        be discovered via sysfs.
 
-        Master contexts will get all of the MMIO space. Slave
-        contexts will get only the per process space associated with
-        its context.
+        In the AFU directed model, master contexts will get all of the
+        MMIO space and slave contexts will get only the per process
+        space associated with its context. In the dedicated process
+        model the entire MMIO space is always mapped.
 
         This mmap call must be done after the IOCTL is started.
 
@@ -291,27 +294,28 @@ User API
 
         If a data storage event is received, the full structure received is:
                 struct cxl_event_data_storage {
-                        __u32 flags;
-                        __u32 reserved1;
+                        __u16 flags;
+                        __u16 reserved1;
+                        __u32 reserved2;
                         __u64 addr;
                         __u64 dsisr;
-                        __u64 reserved1;
+                        __u64 reserved3;
                 };
 
             flags:
                 These flags indicate which optional fields are present
                 in this struct. Currently all fields are Mandatory.
 
-            dsisr: Manditory
-                These fields give information on the type of
-                fault. Copy of the DSISR from PSL hardware when
-                address fault occured.
-
             address: Mandatory
                 Address of the data storage trying to be accessed by
                 the AFU. Valid accesses will handled transparently by
                 the kernel but invalid access will generate this
                 event.
+
+            dsisr: Manditory
+                These fields give information on the type of
+                fault. Copy of the DSISR from PSL hardware when
+                address fault occured.
 
             reserved fields:
                 For future extensions
