@@ -261,9 +261,11 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 
 	spin_lock_irqsave(&ctx->lock, flags);
 
-	prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
+	for (;;) {
+		prepare_to_wait(&ctx->wq, &wait, TASK_INTERRUPTIBLE);
+		if (ctx_event_pending(ctx))
+			break;
 
-	while (!ctx_event_pending(ctx)) {
 		spin_unlock_irqrestore(&ctx->lock, flags);
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
