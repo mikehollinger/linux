@@ -56,6 +56,9 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 	ctx->pending_fault = false;
 	ctx->pending_afu_err = false;
 
+	mutex_init(&ctx->status_mutex);
+
+	/* Don't need to lock just writing this */
 	ctx->status = OPENED;
 
 	idr_preload(GFP_KERNEL);
@@ -113,10 +116,10 @@ static void __detach_context(struct cxl_context *ctx)
 	unsigned long flags;
 	enum cxl_context_status status;
 
-	spin_lock_irqsave(&ctx->sst_lock, flags);
+	mutex_lock(&ctx->status_mutex);
 	status = ctx->status;
 	ctx->status = CLOSED;
-	spin_unlock_irqrestore(&ctx->sst_lock, flags);
+	mutex_unlock(&ctx->status_mutex);
 	if (status != STARTED)
 		return;
 

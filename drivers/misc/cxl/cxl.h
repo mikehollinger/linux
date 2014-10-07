@@ -399,7 +399,13 @@ struct cxl_context {
 	u64 fault_addr;
 	u64 fault_dsisr;
 	u64 afu_err;
+
+	/* This status and it's lock pretects start and detach context
+	 * from racing.  It also prevents detach from racing with
+	 * itself
+	 */
 	enum cxl_context_status status;
+	struct mutex status_mutex;
 
 
 	/* XXX: Is it possible to need multiple work items at once? */

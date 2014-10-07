@@ -135,6 +135,7 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 
 	pr_devel("%s: pe: %i\n", __func__, ctx->pe);
 
+	mutex_lock(&ctx->status_mutex);
 	if (ctx->status != OPENED)
 		return -EIO;
 
@@ -165,6 +166,7 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 		return rc;
 
 	ctx->status = STARTED;
+	mutex_unlock(&ctx->status_mutex);
 
 	return 0;
 }
