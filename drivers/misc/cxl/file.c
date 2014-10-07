@@ -47,7 +47,6 @@
 dev_t cxl_dev;
 
 struct class *cxl_class;
-EXPORT_SYMBOL(cxl_class);
 
 static int __afu_open(struct inode *inode, struct file *file, bool master)
 {
@@ -436,7 +435,6 @@ int cxl_register_afu(struct cxl_afu *afu)
 
 	return device_register(&afu->dev);
 }
-EXPORT_SYMBOL(cxl_register_afu);
 
 int cxl_register_adapter(struct cxl *adapter)
 {
@@ -449,7 +447,6 @@ int cxl_register_adapter(struct cxl *adapter)
 
 	return device_register(&adapter->dev);
 }
-EXPORT_SYMBOL(cxl_register_adapter);
 
 int __init cxl_file_init(void)
 {

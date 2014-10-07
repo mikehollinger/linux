@@ -317,7 +317,6 @@ err:
 		device_remove_file(&adapter->dev, &adapter_attrs[i]);
 	return rc;
 }
-EXPORT_SYMBOL(cxl_sysfs_adapter_add);
 void cxl_sysfs_adapter_remove(struct cxl *adapter)
 {
 	int i;
@@ -325,7 +324,6 @@ void cxl_sysfs_adapter_remove(struct cxl *adapter)
 	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++)
 		device_remove_file(&adapter->dev, &adapter_attrs[i]);
 }
-EXPORT_SYMBOL(cxl_sysfs_adapter_remove);
 
 int cxl_sysfs_afu_add(struct cxl_afu *afu)
 {
@@ -350,7 +348,6 @@ err:
 		device_remove_file(&afu->dev, &afu_attrs[afu_attr]);
 	return rc;
 }
-EXPORT_SYMBOL(cxl_sysfs_afu_add);
 
 void cxl_sysfs_afu_remove(struct cxl_afu *afu)
 {
@@ -361,4 +358,3 @@ void cxl_sysfs_afu_remove(struct cxl_afu *afu)
 	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++)
 		device_remove_file(&afu->dev, &afu_attrs[i]);
 }
-EXPORT_SYMBOL(cxl_sysfs_afu_remove);

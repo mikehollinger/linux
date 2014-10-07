@@ -150,7 +150,6 @@ void cxl_context_detach_all(struct cxl_afu *afu)
 		__detach_context(ctx);
 	rcu_read_unlock();
 }
-EXPORT_SYMBOL(cxl_context_detach_all);
 
 void cxl_context_free(struct cxl_context *ctx)
 {

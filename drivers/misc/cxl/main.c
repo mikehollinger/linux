@@ -30,7 +30,6 @@ static DEFINE_SPINLOCK(adapter_idr_lock);
 static DEFINE_IDR(cxl_adapter_idr);
 
 uint cxl_verbose;
-EXPORT_SYMBOL(cxl_verbose);
 module_param_named(verbose, cxl_verbose, uint, 0600);
 MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
 
@@ -171,13 +170,11 @@ int cxl_alloc_adapter_nr(struct cxl *adapter)
 
 	return 0;
 }
-EXPORT_SYMBOL(cxl_alloc_adapter_nr);
 
 void cxl_remove_adapter_nr(struct cxl *adapter)
 {
 	idr_remove(&cxl_adapter_idr, adapter->adapter_num);
 }
-EXPORT_SYMBOL(cxl_remove_adapter_nr);
 
 int cxl_afu_select_best_model(struct cxl_afu *afu)
 {
@@ -191,7 +188,6 @@ int cxl_afu_select_best_model(struct cxl_afu *afu)
 	/* We don't fail this so the user can inspect sysfs */
 	return 0;
 }
-EXPORT_SYMBOL(cxl_afu_select_best_model);
 
 static int __init init_cxl(void)
 {

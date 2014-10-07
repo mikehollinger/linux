@@ -66,7 +66,6 @@ void cxl_slbia(struct mm_struct *mm)
 
 	cxl_calls_put(calls);
 }
-EXPORT_SYMBOL(cxl_slbia);
 
 int register_cxl_calls(struct cxl_calls *calls)
 {

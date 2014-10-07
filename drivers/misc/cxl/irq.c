@@ -307,7 +307,6 @@ int cxl_register_psl_err_irq(struct cxl *adapter)
 
 	return 0;
 }
-EXPORT_SYMBOL(cxl_register_psl_err_irq);
 
 void cxl_release_psl_err_irq(struct cxl *adapter)
 {
@@ -315,7 +314,6 @@ void cxl_release_psl_err_irq(struct cxl *adapter)
 	cxl_unmap_irq(adapter->err_virq, adapter);
 	cxl_release_one_irq(adapter, adapter->err_hwirq);
 }
-EXPORT_SYMBOL(cxl_release_psl_err_irq);
 
 int cxl_register_serr_irq(struct cxl_afu *afu)
 {
@@ -333,7 +331,6 @@ int cxl_register_serr_irq(struct cxl_afu *afu)
 
 	return 0;
 }
-EXPORT_SYMBOL(cxl_register_serr_irq);
 
 void cxl_release_serr_irq(struct cxl_afu *afu)
 {
@@ -341,21 +338,18 @@ void cxl_release_serr_irq(struct cxl_afu *afu)
 	cxl_unmap_irq(afu->serr_virq, afu);
 	cxl_release_one_irq(afu->adapter, afu->serr_hwirq);
 }
-EXPORT_SYMBOL(cxl_release_serr_irq);
 
 int cxl_register_psl_irq(struct cxl_afu *afu)
 {
 	return cxl_register_one_irq(afu->adapter, cxl_irq_multiplexed, afu,
 			&afu->psl_hwirq, &afu->psl_virq);
 }
-EXPORT_SYMBOL(cxl_register_psl_irq);
 
 void cxl_release_psl_irq(struct cxl_afu *afu)
 {
 	cxl_unmap_irq(afu->psl_virq, afu);
 	cxl_release_one_irq(afu->adapter, afu->psl_hwirq);
 }
-EXPORT_SYMBOL(cxl_release_psl_irq);
 
 int afu_register_irqs(struct cxl_context *ctx, u32 count)
 {

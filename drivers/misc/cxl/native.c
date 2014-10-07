@@ -575,7 +575,6 @@ int cxl_afu_deactivate_model(struct cxl_afu *afu)
 {
 	return _cxl_afu_deactivate_model(afu, afu->current_model);
 }
-EXPORT_SYMBOL(cxl_afu_deactivate_model);
 
 int cxl_afu_activate_model(struct cxl_afu *afu, int model)
 {
@@ -591,7 +590,6 @@ int cxl_afu_activate_model(struct cxl_afu *afu, int model)
 
 	return -EINVAL;
 }
-EXPORT_SYMBOL(cxl_afu_activate_model);
 
 int cxl_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
 {
