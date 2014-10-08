@@ -112,14 +112,16 @@ static irqreturn_t cxl_irq(int irq, void *data)
 	pr_devel("CXL interrupt %i for afu pe: %i DSISR: %#llx DAR: %#llx\n", irq, ctx->pe, dsisr, dar);
 
 	if (dsisr & CXL_PSL_DSISR_An_DS) {
-		/* We don't inherently need to sleep to handle this, but we do
+		/*
+		 * We don't inherently need to sleep to handle this, but we do
 		 * need to get a ref to the task's mm, which we can't do from
 		 * irq context without the potential for a deadlock since it
 		 * takes the task_lock. An alternate option would be to keep a
 		 * reference to the task's mm the entire time it has cxl open,
 		 * but to do that we need to solve the issue where we hold a
 		 * ref to the mm, but the mm can hold a ref to the fd after an
-		 * mmap preventing anything from being cleaned up. */
+		 * mmap preventing anything from being cleaned up.
+		 */
 		pr_devel("Scheduling segment miss handling for later pe: %i\n", ctx->pe);
 		return schedule_cxl_fault(ctx, dsisr, dar);
 	}
@@ -136,9 +138,11 @@ static irqreturn_t cxl_irq(int irq, void *data)
 		pr_devel("CXL interrupt: Access not permitted by virtual page class key protection\n");
 
 	if (dsisr & CXL_PSL_DSISR_An_DM) {
-		/* In some cases we might be able to handle the fault
+		/*
+		 * In some cases we might be able to handle the fault
 		 * immediately if hash_page would succeed, but we still need
-		 * the task's mm, which as above we can't get without a lock */
+		 * the task's mm, which as above we can't get without a lock
+		 */
 		pr_devel("Scheduling page fault handling for later pe: %i\n", ctx->pe);
 		return schedule_cxl_fault(ctx, dsisr, dar);
 	}
@@ -152,11 +156,13 @@ static irqreturn_t cxl_irq(int irq, void *data)
 		pr_devel("CXL interrupt: AFU Error %.llx\n", irq_info.afu_err);
 
 		if (ctx->pending_afu_err) {
-			/* This shouldn't happen - the PSL treats these errors
+			/*
+			 * This shouldn't happen - the PSL treats these errors
 			 * as fatal and will have reset the AFU, so there's not
 			 * much point buffering multiple AFU errors.
 			 * OTOH if we DO ever see a storm of these come in it's
-			 * probably best that we log them somewhere: */
+			 * probably best that we log them somewhere:
+			 */
 			dev_err_ratelimited(&ctx->afu->dev, "CXL AFU Error "
 					    "undelivered to pe %i: %.llx\n",
 					    ctx->pe, irq_info.afu_err);

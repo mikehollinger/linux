@@ -135,7 +135,8 @@ int cxl_psl_purge(struct cxl_afu *afu)
 
 static int spa_max_procs(int spa_size)
 {
-	/* From the CAIA:
+	/*
+	 * From the CAIA:
 	 *    end_of_SPA_area = SPA_Base + ((n+4) * 128) + (( ((n*8) + 127) >> 7) * 128) + 255
 	 * Most of that junk is really just an overly-complicated way of saying
 	 * the last 256 bytes are __aligned(128), so it's really:
@@ -295,7 +296,8 @@ static int do_process_element_cmd(struct cxl_context *ctx,
 		if ((state & (CXL_SPA_SW_CMD_MASK | CXL_SPA_SW_STATE_MASK  | CXL_SPA_SW_LINK_MASK)) ==
 		    (cmd | (cmd >> 16) | ctx->pe))
 			break;
-		/* The command won't finish in the PSL if there are
+		/*
+		 * The command won't finish in the PSL if there are
 		 * outstanding DSIs.  Hence we need to yield here in
 		 * case there are outstanding DSIs that we need to
 		 * service.  Tuning possiblity: we could wait for a
@@ -604,7 +606,8 @@ static inline int detach_process_native_dedicated(struct cxl_context *ctx)
 	return 0;
 }
 
-/* TODO: handle case when this is called inside a rcu_read_lock() which may
+/*
+ * TODO: handle case when this is called inside a rcu_read_lock() which may
  * happen when we unbind the driver (ie. cxl_context_detach_all()) .  Terminate
  * & remove use a mutex lock and schedule which will not good with lock held.
  * May need to write do_process_element_cmd() that handles outstanding page

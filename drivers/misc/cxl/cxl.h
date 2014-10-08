@@ -29,13 +29,15 @@ extern uint cxl_verbose;
 
 #define CXL_TIMEOUT 5
 
-/* Bump version each time a user API change is made, whether it is
+/*
+ * Bump version each time a user API change is made, whether it is
  * backwards compatible ot not.
  */
 #define CXL_API_VERSION 1
 #define CXL_API_VERSION_COMPATIBLE 1
 
-/* Opaque types to avoid accidentally passing registers for the wrong MMIO
+/*
+ * Opaque types to avoid accidentally passing registers for the wrong MMIO
  *
  * At the end of the day, I'm not married to using typedef here, but it might
  * (and has!) help avoid bugs like mixing up CXL_PSL_CtxTime and
@@ -351,7 +353,8 @@ struct cxl_afu {
 	struct mutex spa_mutex;
 	spinlock_t afu_cntl_lock;
 
-	/* Only the first part of the SPA is used for the process element
+	/*
+	 * Only the first part of the SPA is used for the process element
 	 * linked list. The only other part that software needs to worry about
 	 * is sw_command_status, which we store a separate pointer to.
 	 * Everything else in the SPA is only used by hardware
@@ -376,7 +379,8 @@ struct cxl_afu {
 	bool enabled;
 };
 
-/* This is a cxl context.  If the PSL is in dedicated model, there will be one
+/*
+ * This is a cxl context.  If the PSL is in dedicated model, there will be one
  * of these per AFU.  If in AFU directed there can be lots of these.
  */
 struct cxl_context {
@@ -403,7 +407,8 @@ struct cxl_context {
 	u64 fault_dsisr;
 	u64 afu_err;
 
-	/* This status and it's lock pretects start and detach context
+	/*
+	 * This status and it's lock pretects start and detach context
 	 * from racing.  It also prevents detach from racing with
 	 * itself
 	 */

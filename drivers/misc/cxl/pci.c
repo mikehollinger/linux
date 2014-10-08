@@ -126,8 +126,10 @@ static DEFINE_PCI_DEVICE_TABLE(cxl_pci_tbl) = {
 MODULE_DEVICE_TABLE(pci, cxl_pci_tbl);
 
 
-/* Mostly using these wrappers to avoid confusion:
- * priv 1 is BAR2, while priv 2 is BAR0 */
+/*
+ * Mostly using these wrappers to avoid confusion:
+ * priv 1 is BAR2, while priv 2 is BAR0
+ */
 static inline resource_size_t p1_base(struct pci_dev *dev)
 {
 	return pci_resource_start(dev, 2);
@@ -398,19 +400,18 @@ static int setup_cxl_bars(struct pci_dev *dev)
 		return -ENODEV;
 	}
 
-	/* BAR 4/5 has a special meaning for CXL and must be programmed with a
+	/*
+	 * BAR 4/5 has a special meaning for CXL and must be programmed with a
 	 * special value corresponding to the CXL protocol address range.
-	 * For POWER 8 that means bits 48:49 must be set to 10 */
+	 * For POWER 8 that means bits 48:49 must be set to 10
+	 */
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_4, 0x00000000);
 	pci_write_config_dword(dev, PCI_BASE_ADDRESS_5, 0x00020000);
 
 	return 0;
 }
 
-/*
- *  pciex node: ibm,opal-m64-window = <0x3d058 0x0 0x3d058 0x0 0x8 0x0>;
- */
-
+/* pciex node: ibm,opal-m64-window = <0x3d058 0x0 0x3d058 0x0 0x8 0x0>; */
 static int switch_card_to_cxl(struct pci_dev *dev)
 {
 	int vsec;
@@ -434,7 +435,8 @@ static int switch_card_to_cxl(struct pci_dev *dev)
 		dev_err(&dev->dev, "failed to enable CXL protocol: %i", rc);
 		return rc;
 	}
-	/* The CAIA spec (v0.12 11.6 Bi-modal Device Support) states
+	/*
+	 * The CAIA spec (v0.12 11.6 Bi-modal Device Support) states
 	 * we must wait 100ms after this mode switch before touching
 	 * PCIe config space.
 	 */
@@ -555,9 +557,11 @@ static int sanitise_afu_regs(struct cxl_afu *afu)
 {
 	u64 reg;
 
-	/* Clear out any regs that contain either an IVTE or address or may be
+	/*
+	 * Clear out any regs that contain either an IVTE or address or may be
 	 * waiting on an acknowledgement to try to be a bit safer as we bring
-	 * it online */
+	 * it online
+	 */
 	reg = cxl_p2n_read(afu, CXL_AFU_Cntl_An);
 	if ((reg & CXL_AFU_Cntl_An_ES_MASK) != CXL_AFU_Cntl_An_ES_Disabled) {
 		dev_warn(&afu->dev, "WARNING: AFU was not disabled: %#.16llx\n", reg);
@@ -645,8 +649,10 @@ static int cxl_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 	/* Don't care if this fails */
 	cxl_debugfs_afu_add(afu);
 
-	/* After we call this function we must not free the afu directly, even
-	 * if it returns an error! */
+	/*
+	 * After we call this function we must not free the afu directly, even
+	 * if it returns an error!
+	 */
 	if ((rc = cxl_register_afu(afu)))
 		goto err_put1;
 
@@ -893,8 +899,10 @@ static struct cxl *cxl_init_adapter(struct pci_dev *dev)
 	/* Don't care if this one fails: */
 	cxl_debugfs_adapter_add(adapter);
 
-	/* After we call this function we must not free the adapter directly,
-	 * even if it returns an error! */
+	/*
+	 * After we call this function we must not free the adapter directly,
+	 * even if it returns an error!
+	 */
 	if ((rc = cxl_register_adapter(adapter)))
 		goto err_put1;
 
@@ -977,8 +985,10 @@ static void cxl_remove(struct pci_dev *dev)
 
 	dev_warn(&dev->dev, "pci remove\n");
 
-	/* Lock to prevent someone grabbing a ref through the adapter list as
-	 * we are removing it */
+	/*
+	 * Lock to prevent someone grabbing a ref through the adapter list as
+	 * we are removing it
+	 */
 	for (afu = 0; afu < adapter->slices; afu++)
 		cxl_remove_afu(adapter->afu[afu]);
 	cxl_remove_adapter(adapter);

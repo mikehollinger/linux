@@ -256,8 +256,10 @@ static ssize_t model_store(struct device *device,
 		goto err;
 	}
 
-	/* cxl_afu_deactivate_model needs to be done outside the lock, prevent
-	 * other contexts coming in before we are ready: */
+	/*
+	 * cxl_afu_deactivate_model needs to be done outside the lock, prevent
+	 * other contexts coming in before we are ready:
+	 */
 	old_model = afu->current_model;
 	afu->current_model = 0;
 	afu->num_procs = 0;

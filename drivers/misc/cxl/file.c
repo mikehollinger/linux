@@ -119,7 +119,8 @@ static int afu_release(struct inode *inode, struct file *file)
 
 	put_device(&ctx->afu->dev);
 
-	/* At this this point all bottom halfs have finished and we should be
+	/*
+	 * At this this point all bottom halfs have finished and we should be
 	 * getting no more IRQs from the hardware for this context.  Once it's
 	 * removed from the IDR (and RCU synchronised) it's safe to free the
 	 * sstp and context.
@@ -151,7 +152,8 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 		goto out;
 	}
 
-	/* if any of the reserved fields are set or any of the unused
+	/*
+	 * if any of the reserved fields are set or any of the unused
 	 * flags are set it's invalid
 	 */
 	if (work.reserved1 || work.reserved2 || work.reserved3 ||
@@ -367,12 +369,16 @@ static char *cxl_devnode(struct device *dev, umode_t *mode)
 	struct cxl_afu *afu;
 
 	if (CXL_DEVT_IS_CARD(dev->devt)) {
-		/* These minor numbers will eventually be used to program the
-		 * PSL and AFUs once we have dynamic reprogramming support */
+		/*
+		 * These minor numbers will eventually be used to program the
+		 * PSL and AFUs once we have dynamic reprogramming support
+		 */
 		return NULL;
 	} else { /* CXL_DEVT_IS_AFU */
-		/* Default character devices in each programming model just get
-		 * named /dev/cxl/afuX.Y */
+		/*
+		 * Default character devices in each programming model just get
+		 * named /dev/cxl/afuX.Y
+		 */
 		afu = dev_get_drvdata(dev);
 		if ((afu->current_model == CXL_MODEL_DEDICATED) &&
 				CXL_DEVT_IS_AFU_M(dev->devt))
@@ -463,7 +469,8 @@ int cxl_register_adapter(struct cxl *adapter)
 {
 	adapter->dev.class = cxl_class;
 
-	/* Future: When we support dynamically reprogramming the PSL & AFU we
+	/*
+	 * Future: When we support dynamically reprogramming the PSL & AFU we
 	 * will expose the interface to do that via a chardev:
 	 * adapter->dev.devt = CXL_CARD_MKDEV(adapter);
 	 */
@@ -475,7 +482,8 @@ int __init cxl_file_init(void)
 {
 	int rc;
 
-	/* If these change we really need to update API.  Either change some
+	/*
+	 * If these change we really need to update API.  Either change some
 	 * flags or update API version number CXL_API_VERSION.
 	 */
 	BUILD_BUG_ON(CXL_API_VERSION != 1);
