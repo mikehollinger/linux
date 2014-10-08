@@ -63,7 +63,7 @@ irqreturn_t cxl_slice_irq_err(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-irqreturn_t cxl_irq_err(int irq, void *data)
+static irqreturn_t cxl_irq_err(int irq, void *data)
 {
 	struct cxl *adapter = data;
 	u64 fir1, fir2, err_ivte;
