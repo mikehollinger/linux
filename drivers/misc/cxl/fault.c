@@ -34,7 +34,7 @@ static struct cxl_sste* find_free_sste(struct cxl_sste *primary_group,
 	for (i = 0; i < 2; i++) {
 		for (entry = 0; entry < 8; entry++) {
 			sste = group + entry;
-			if (!(sste->esid_data & SLB_ESID_V))
+			if (!(be64_to_cpu(sste->esid_data) & SLB_ESID_V))
 				return sste;
 		}
 		if (!sec_hash)
