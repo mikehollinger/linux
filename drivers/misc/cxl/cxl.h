@@ -496,39 +496,37 @@ struct cxl_process_element {
 	__be32 software_state;
 } __packed;
 
-#define _cxl_reg_write(addr, val) \
-	out_be64((u64 __iomem *)(addr), val)
-#define _cxl_reg_read(addr) \
-	in_be64((u64 __iomem *)(addr))
-
 static inline void __iomem *_cxl_p1_addr(struct cxl *cxl, cxl_p1_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
 	return cxl->p1_mmio + cxl_reg_off(reg);
 }
+
 #define cxl_p1_write(cxl, reg, val) \
-	_cxl_reg_write(_cxl_p1_addr(cxl, reg), val)
+	out_be64(_cxl_p1_addr(cxl, reg), val)
 #define cxl_p1_read(cxl, reg) \
-	_cxl_reg_read(_cxl_p1_addr(cxl, reg))
+	in_be64(_cxl_p1_addr(cxl, reg))
 
 static inline void __iomem *_cxl_p1n_addr(struct cxl_afu *afu, cxl_p1n_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
 	return afu->p1n_mmio + cxl_reg_off(reg);
 }
+
 #define cxl_p1n_write(afu, reg, val) \
-	_cxl_reg_write(_cxl_p1n_addr(afu, reg), val)
+	out_be64(_cxl_p1n_addr(afu, reg), val)
 #define cxl_p1n_read(afu, reg) \
-	_cxl_reg_read(_cxl_p1n_addr(afu, reg))
+	in_be64(_cxl_p1n_addr(afu, reg))
 
 static inline void __iomem *_cxl_p2n_addr(struct cxl_afu *afu, cxl_p2n_reg_t reg)
 {
 	return afu->p2n_mmio + cxl_reg_off(reg);
 }
+
 #define cxl_p2n_write(afu, reg, val) \
-	_cxl_reg_write(_cxl_p2n_addr(afu, reg), val)
+	out_be64(_cxl_p2n_addr(afu, reg), val)
 #define cxl_p2n_read(afu, reg) \
-	_cxl_reg_read(_cxl_p2n_addr(afu, reg))
+	in_be64(_cxl_p2n_addr(afu, reg))
 
 struct cxl_calls {
 	void (*cxl_slbia)(struct mm_struct *mm);

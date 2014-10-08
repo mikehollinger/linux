@@ -34,13 +34,13 @@ void cxl_stop_trace(struct cxl *adapter)
 /* Helpers to export CXL mmaped IO registers via debugfs */
 static int debugfs_io_u64_get(void *data, u64 *val)
 {
-	*val = _cxl_reg_read(data);
+	*val = in_be64((u64 __iomem *)data);
 	return 0;
 }
 
 static int debugfs_io_u64_set(void *data, u64 val)
 {
-	_cxl_reg_write(data, val);
+	out_be64((u64 __iomem *)data, val);
 	return 0;
 }
 DEFINE_SIMPLE_ATTRIBUTE(fops_io_x64, debugfs_io_u64_get, debugfs_io_u64_set, "0x%016llx\n");
