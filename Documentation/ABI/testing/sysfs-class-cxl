@@ -26,19 +26,19 @@ Description:    read only
                 Decimal value of the size of the MMIO space that may be mmaped
                 by userspace.
 
-What:           /sys/class/cxl/<afu>/models_supported
+What:           /sys/class/cxl/<afu>/modes_supported
 Date:           September 2014
 Contact:        linuxppc-dev@lists.ozlabs.org
 Description:    read only
-                List of the models this AFU supports. One per line.
+                List of the modes this AFU supports. One per line.
                 Valid entries are: "dedicated_process" and "afu_directed"
 
-What:           /sys/class/cxl/<afu>/model
+What:           /sys/class/cxl/<afu>/mode
 Date:           September 2014
 Contact:        linuxppc-dev@lists.ozlabs.org
 Description:    read/write
-                The current model the AFU is using. Will be one of the models
-                given in models_supported. Writing will change the model
+                The current mode the AFU is using. Will be one of the modes
+                given in modes_supported. Writing will change the mode
                 provided that no user contexts are attached.
 
 
