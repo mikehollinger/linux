@@ -46,7 +46,7 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 	ctx->pid = NULL; /* Set in start work ioctl */
 
 	/* Allocate the segment table before we put it in the IDR so that we
-	 * can always access it when dereferenced from the IDR. For the same
+	 * can always access it when dereferenced from IDR. For the same
 	 * reason, the segment table is only destroyed after the context is
 	 * removed from the IDR.  Access to this in the IOCTL is protected by
 	 * Linux filesytem symantics (can't IOCTL until open is complete).
@@ -65,10 +65,22 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 	ctx->pending_fault = false;
 	ctx->pending_afu_err = false;
 
+	/* When we have to destroy all contexts in cxl_context_detach_all() we
+	 * end up with afu_release_irqs() called from inside a
+	 * idr_for_each_entry(). Hence we need to make sure that anything
+	 * dereferenced from this IDR is ok before we allocate the IDR here.
+	 * This clears out the IRQ ranges to ensure this.
+	 */
+	for (i = 0; i < CXL_IRQ_RANGES; i++)
+		ctx->irqs.range[i] = 0;
+
 	mutex_init(&ctx->status_mutex);
 
 	ctx->status = OPENED;
 
+	/* Allocating IDR! We better make sure everything's setup that
+	 * dereferences from it.
+	 */
 	idr_preload(GFP_KERNEL);
 	spin_lock(&afu->contexts_lock);
 	i = idr_alloc(&ctx->afu->contexts_idr, ctx, 0,
@@ -157,6 +169,9 @@ void cxl_context_detach_all(struct cxl_afu *afu)
 
 	rcu_read_lock();
 	idr_for_each_entry(&afu->contexts_idr, ctx, tmp)
+		/* Anything done in here needs to be setup before the IDR is
+		 * created and torn down after the IDR removed
+		 */
 		__detach_context(ctx);
 	rcu_read_unlock();
 }
