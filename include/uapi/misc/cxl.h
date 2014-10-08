@@ -34,7 +34,7 @@ struct cxl_ioctl_start_work {
 /* IOCTL numbers */
 #define CXL_MAGIC 0xCA
 #define CXL_IOCTL_START_WORK		_IOW(CXL_MAGIC, 0x00, struct cxl_ioctl_start_work)
-#define CXL_IOCTL_GET_PROCESS_ELEMENT	_IOR(CXL_MAGIC, 0x01, int)
+#define CXL_IOCTL_GET_PROCESS_ELEMENT	_IOR(CXL_MAGIC, 0x01, __u32)
 
 /* Events from read() */
 #define CXL_READ_MIN_SIZE 0x1000 /* 4K */

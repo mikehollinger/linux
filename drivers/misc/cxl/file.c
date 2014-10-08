@@ -195,7 +195,7 @@ static long afu_ioctl_process_element(struct cxl_context *ctx,
 {
 	pr_devel("%s: pe: %i\n", __func__, ctx->pe);
 
-	if (copy_to_user(upe, &ctx->pe, sizeof(int)))
+	if (copy_to_user(upe, &ctx->pe, sizeof(__u32)))
 		return -EFAULT;
 
 	return 0;
@@ -213,7 +213,7 @@ static long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case CXL_IOCTL_START_WORK:
 		return afu_ioctl_start_work(ctx, (struct cxl_ioctl_start_work __user *)arg);
 	case CXL_IOCTL_GET_PROCESS_ELEMENT:
-		return afu_ioctl_process_element(ctx, (int __user *)arg);
+		return afu_ioctl_process_element(ctx, (__u32 __user *)arg);
 	}
 	return -EINVAL;
 }
