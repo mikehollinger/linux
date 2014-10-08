@@ -7,8 +7,6 @@
  * 2 of the License, or (at your option) any later version.
  */
 
-#undef DEBUG
-
 #include <linux/spinlock.h>
 #include <linux/module.h>
 #include <linux/export.h>

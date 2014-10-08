@@ -7,8 +7,6 @@
  * 2 of the License, or (at your option) any later version.
  */
 
-#undef DEBUG
-
 #include <linux/pci_regs.h>
 #include <linux/pci_ids.h>
 #include <linux/device.h>
