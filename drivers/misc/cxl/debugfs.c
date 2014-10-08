@@ -31,6 +31,26 @@ void cxl_stop_trace(struct cxl *adapter)
 	spin_unlock(&adapter->afu_list_lock);
 }
 
+/* Helpers to export CXL mmaped IO registers via debugfs */
+static int debugfs_io_u64_get(void *data, u64 *val)
+{
+	*val = _cxl_reg_read(data);
+	return 0;
+}
+
+static int debugfs_io_u64_set(void *data, u64 val)
+{
+	_cxl_reg_write(data, val);
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(fops_io_x64, debugfs_io_u64_get, debugfs_io_u64_set, "0x%016llx\n");
+
+static struct dentry *debugfs_create_io_x64(const char *name, umode_t mode,
+					    struct dentry *parent, u64 *value)
+{
+	return debugfs_create_file(name, mode, parent, value, &fops_io_x64);
+}
+
 int cxl_debugfs_adapter_add(struct cxl *adapter)
 {
 	struct dentry *dir;
@@ -45,12 +65,12 @@ int cxl_debugfs_adapter_add(struct cxl *adapter)
 		return PTR_ERR(dir);
 	adapter->debugfs = dir;
 
-	debugfs_create_x64("fir1",     S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_FIR1));
-	debugfs_create_x64("fir2",     S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_FIR2));
-	debugfs_create_x64("fir_cntl", S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_FIR_CNTL));
-	debugfs_create_x64("err_ivte", S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_ErrIVTE));
+	debugfs_create_io_x64("fir1",     S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_FIR1));
+	debugfs_create_io_x64("fir2",     S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_FIR2));
+	debugfs_create_io_x64("fir_cntl", S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_FIR_CNTL));
+	debugfs_create_io_x64("err_ivte", S_IRUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_ErrIVTE));
 
-	debugfs_create_x64("trace", S_IRUSR | S_IWUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_TRACE));
+	debugfs_create_io_x64("trace", S_IRUSR | S_IWUSR, dir, _cxl_p1_addr(adapter, CXL_PSL_TRACE));
 
 	return 0;
 }
@@ -74,18 +94,18 @@ int cxl_debugfs_afu_add(struct cxl_afu *afu)
 		return PTR_ERR(dir);
 	afu->debugfs = dir;
 
-	debugfs_create_x64("fir",        S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
-	debugfs_create_x64("serr",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SERR_An));
-	debugfs_create_x64("afu_debug",  S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_AFU_DEBUG_An));
-	debugfs_create_x64("sr",         S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SR_An));
+	debugfs_create_io_x64("fir",        S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_FIR_SLICE_An));
+	debugfs_create_io_x64("serr",       S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SERR_An));
+	debugfs_create_io_x64("afu_debug",  S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_AFU_DEBUG_An));
+	debugfs_create_io_x64("sr",         S_IRUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SR_An));
 
-	debugfs_create_x64("dsisr",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DSISR_An));
-	debugfs_create_x64("dar",        S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DAR_An));
-	debugfs_create_x64("sstp0",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP0_An));
-	debugfs_create_x64("sstp1",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP1_An));
-	debugfs_create_x64("err_status", S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_ErrStat_An));
+	debugfs_create_io_x64("dsisr",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DSISR_An));
+	debugfs_create_io_x64("dar",        S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_DAR_An));
+	debugfs_create_io_x64("sstp0",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP0_An));
+	debugfs_create_io_x64("sstp1",      S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_SSTP1_An));
+	debugfs_create_io_x64("err_status", S_IRUSR, dir, _cxl_p2n_addr(afu, CXL_PSL_ErrStat_An));
 
-	debugfs_create_x64("trace", S_IRUSR | S_IWUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SLICE_TRACE));
+	debugfs_create_io_x64("trace", S_IRUSR | S_IWUSR, dir, _cxl_p1n_addr(afu, CXL_PSL_SLICE_TRACE));
 
 	return 0;
 }
