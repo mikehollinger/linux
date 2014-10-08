@@ -36,7 +36,6 @@ MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
 static inline void _cxl_slbia(struct cxl_context *ctx, struct mm_struct *mm)
 {
 	struct task_struct *task;
-	unsigned long flags;
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 		pr_devel("%s unable to get task %i\n",
@@ -50,15 +49,9 @@ static inline void _cxl_slbia(struct cxl_context *ctx, struct mm_struct *mm)
 	pr_devel("%s matched mm - card: %i afu: %i pe: %i\n", __func__,
 		 ctx->afu->adapter->adapter_num, ctx->afu->slice, ctx->pe);
 
-	spin_lock_irqsave(&ctx->sst_lock, flags);
-	if (!ctx->sstp)
-		goto out_unlock;
 	memset(ctx->sstp, 0, ctx->sst_size);
 	mb();
 	cxl_afu_slbia(ctx->afu);
-
-out_unlock:
-	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 out_put:
 	put_task_struct(task);
 }
@@ -95,14 +88,13 @@ struct cxl_calls cxl_calls = {
 	.owner = THIS_MODULE,
 };
 
-int cxl_alloc_sst(struct cxl_context *ctx, u64 *sstp0, u64 *sstp1)
+int cxl_alloc_sst(struct cxl_context *ctx)
 {
 	unsigned long vsid;
-	u64 ea_mask;
-	u64 size;
+	u64 ea_mask, size, sstp0, sstp1;
 
-	*sstp0 = 0;
-	*sstp1 = 0;
+	sstp0 = 0;
+	sstp1 = 0;
 
 	ctx->sst_size = PAGE_SIZE;
 	ctx->sst_lru = 0;
@@ -115,28 +107,32 @@ int cxl_alloc_sst(struct cxl_context *ctx, u64 *sstp0, u64 *sstp1)
 
 	vsid  = get_kernel_vsid((u64)ctx->sstp, mmu_kernel_ssize) << 12;
 
-	*sstp0 |= (u64)mmu_kernel_ssize << CXL_SSTP0_An_B_SHIFT;
-	*sstp0 |= (SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp) << 50;
+	sstp0 |= (u64)mmu_kernel_ssize << CXL_SSTP0_An_B_SHIFT;
+	sstp0 |= (SLB_VSID_KERNEL | mmu_psize_defs[mmu_linear_psize].sllp) << 50;
 
 	size = (((u64)ctx->sst_size >> 8) - 1) << CXL_SSTP0_An_SegTableSize_SHIFT;
 	if (unlikely(size & ~CXL_SSTP0_An_SegTableSize_MASK)) {
 		WARN(1, "Impossible segment table size\n");
 		return -EINVAL;
 	}
-	*sstp0 |= size;
+	sstp0 |= size;
 
 	if (mmu_kernel_ssize == MMU_SEGSIZE_256M)
 		ea_mask = 0xfffff00ULL;
 	else
 		ea_mask = 0xffffffff00ULL;
 
-	*sstp0 |=  vsid >>     (50-14);  /*   Top 14 bits of VSID */
-	*sstp1 |= (vsid << (64-(50-14))) & ~ea_mask;
-	*sstp1 |= (u64)ctx->sstp & ea_mask;
-	*sstp1 |= CXL_SSTP1_An_V;
+	sstp0 |=  vsid >>     (50-14);  /*   Top 14 bits of VSID */
+	sstp1 |= (vsid << (64-(50-14))) & ~ea_mask;
+	sstp1 |= (u64)ctx->sstp & ea_mask;
+	sstp1 |= CXL_SSTP1_An_V;
 
 	pr_devel("Looked up %#llx: slbfee. %#llx (ssize: %x, vsid: %#lx), copied to SSTP0: %#llx, SSTP1: %#llx\n",
-			(u64)ctx->sstp, (u64)ctx->sstp & ESID_MASK, mmu_kernel_ssize, vsid, *sstp0, *sstp1);
+			(u64)ctx->sstp, (u64)ctx->sstp & ESID_MASK, mmu_kernel_ssize, vsid, sstp0, sstp1);
+
+	/* Store calculated sstp hardware points for use later */
+	ctx->sstp0 = sstp0;
+	ctx->sstp1 = sstp1;
 
 	return 0;
 }

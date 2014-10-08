@@ -40,11 +40,19 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 {
 	int i;
 
-	spin_lock_init(&ctx->sst_lock);
-	ctx->sstp = NULL;
 	ctx->afu = afu;
 	ctx->master = master;
 	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
+
+	/* Allocate the segment table before we put it in the IDR so that we
+	 * can always access it when dereferenced from the IDR. For the same
+	 * reason, the segment table is only destroyed after the context is
+	 * removed from the IDR.  Access to this in the IOCTL is protected by
+	 * Linux filesytem symantics (can't IOCTL until open is complete).
+	 */
+	i = cxl_alloc_sst(ctx);
+	if (i)
+		return i;
 
 	INIT_WORK(&ctx->fault_work, cxl_handle_fault);
 
@@ -58,7 +66,6 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 
 	mutex_init(&ctx->status_mutex);
 
-	/* Don't need to lock just writing this */
 	ctx->status = OPENED;
 
 	idr_preload(GFP_KERNEL);
@@ -155,17 +162,13 @@ void cxl_context_detach_all(struct cxl_afu *afu)
 
 void cxl_context_free(struct cxl_context *ctx)
 {
-	unsigned long flags;
-
 	spin_lock(&ctx->afu->contexts_lock);
 	idr_remove(&ctx->afu->contexts_idr, ctx->pe);
 	spin_unlock(&ctx->afu->contexts_lock);
 	synchronize_rcu();
 
-	spin_lock_irqsave(&ctx->sst_lock, flags);
 	free_page((u64)ctx->sstp);
 	ctx->sstp = NULL;
-	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	put_pid(ctx->pid);
 	kfree(ctx);

@@ -119,7 +119,11 @@ static int afu_release(struct inode *inode, struct file *file)
 
 	put_device(&ctx->afu->dev);
 
-	/* It should be safe to remove the context now */
+	/* At this this point all bottom halfs have finished and we should be
+	 * getting no more IRQs from the hardware for this context.  Once it's
+	 * removed from the IDR (and RCU synchronised) it's safe to free the
+	 * sstp and context.
+	 */
 	cxl_context_free(ctx);
 
 	cxl_ctx_put();

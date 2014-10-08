@@ -61,8 +61,6 @@ static void cxl_load_segment(struct cxl_context *ctx, struct copro_slb *slb)
 	struct cxl_sste *sste;
 	unsigned int hash;
 
-	WARN_ON_SMP(!spin_is_locked(&ctx->sst_lock));
-
 	sec_hash = !!(cxl_p1n_read(ctx->afu, CXL_PSL_SR_An) & CXL_PSL_SR_An_SC);
 
 	if (slb->vsid & SLB_VSID_B_1T)
@@ -84,14 +82,11 @@ static int cxl_fault_segment(struct cxl_context *ctx, struct mm_struct *mm,
 			     u64 ea)
 {
 	struct copro_slb slb = {0,0};
-	unsigned long flags;
 	int rc;
 
-	spin_lock_irqsave(&ctx->sst_lock, flags);
 	if (!(rc = copro_calc_slb(mm, ea, &slb))) {
 		cxl_load_segment(ctx, &slb);
 	}
-	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	return rc;
 }
@@ -247,7 +242,6 @@ static void cxl_prefault_vma(struct cxl_context *ctx)
 	int rc;
 	struct task_struct *task;
 	struct mm_struct *mm;
-	unsigned long flags;
 
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 		pr_devel("cxl_prefault_vma unable to get task %i\n",
@@ -260,7 +254,6 @@ static void cxl_prefault_vma(struct cxl_context *ctx)
 		goto out1;
 	}
 
-	spin_lock_irqsave(&ctx->sst_lock, flags);
 	down_read(&mm->mmap_sem);
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		for (ea = vma->vm_start; ea < vma->vm_end;
@@ -277,7 +270,6 @@ static void cxl_prefault_vma(struct cxl_context *ctx)
 		}
 	}
 	up_read(&mm->mmap_sem);
-	spin_unlock_irqrestore(&ctx->sst_lock, flags);
 
 	mmput(mm);
 out1:

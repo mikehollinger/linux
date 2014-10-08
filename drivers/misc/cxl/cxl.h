@@ -386,8 +386,8 @@ struct cxl_context {
 	phys_addr_t psn_phys;
 	u64 psn_size;
 
-	spinlock_t sst_lock; /* Protects segment table */
 	struct cxl_sste *sstp;
+	u64 sstp0, sstp1;
 	unsigned int sst_size, sst_lru;
 
 	wait_queue_head_t wq;
@@ -580,7 +580,7 @@ void cxl_handle_fault(struct work_struct *work);
 void cxl_prefault(struct cxl_context *ctx, u64 wed);
 
 struct cxl *get_cxl_adapter(int num);
-int cxl_alloc_sst(struct cxl_context *ctx, u64 *sstp0, u64 *sstp1);
+int cxl_alloc_sst(struct cxl_context *ctx);
 
 void init_cxl_native(void);
 

@@ -402,8 +402,7 @@ err:
 
 static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 {
-
-	u64 sr, sstp0, sstp1;
+	u64 sr;
 	int r, result;
 
 	assign_psn_space(ctx);
@@ -434,13 +433,10 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 	ctx->elem->common.aurp0 = 0; /* disable */
 	ctx->elem->common.aurp1 = 0; /* disable */
 
-	if ((result = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
-		return result;
-
 	cxl_prefault(ctx, wed);
 
-	ctx->elem->common.sstp0 = cpu_to_be64(sstp0);
-	ctx->elem->common.sstp1 = cpu_to_be64(sstp1);
+	ctx->elem->common.sstp0 = cpu_to_be64(ctx->sstp0);
+	ctx->elem->common.sstp1 = cpu_to_be64(ctx->sstp1);
 
 	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		ctx->elem->ivte_offsets[r] = cpu_to_be16(ctx->irqs.offset[r]);
@@ -503,7 +499,7 @@ static int activate_dedicated_process(struct cxl_afu *afu)
 static int attach_dedicated(struct cxl_context *ctx, u64 wed, u64 amr)
 {
 	struct cxl_afu *afu = ctx->afu;
-	u64 sr, sstp0, sstp1;
+	u64 sr;
 	int rc;
 
 	sr = CXL_PSL_SR_An_SC;
@@ -518,10 +514,7 @@ static int attach_dedicated(struct cxl_context *ctx, u64 wed, u64 amr)
 	cxl_p2n_write(afu, CXL_PSL_PID_TID_An, (u64)current->pid << 32);
 	cxl_p1n_write(afu, CXL_PSL_SR_An, sr);
 
-	if ((rc = cxl_alloc_sst(ctx, &sstp0, &sstp1)))
-		return rc;
-
-	if ((rc = cxl_write_sstp(afu, sstp0, sstp1)))
+	if ((rc = cxl_write_sstp(afu, ctx->sstp0, ctx->sstp1)))
 		return rc;
 
 	cxl_prefault(ctx, wed);
