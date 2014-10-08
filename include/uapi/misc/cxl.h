@@ -80,7 +80,7 @@ struct cxl_event {
 	union {
 		struct cxl_event_afu_interrupt irq;
 		struct cxl_event_data_storage fault;
-		struct cxl_event_afu_error afu_err;
+		struct cxl_event_afu_error afu_error;
 	};
 };
 
