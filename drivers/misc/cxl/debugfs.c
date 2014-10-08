@@ -13,7 +13,7 @@
 
 #include "cxl.h"
 
-struct dentry *cxl_debugfs;
+static struct dentry *cxl_debugfs;
 
 void cxl_stop_trace(struct cxl *adapter)
 {

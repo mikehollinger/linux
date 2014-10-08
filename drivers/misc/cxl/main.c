@@ -83,7 +83,7 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 	spin_unlock(&adapter_idr_lock);
 }
 
-struct cxl_calls cxl_calls = {
+static struct cxl_calls cxl_calls = {
 	.cxl_slbia = cxl_slbia_core,
 	.owner = THIS_MODULE,
 };

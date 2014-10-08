@@ -40,9 +40,9 @@
 
 #define CXL_DEVT_IS_CARD(dev) (MINOR(dev) % CXL_DEV_MINORS == 0)
 
-dev_t cxl_dev;
+static dev_t cxl_dev;
 
-struct class *cxl_class;
+static struct class *cxl_class;
 
 static int __afu_open(struct inode *inode, struct file *file, bool master)
 {
