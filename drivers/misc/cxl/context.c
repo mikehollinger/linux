@@ -43,7 +43,7 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master)
 	spin_lock_init(&ctx->sste_lock);
 	ctx->afu = afu;
 	ctx->master = master;
-	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
+	ctx->pid = NULL; /* Set in start work ioctl */
 
 	/* Allocate the segment table before we put it in the IDR so that we
 	 * can always access it when dereferenced from the IDR. For the same

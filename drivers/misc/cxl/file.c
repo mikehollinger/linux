@@ -174,6 +174,14 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 	if (work.flags & CXL_START_WORK_AMR)
 		amr = work.amr & mfspr(SPRN_UAMOR);
 
+	/*
+	 * We grab the PID here and not in the file open to allow for the case
+	 * where a process (master, some daemon, etc) has opened the chardev on
+	 * behalf of another process, so the AFU's mm gets bound to the process
+	 * that performs this ioctl and not the process that opened the file.
+	 */
+	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
+
 	if ((rc = cxl_attach_process(ctx, false, work.wed, amr)))
 		goto out;
 
