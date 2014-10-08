@@ -386,6 +386,7 @@ struct cxl_context {
 	phys_addr_t psn_phys;
 	u64 psn_size;
 
+	spinlock_t sste_lock; /* Protects segment table entries */
 	struct cxl_sste *sstp;
 	u64 sstp0, sstp1;
 	unsigned int sst_size, sst_lru;

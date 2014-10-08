@@ -60,6 +60,8 @@ static void cxl_load_segment(struct cxl_context *ctx, struct copro_slb *slb)
 	bool sec_hash = 1;
 	struct cxl_sste *sste;
 	unsigned int hash;
+	unsigned long flags;
+
 
 	sec_hash = !!(cxl_p1n_read(ctx->afu, CXL_PSL_SR_An) & CXL_PSL_SR_An_SC);
 
@@ -68,6 +70,7 @@ static void cxl_load_segment(struct cxl_context *ctx, struct copro_slb *slb)
 	else /* 256M */
 		hash = (slb->esid >> SID_SHIFT) & mask;
 
+	spin_lock_irqsave(&ctx->sste_lock, flags);
 	sste = find_free_sste(ctx->sstp + (hash << 3), sec_hash,
 			      ctx->sstp + ((~hash & mask) << 3), &ctx->sst_lru);
 
@@ -76,6 +79,7 @@ static void cxl_load_segment(struct cxl_context *ctx, struct copro_slb *slb)
 
 	sste->vsid_data = cpu_to_be64(slb->vsid);
 	sste->esid_data = cpu_to_be64(slb->esid);
+	spin_unlock_irqrestore(&ctx->sste_lock, flags);
 }
 
 static int cxl_fault_segment(struct cxl_context *ctx, struct mm_struct *mm,

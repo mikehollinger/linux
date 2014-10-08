@@ -36,7 +36,7 @@ MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
 static inline void _cxl_slbia(struct cxl_context *ctx, struct mm_struct *mm)
 {
 	struct task_struct *task;
-
+	unsigned long flags;
 	if (!(task = get_pid_task(ctx->pid, PIDTYPE_PID))) {
 		pr_devel("%s unable to get task %i\n",
 			 __func__, pid_nr(ctx->pid));
@@ -49,7 +49,9 @@ static inline void _cxl_slbia(struct cxl_context *ctx, struct mm_struct *mm)
 	pr_devel("%s matched mm - card: %i afu: %i pe: %i\n", __func__,
 		 ctx->afu->adapter->adapter_num, ctx->afu->slice, ctx->pe);
 
+	spin_lock_irqsave(&ctx->sste_lock, flags);
 	memset(ctx->sstp, 0, ctx->sst_size);
+	spin_unlock_irqrestore(&ctx->sste_lock, flags);
 	mb();
 	cxl_afu_slbia(ctx->afu);
 out_put:
