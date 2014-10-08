@@ -166,7 +166,7 @@ static int __spu_trap_data_seg(struct spu *spu, unsigned long ea)
 	struct copro_slb slb;
 	int ret;
 
-	ret = copro_calc_slb(spu->mm, ea, &slb);
+	ret = copro_calculate_slb(spu->mm, ea, &slb);
 	if (ret)
 		return ret;
 

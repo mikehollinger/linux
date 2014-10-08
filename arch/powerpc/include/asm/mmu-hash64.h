@@ -189,12 +189,14 @@ static inline unsigned int mmu_psize_to_shift(unsigned int mmu_psize)
 #define LP_MASK(i)	((0xFF >> (i)) << LP_SHIFT)
 
 #ifndef __ASSEMBLY__
+
 static inline int slb_vsid_shift(int ssize)
 {
 	if (ssize == MMU_SEGSIZE_256M)
 		return SLB_VSID_SHIFT;
 	return SLB_VSID_SHIFT_1T;
 }
+
 static inline int segment_shift(int ssize)
 {
 	if (ssize == MMU_SEGSIZE_256M)

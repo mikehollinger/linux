@@ -86,7 +86,7 @@ static int cxl_fault_segment(struct cxl_context *ctx, struct mm_struct *mm,
 	struct copro_slb slb = {0,0};
 	int rc;
 
-	if (!(rc = copro_calc_slb(mm, ea, &slb))) {
+	if (!(rc = copro_calculate_slb(mm, ea, &slb))) {
 		cxl_load_segment(ctx, &slb);
 	}
 
@@ -260,7 +260,7 @@ static void cxl_prefault_vma(struct cxl_context *ctx)
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		for (ea = vma->vm_start; ea < vma->vm_end;
 				ea = next_segment(ea, slb.vsid)) {
-			rc = copro_calc_slb(mm, ea, &slb);
+			rc = copro_calculate_slb(mm, ea, &slb);
 			if (rc)
 				continue;
 

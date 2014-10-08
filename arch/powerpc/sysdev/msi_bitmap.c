@@ -190,6 +190,9 @@ void __init test_basics(void)
 	check(msi_bitmap_alloc_hwirqs(&bmp, 4) % 4 == 0);
 	check(msi_bitmap_alloc_hwirqs(&bmp, 8) % 8 == 0);
 	check(msi_bitmap_alloc_hwirqs(&bmp, 9) % 16 == 0);
+	check(msi_bitmap_alloc_hwirqs(&bmp, 3) % 4 == 0);
+	check(msi_bitmap_alloc_hwirqs(&bmp, 7) % 8 == 0);
+	check(msi_bitmap_alloc_hwirqs(&bmp, 121) % 128 == 0);
 
 	msi_bitmap_free(&bmp);
 

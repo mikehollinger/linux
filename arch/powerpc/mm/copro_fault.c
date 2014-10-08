@@ -94,7 +94,7 @@ out_unlock:
 }
 EXPORT_SYMBOL_GPL(copro_handle_mm_fault);
 
-int copro_calc_slb(struct mm_struct *mm, u64 ea, struct copro_slb *slb)
+int copro_calculate_slb(struct mm_struct *mm, u64 ea, struct copro_slb *slb)
 {
 	u64 vsid;
 	int psize, ssize;
@@ -137,7 +137,7 @@ int copro_calc_slb(struct mm_struct *mm, u64 ea, struct copro_slb *slb)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(copro_calc_slb);
+EXPORT_SYMBOL_GPL(copro_calculate_slb);
 
 void copro_flush_all_slbs(struct mm_struct *mm)
 {
