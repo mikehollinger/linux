@@ -172,15 +172,15 @@ void cxl_remove_adapter_nr(struct cxl *adapter)
 	idr_remove(&cxl_adapter_idr, adapter->adapter_num);
 }
 
-int cxl_afu_select_best_model(struct cxl_afu *afu)
+int cxl_afu_select_best_mode(struct cxl_afu *afu)
 {
-	if (afu->models_supported & CXL_MODEL_DIRECTED)
-		return cxl_afu_activate_model(afu, CXL_MODEL_DIRECTED);
+	if (afu->modes_supported & CXL_MODE_DIRECTED)
+		return cxl_afu_activate_mode(afu, CXL_MODE_DIRECTED);
 
-	if (afu->models_supported & CXL_MODEL_DEDICATED)
-		return cxl_afu_activate_model(afu, CXL_MODEL_DEDICATED);
+	if (afu->modes_supported & CXL_MODE_DEDICATED)
+		return cxl_afu_activate_mode(afu, CXL_MODE_DEDICATED);
 
-	dev_warn(&afu->dev, "No supported programing models available\n");
+	dev_warn(&afu->dev, "No supported programming modes available\n");
 	/* We don't fail this so the user can inspect sysfs */
 	return 0;
 }

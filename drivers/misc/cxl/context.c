@@ -105,7 +105,7 @@ int cxl_context_iomap(struct cxl_context *ctx, struct vm_area_struct *vma)
 	u64 len = vma->vm_end - vma->vm_start;
 	len = min(len, ctx->psn_size);
 
-	if (ctx->afu->current_model == CXL_MODEL_DEDICATED) {
+	if (ctx->afu->current_mode == CXL_MODE_DEDICATED) {
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 		return vm_iomap_memory(vma, ctx->afu->psn_phys, ctx->afu->adapter->ps_size);
 	}

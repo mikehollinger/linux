@@ -176,16 +176,15 @@ static ssize_t irqs_max_store(struct device *device,
 	return count;
 }
 
-static ssize_t models_supported_show(struct device *device,
-				    struct device_attribute *attr,
-				    char *buf)
+static ssize_t modes_supported_show(struct device *device,
+				    struct device_attribute *attr, char *buf)
 {
 	struct cxl_afu *afu = to_cxl_afu(device);
 	char *p = buf, *end = buf + PAGE_SIZE;
 
-	if (afu->models_supported & CXL_MODEL_DEDICATED)
+	if (afu->modes_supported & CXL_MODE_DEDICATED)
 		p += scnprintf(p, end - p, "dedicated_process\n");
-	if (afu->models_supported & CXL_MODEL_DIRECTED)
+	if (afu->modes_supported & CXL_MODE_DIRECTED)
 		p += scnprintf(p, end - p, "afu_directed\n");
 	return (p - buf);
 }
@@ -227,25 +226,24 @@ static ssize_t prefault_mode_store(struct device *device,
 	return count;
 }
 
-static ssize_t model_show(struct device *device,
+static ssize_t mode_show(struct device *device,
 			 struct device_attribute *attr,
 			 char *buf)
 {
 	struct cxl_afu *afu = to_cxl_afu(device);
 
-	if (afu->current_model == CXL_MODEL_DEDICATED)
+	if (afu->current_mode == CXL_MODE_DEDICATED)
 		return scnprintf(buf, PAGE_SIZE, "dedicated_process\n");
-	if (afu->current_model == CXL_MODEL_DIRECTED)
+	if (afu->current_mode == CXL_MODE_DIRECTED)
 		return scnprintf(buf, PAGE_SIZE, "afu_directed\n");
 	return scnprintf(buf, PAGE_SIZE, "none\n");
 }
 
-static ssize_t model_store(struct device *device,
-			   struct device_attribute *attr,
-			   const char *buf, size_t count)
+static ssize_t mode_store(struct device *device, struct device_attribute *attr,
+			  const char *buf, size_t count)
 {
 	struct cxl_afu *afu = to_cxl_afu(device);
-	int old_model, model = -1;
+	int old_mode, mode = -1;
 	int rc = -EBUSY;
 
 	/* can't change this if we have a user */
@@ -254,30 +252,30 @@ static ssize_t model_store(struct device *device,
 		goto err;
 
 	if (!strncmp(buf, "dedicated_process", 17))
-		model = CXL_MODEL_DEDICATED;
+		mode = CXL_MODE_DEDICATED;
 	if (!strncmp(buf, "afu_directed", 12))
-		model = CXL_MODEL_DIRECTED;
+		mode = CXL_MODE_DIRECTED;
 	if (!strncmp(buf, "none", 4))
-		model = 0;
+		mode = 0;
 
-	if (model == -1) {
+	if (mode == -1) {
 		rc = -EINVAL;
 		goto err;
 	}
 
 	/*
-	 * cxl_afu_deactivate_model needs to be done outside the lock, prevent
+	 * cxl_afu_deactivate_mode needs to be done outside the lock, prevent
 	 * other contexts coming in before we are ready:
 	 */
-	old_model = afu->current_model;
-	afu->current_model = 0;
+	old_mode = afu->current_mode;
+	afu->current_mode = 0;
 	afu->num_procs = 0;
 
 	spin_unlock(&afu->contexts_lock);
 
-	if ((rc = _cxl_afu_deactivate_model(afu, old_model)))
+	if ((rc = _cxl_afu_deactivate_mode(afu, old_mode)))
 		return rc;
-	if ((rc = cxl_afu_activate_model(afu, model)))
+	if ((rc = cxl_afu_activate_mode(afu, mode)))
 		return rc;
 
 	return count;
@@ -304,8 +302,8 @@ static struct device_attribute afu_attrs[] = {
 	__ATTR_RO(mmio_size),
 	__ATTR_RO(irqs_min),
 	__ATTR_RW(irqs_max),
-	__ATTR_RO(models_supported),
-	__ATTR_RW(model),
+	__ATTR_RO(modes_supported),
+	__ATTR_RW(mode),
 	__ATTR_RW(prefault_mode),
 	__ATTR_RO(api_version),
 	__ATTR_RO(api_version_compatible),

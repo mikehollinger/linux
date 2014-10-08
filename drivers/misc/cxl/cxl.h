@@ -187,7 +187,7 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 
 /****** CXL_PSL_SCNTL_An ****************************************************/
 #define CXL_PSL_SCNTL_An_CR          (0x1ull << (63-15))
-/* Programming Models: */
+/* Programming Modes: */
 #define CXL_PSL_SCNTL_An_PM_MASK     (0xffffull << (63-31))
 #define CXL_PSL_SCNTL_An_PM_Shared   (0x0000ull << (63-31))
 #define CXL_PSL_SCNTL_An_PM_OS       (0x0001ull << (63-31))
@@ -308,10 +308,10 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_MAX_SLICES 4
 #define MAX_AFU_MMIO_REGS 3
 
-#define CXL_MODEL_DEDICATED   0x1
-#define CXL_MODEL_DIRECTED    0x2
-#define CXL_MODEL_TIME_SLICED 0x4
-#define CXL_SUPPORTED_MODELS (CXL_MODEL_DEDICATED | CXL_MODEL_DIRECTED)
+#define CXL_MODE_DEDICATED   0x1
+#define CXL_MODE_DIRECTED    0x2
+#define CXL_MODE_TIME_SLICED 0x4
+#define CXL_SUPPORTED_MODES (CXL_MODE_DEDICATED | CXL_MODE_DIRECTED)
 
 enum cxl_context_status {
 	CLOSED,
@@ -371,8 +371,8 @@ struct cxl_afu {
 	int num_procs;
 	int max_procs_virtualised;
 	int slice;
-	int models_supported;
-	int current_model;
+	int modes_supported;
+	int current_mode;
 	enum prefault_modes prefault_mode;
 	bool psa;
 	bool pp_psa;
@@ -380,7 +380,7 @@ struct cxl_afu {
 };
 
 /*
- * This is a cxl context.  If the PSL is in dedicated model, there will be one
+ * This is a cxl context.  If the PSL is in dedicated mode, there will be one
  * of these per AFU.  If in AFU directed there can be lots of these.
  */
 struct cxl_context {
@@ -558,10 +558,10 @@ void cxl_sysfs_adapter_remove(struct cxl *adapter);
 int cxl_sysfs_afu_add(struct cxl_afu *afu);
 void cxl_sysfs_afu_remove(struct cxl_afu *afu);
 
-int cxl_afu_activate_model(struct cxl_afu *afu, int model);
-int _cxl_afu_deactivate_model(struct cxl_afu *afu, int model);
-int cxl_afu_deactivate_model(struct cxl_afu *afu);
-int cxl_afu_select_best_model(struct cxl_afu *afu);
+int cxl_afu_activate_mode(struct cxl_afu *afu, int mode);
+int _cxl_afu_deactivate_mode(struct cxl_afu *afu, int mode);
+int cxl_afu_deactivate_mode(struct cxl_afu *afu);
+int cxl_afu_select_best_mode(struct cxl_afu *afu);
 
 unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 		         irq_handler_t handler, void *cookie);

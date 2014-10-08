@@ -370,7 +370,7 @@ static int activate_afu_directed(struct cxl_afu *afu)
 {
 	int rc;
 
-	dev_info(&afu->dev, "Activating AFU directed model\n");
+	dev_info(&afu->dev, "Activating AFU directed mode\n");
 
 	if (alloc_spa(afu))
 		return -ENOMEM;
@@ -379,7 +379,7 @@ static int activate_afu_directed(struct cxl_afu *afu)
 	cxl_p1n_write(afu, CXL_PSL_AMOR_An, 0xFFFFFFFFFFFFFFFFULL);
 	cxl_p1n_write(afu, CXL_PSL_ID_An, CXL_PSL_ID_An_F | CXL_PSL_ID_An_L);
 
-	afu->current_model = CXL_MODEL_DIRECTED;
+	afu->current_mode = CXL_MODE_DIRECTED;
 	afu->num_procs = afu->max_procs_virtualised;
 
 	if ((rc = cxl_chardev_m_afu_add(afu)))
@@ -457,9 +457,9 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 
 static int deactivate_afu_directed(struct cxl_afu *afu)
 {
-	dev_info(&afu->dev, "Deactivating AFU directed model\n");
+	dev_info(&afu->dev, "Deactivating AFU directed mode\n");
 
-	afu->current_model = 0;
+	afu->current_mode = 0;
 	afu->num_procs = 0;
 
 	cxl_chardev_afu_remove(afu);
@@ -475,7 +475,7 @@ static int deactivate_afu_directed(struct cxl_afu *afu)
 
 static int activate_dedicated_process(struct cxl_afu *afu)
 {
-	dev_info(&afu->dev, "Activating dedicated process model\n");
+	dev_info(&afu->dev, "Activating dedicated process mode\n");
 
 	cxl_p1n_write(afu, CXL_PSL_SCNTL_An, CXL_PSL_SCNTL_An_PM_Process);
 
@@ -490,7 +490,7 @@ static int activate_dedicated_process(struct cxl_afu *afu)
 	cxl_p2n_write(afu, CXL_AURP0_An, 0);       /* disable */
 	cxl_p2n_write(afu, CXL_AURP1_An, 0);       /* disable */
 
-	afu->current_model = CXL_MODEL_DEDICATED;
+	afu->current_mode = CXL_MODE_DEDICATED;
 	afu->num_procs = 1;
 
 	return cxl_chardev_d_afu_add(afu);
@@ -545,9 +545,9 @@ static int attach_dedicated(struct cxl_context *ctx, u64 wed, u64 amr)
 
 static int deactivate_dedicated_process(struct cxl_afu *afu)
 {
-	dev_info(&afu->dev, "Deactivating dedicated process model\n");
+	dev_info(&afu->dev, "Deactivating dedicated process mode\n");
 
-	afu->current_model = 0;
+	afu->current_mode = 0;
 	afu->num_procs = 0;
 
 	cxl_chardev_afu_remove(afu);
@@ -555,30 +555,30 @@ static int deactivate_dedicated_process(struct cxl_afu *afu)
 	return 0;
 }
 
-int _cxl_afu_deactivate_model(struct cxl_afu *afu, int model)
+int _cxl_afu_deactivate_mode(struct cxl_afu *afu, int mode)
 {
-	if (model == CXL_MODEL_DIRECTED)
+	if (mode == CXL_MODE_DIRECTED)
 		return deactivate_afu_directed(afu);
-	if (model == CXL_MODEL_DEDICATED)
+	if (mode == CXL_MODE_DEDICATED)
 		return deactivate_dedicated_process(afu);
 	return 0;
 }
 
-int cxl_afu_deactivate_model(struct cxl_afu *afu)
+int cxl_afu_deactivate_mode(struct cxl_afu *afu)
 {
-	return _cxl_afu_deactivate_model(afu, afu->current_model);
+	return _cxl_afu_deactivate_mode(afu, afu->current_mode);
 }
 
-int cxl_afu_activate_model(struct cxl_afu *afu, int model)
+int cxl_afu_activate_mode(struct cxl_afu *afu, int mode)
 {
-	if (!model)
+	if (!mode)
 		return 0;
-	if (!(model & afu->models_supported))
+	if (!(mode & afu->modes_supported))
 		return -EINVAL;
 
-	if (model == CXL_MODEL_DIRECTED)
+	if (mode == CXL_MODE_DIRECTED)
 		return activate_afu_directed(afu);
-	if (model == CXL_MODEL_DEDICATED)
+	if (mode == CXL_MODE_DEDICATED)
 		return activate_dedicated_process(afu);
 
 	return -EINVAL;
@@ -587,10 +587,10 @@ int cxl_afu_activate_model(struct cxl_afu *afu, int model)
 int cxl_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
 {
 	ctx->kernel = kernel;
-	if (ctx->afu->current_model == CXL_MODEL_DIRECTED)
+	if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
 		return attach_afu_directed(ctx, wed, amr);
 
-	if (ctx->afu->current_model == CXL_MODEL_DEDICATED)
+	if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
 		return attach_dedicated(ctx, wed, amr);
 
 	return -EINVAL;
@@ -625,7 +625,7 @@ static inline int detach_process_native_afu_directed(struct cxl_context *ctx)
 
 int cxl_detach_process(struct cxl_context *ctx)
 {
-	if (ctx->afu->current_model == CXL_MODEL_DEDICATED)
+	if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
 		return detach_process_native_dedicated(ctx);
 
 	return detach_process_native_afu_directed(ctx);

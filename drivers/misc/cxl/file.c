@@ -69,7 +69,7 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 	get_device(&afu->dev);
 	spin_unlock(&adapter->afu_list_lock);
 
-	if (!afu->current_model)
+	if (!afu->current_mode)
 		goto err_put_afu;
 
 	if (!(ctx = cxl_context_alloc())) {

@@ -96,7 +96,7 @@
 #define   AFUD_NUM_INTS_PER_PROC(val)	EXTRACT_PPC_BITS(val,  0, 15)
 #define   AFUD_NUM_PROCS(val)		EXTRACT_PPC_BITS(val, 16, 31)
 #define   AFUD_NUM_CRS(val)		EXTRACT_PPC_BITS(val, 32, 47)
-#define   AFUD_MULTIMODEL(val)		EXTRACT_PPC_BIT(val, 48)
+#define   AFUD_MULTIMODE(val)		EXTRACT_PPC_BIT(val, 48)
 #define   AFUD_PUSH_BLOCK_TRANSFER(val)	EXTRACT_PPC_BIT(val, 55)
 #define   AFUD_DEDICATED_PROCESS(val)	EXTRACT_PPC_BIT(val, 59)
 #define   AFUD_AFU_DIRECTED(val)	EXTRACT_PPC_BIT(val, 61)
@@ -276,7 +276,7 @@ static void dump_afu_descriptor(struct cxl_afu *afu)
 	show_reg("num_ints_per_process", AFUD_NUM_INTS_PER_PROC(val));
 	show_reg("num_of_processes", AFUD_NUM_PROCS(val));
 	show_reg("num_of_afu_CRs", AFUD_NUM_CRS(val));
-	show_reg("req_prog_model", val & 0xffffULL);
+	show_reg("req_prog_mode", val & 0xffffULL);
 
 	val = AFUD_READ(afu, 0x8);
 	show_reg("Reserved", val);
@@ -522,11 +522,11 @@ static int cxl_read_afu_descriptor(struct cxl_afu *afu)
 	afu->max_procs_virtualised = AFUD_NUM_PROCS(val);
 
 	if (AFUD_AFU_DIRECTED(val))
-		afu->models_supported |= CXL_MODEL_DIRECTED;
+		afu->modes_supported |= CXL_MODE_DIRECTED;
 	if (AFUD_DEDICATED_PROCESS(val))
-		afu->models_supported |= CXL_MODEL_DEDICATED;
+		afu->modes_supported |= CXL_MODE_DEDICATED;
 	if (AFUD_TIME_SLICED(val))
-		afu->models_supported |= CXL_MODEL_TIME_SLICED;
+		afu->modes_supported |= CXL_MODE_TIME_SLICED;
 
 	val = AFUD_READ_PPPSA(afu);
 	afu->pp_size = AFUD_PPPSA_LEN(val) * 4096;
@@ -658,7 +658,7 @@ static int cxl_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 		goto err_put1;
 
 
-	if ((rc = cxl_afu_select_best_model(afu)))
+	if ((rc = cxl_afu_select_best_mode(afu)))
 		goto err_put2;
 
 	adapter->afu[afu->slice] = afu;
@@ -697,7 +697,7 @@ static void cxl_remove_afu(struct cxl_afu *afu)
 	spin_unlock(&afu->adapter->afu_list_lock);
 
 	cxl_context_detach_all(afu);
-	cxl_afu_deactivate_model(afu);
+	cxl_afu_deactivate_mode(afu);
 
 	cxl_release_psl_irq(afu);
 	cxl_release_serr_irq(afu);
