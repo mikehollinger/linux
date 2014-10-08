@@ -430,14 +430,17 @@ void cxl_chardev_afu_remove(struct cxl_afu *afu)
 	if (afu->chardev_d) {
 		cdev_del(&afu->afu_cdev_d);
 		device_unregister(afu->chardev_d);
+		afu->chardev_d = NULL;
 	}
 	if (afu->chardev_m) {
 		cdev_del(&afu->afu_cdev_m);
 		device_unregister(afu->chardev_m);
+		afu->chardev_m = NULL;
 	}
 	if (afu->chardev_s) {
 		cdev_del(&afu->afu_cdev_s);
 		device_unregister(afu->chardev_s);
+		afu->chardev_s = NULL;
 	}
 }
 
