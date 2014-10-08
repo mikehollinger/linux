@@ -375,85 +375,54 @@ static char *cxl_devnode(struct device *dev, umode_t *mode)
 
 extern struct class *cxl_class;
 
-int cxl_chardev_d_afu_add(struct cxl_afu *afu)
+static int cxl_add_chardev(struct cxl_afu *afu, dev_t devt, struct cdev *cdev,
+			   struct device **chardev, char *postfix, char *desc,
+			   const struct file_operations *fops)
 {
 	struct device *dev;
 	int rc;
 
-	cdev_init(&afu->afu_cdev_d, &afu_master_fops);
-	if ((rc = cdev_add(&afu->afu_cdev_d, CXL_AFU_MKDEV_D(afu), 1))) {
-		dev_err(&afu->dev, "Unable to add dedicated chardev: %i\n", rc);
+	cdev_init(cdev, fops);
+	if ((rc = cdev_add(cdev, devt, 1))) {
+		dev_err(&afu->dev, "Unable to add %s chardev: %i\n", desc, rc);
 		return rc;
 	}
 
-	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_D(afu), afu,
-			"afu%i.%id", afu->adapter->adapter_num, afu->slice);
+	dev = device_create(cxl_class, &afu->dev, devt, afu,
+			"afu%i.%i%s", afu->adapter->adapter_num, afu->slice, postfix);
 	if (IS_ERR(dev)) {
-		dev_err(&afu->dev, "Unable to create dedicated chardev in sysfs: %i\n", rc);
+		dev_err(&afu->dev, "Unable to create %s chardev in sysfs: %i\n", desc, rc);
 		rc = PTR_ERR(dev);
 		goto err;
 	}
 
-	afu->chardev_d = dev;
+	*chardev = dev;
 
 	return 0;
 err:
-	cdev_del(&afu->afu_cdev_d);
+	cdev_del(cdev);
 	return rc;
+}
+
+int cxl_chardev_d_afu_add(struct cxl_afu *afu)
+{
+	return cxl_add_chardev(afu, CXL_AFU_MKDEV_D(afu), &afu->afu_cdev_d,
+			       &afu->chardev_d, "d", "dedicated",
+			       &afu_master_fops); /* Uses master fops */
 }
 
 int cxl_chardev_m_afu_add(struct cxl_afu *afu)
 {
-	struct device *dev;
-	int rc;
-
-	cdev_init(&afu->afu_cdev_m, &afu_master_fops);
-	if ((rc = cdev_add(&afu->afu_cdev_m, CXL_AFU_MKDEV_M(afu), 1))) {
-		dev_err(&afu->dev, "Unable to add master chardev: %i\n", rc);
-		return rc;
-	}
-
-	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_M(afu), afu,
-			"afu%i.%im", afu->adapter->adapter_num, afu->slice);
-	if (IS_ERR(dev)) {
-		dev_err(&afu->dev, "Unable to create master chardev in sysfs: %i\n", rc);
-		rc = PTR_ERR(dev);
-		goto err;
-	}
-
-	afu->chardev_m = dev;
-
-	return 0;
-err:
-	cdev_del(&afu->afu_cdev_m);
-	return rc;
+	return cxl_add_chardev(afu, CXL_AFU_MKDEV_M(afu), &afu->afu_cdev_m,
+			       &afu->chardev_m, "m", "master",
+			       &afu_master_fops);
 }
 
 int cxl_chardev_s_afu_add(struct cxl_afu *afu)
 {
-	struct device *dev;
-	int rc;
-
-	cdev_init(&afu->afu_cdev_s, &afu_fops);
-	if ((rc = cdev_add(&afu->afu_cdev_s, CXL_AFU_MKDEV_S(afu), 1))) {
-		dev_err(&afu->dev, "Unable to add shared chardev: %i\n", rc);
-		return rc;
-	}
-
-	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_S(afu), afu,
-			"afu%i.%is", afu->adapter->adapter_num, afu->slice);
-	if (IS_ERR(dev)) {
-		dev_err(&afu->dev, "Unable to create shared chardev in sysfs: %i\n", rc);
-		rc = PTR_ERR(dev);
-		goto err;
-	}
-
-	afu->chardev_s = dev;
-
-	return 0;
-err:
-	cdev_del(&afu->afu_cdev_s);
-	return rc;
+	return cxl_add_chardev(afu, CXL_AFU_MKDEV_S(afu), &afu->afu_cdev_s,
+			       &afu->chardev_s, "s", "shared",
+			       &afu_fops);
 }
 
 void cxl_chardev_afu_remove(struct cxl_afu *afu)
