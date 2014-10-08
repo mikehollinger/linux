@@ -182,7 +182,8 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 	 */
 	ctx->pid = get_pid(get_task_pid(current, PIDTYPE_PID));
 
-	if ((rc = cxl_attach_process(ctx, false, work.wed, amr)))
+	if ((rc = cxl_attach_process(ctx, false, work.work_element_descriptor,
+				     amr)))
 		goto out;
 
 	ctx->status = STARTED;

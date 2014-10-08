@@ -159,7 +159,7 @@ User API
             Takes a pointer to a struct cxl_ioctl_start_work
                     struct cxl_ioctl_start_work {
                             __u64 flags;
-                            __u64 wed;
+                            __u64 work_element_descriptor;
                             __u64 amr;
                             __s16 num_interrupts;
                             __s16 reserved1;
@@ -174,7 +174,7 @@ User API
                     Indicates which optional fields (e.g. amr,
                     num_interrupts) in the structure are valid.
 
-                wed:
+                work_element_descriptor:
                     The Work Element Descriptor (WED) is a 64bit
                     argument defined by the AFU. Typically this is an
                     virtual address pointing to an AFU specific

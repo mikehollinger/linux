@@ -189,7 +189,7 @@ static ssize_t prefault_mode_show(struct device *device,
 
 	switch (afu->prefault_mode) {
 	case CXL_PREFAULT_WED:
-		return scnprintf(buf, PAGE_SIZE, "wed\n");
+		return scnprintf(buf, PAGE_SIZE, "work_element_descriptor\n");
 	case CXL_PREFAULT_ALL:
 		return scnprintf(buf, PAGE_SIZE, "all\n");
 	default:
@@ -204,7 +204,7 @@ static ssize_t prefault_mode_store(struct device *device,
 	struct cxl_afu *afu = to_cxl_afu(device);
 	enum prefault_modes mode = -1;
 
-	if (!strncmp(buf, "wed", 3))
+	if (!strncmp(buf, "work_element_descriptor", 23))
 		mode = CXL_PREFAULT_WED;
 	if (!strncmp(buf, "all", 3))
 		mode = CXL_PREFAULT_ALL;

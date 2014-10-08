@@ -7,8 +7,8 @@
  * 2 of the License, or (at your option) any later version.
  */
 
-#ifndef _UAPI_ASM_CXL_H
-#define _UAPI_ASM_CXL_H
+#ifndef _UAPI_MISC_CXL_H
+#define _UAPI_MISC_CXL_H
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
@@ -16,7 +16,7 @@
 /* Structs for IOCTLS for userspace to talk to the kernel */
 struct cxl_ioctl_start_work {
 	__u64 flags;
-	__u64 wed;
+	__u64 work_element_descriptor;
 	__u64 amr;
 	__s16 num_interrupts;
 	__s16 reserved1;
@@ -38,6 +38,7 @@ struct cxl_ioctl_start_work {
 
 /* Events from read() */
 #define CXL_READ_MIN_SIZE 0x1000 /* 4K */
+
 enum cxl_event_type {
 	CXL_EVENT_RESERVED      = 0,
 	CXL_EVENT_AFU_INTERRUPT = 1,
@@ -83,4 +84,4 @@ struct cxl_event {
 	};
 };
 
-#endif
+#endif /* _UAPI_MISC_CXL_H */
