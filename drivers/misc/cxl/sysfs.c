@@ -120,9 +120,19 @@ static ssize_t reset_store_afu(struct device *device,
 	struct cxl_afu *afu = to_cxl_afu(device);
 	int rc;
 
+	/* Not safe to reset if it is currently in use */
+	spin_lock(&afu->contexts_lock);
+	if (!idr_is_empty(&afu->contexts_idr))
+		goto err;
+
 	if ((rc = cxl_afu_reset(afu)))
 		return rc;
+
+	spin_unlock(&afu->contexts_lock);
 	return count;
+err:
+	spin_unlock(&afu->contexts_lock);
+	return -EBUSY;
 }
 
 static ssize_t irqs_min_show(struct device *device,
