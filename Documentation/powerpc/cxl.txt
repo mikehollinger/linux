@@ -5,13 +5,17 @@ Introduction
 ============
 
     The coherent accelerator interface is designed to allow the
-    coherent connection of FPGA based accelerators (and other devices)
-    to a POWER system. These devices need to adhere to the Coherent
+    coherent connection of accelerators (FPGAs and other devices) to a
+    POWER system. These devices need to adhere to the Coherent
     Accelerator Interface Architecture (CAIA).
 
     IBM refers to this as the Coherent Accelerator Processor Interface
     or CAPI. In the kernel it's referred to by the name CXL to avoid
     confusion with the ISDN CAPI subsystem.
+
+    Coherent in this context means that the accelerator and CPUs can
+    both access system memory directly and with the same effective
+    addresses.
 
 Hardware overview
 =================
@@ -24,10 +28,10 @@ Hardware overview
        |          |        |         |
        |          |        |         |
        +----------+        +---------+
-       |          |        |         |
-       |   CAPP   +--------+   PSL   |
-       |          |  PCIe  |         |
-       +----------+        +---------+
+       |   PHB    |        |         |
+       |   +------+        |   PSL   |
+       |   | CAPP |<------>|         |
+       +---+------+  PCIE  +---------+
 
     The POWER8 chip has a Coherently Attached Processor Proxy (CAPP)
     unit which is part of the PCIe Host Bridge (PHB). This is managed
@@ -36,7 +40,7 @@ Hardware overview
 
     The FPGA (or coherently attached device) consists of two parts.
     The POWER Service Layer (PSL) and the Accelerator Function Unit
-    (AFU). AFU is used to implement specific functionality behind
+    (AFU). The AFU is used to implement specific functionality behind
     the PSL. The PSL, among other things, provides memory address
     translation services to allow each AFU direct access to userspace
     memory.
@@ -46,13 +50,13 @@ Hardware overview
     of the AFU. Only userspace interacts directly with the AFU.
 
     The PSL provides the translation and interrupt services that the
-    AFU needs. This is what the kernel interacts with. For example,
-    if the AFU needs to read a particular virtual address, it sends
+    AFU needs. This is what the kernel interacts with. For example, if
+    the AFU needs to read a particular effective address, it sends
     that address to the PSL, the PSL then translates it, fetches the
     data from memory and returns it to the AFU. If the PSL has a
     translation miss, it interrupts the kernel and the kernel services
-    the fault. The context to which this fault is serviced is based
-    on who owns that acceleration function.
+    the fault. The context to which this fault is serviced is based on
+    who owns that acceleration function.
 
 AFU Models
 ==========
@@ -60,34 +64,34 @@ AFU Models
     There are two programming models supported by the AFU. Dedicated
     and AFU directed. AFU may support one or both models.
 
-    In dedicated model only one MMU context is supported. In this
-    model, only one userspace process can use the accelerator at time.
+    When using dedicated mode only one MMU context is supported. In
+    this mode, only one userspace process can use the accelerator at
+    time.
 
-    In AFU directed model, up to 16K simultaneous contexts can be
-    supported. This means up to 16K simultaneous userspace
+    When using AFU directed mode, up to 16K simultaneous contexts can
+    be supported. This means up to 16K simultaneous userspace
     applications may use the accelerator (although specific AFUs may
-    support less). In this mode, the AFU sends a 16 bit context ID
+    support fewer). In this mode, the AFU sends a 16 bit context ID
     with each of its requests. This tells the PSL which context is
-    associated with this operation. If the PSL can't translate a
-    request, the ID can also be accessed by the kernel so it can
-    determine the associated userspace context to service this
-    translation with.
+    associated with each operation. If the PSL can't translate an
+    operation, the ID can also be accessed by the kernel so it can
+    determine the userspace context associated with an operation.
 
 MMIO space
 ==========
 
-    A portion of the FPGA MMIO space can be directly mapped from the
-    AFU to userspace. Either the whole space can be mapped (master
-    context), or just a per context portion (slave context). The
-    hardware is self describing, hence the kernel can determine the
-    offset and size of the per context portion.
+    A portion of the accelerator MMIO space can be directly mapped
+    from the AFU to userspace. Either the whole space can be mapped or
+    just a per context portion. The hardware is self describing, hence
+    the kernel can determine the offset and size of the per context
+    portion.
 
 Interrupts
 ==========
 
     AFUs may generate interrupts that are destined for userspace. These
     are received by the kernel as hardware interrupts and passed onto
-    userspace.
+    userspace by a read syscall documented below.
 
     Data storage faults and error interrupts are handled by the kernel
     driver.
@@ -95,11 +99,11 @@ Interrupts
 Work Element Descriptor (WED)
 =============================
 
-    The WED is a 64bit parameter passed to the AFU when a context is
+    The WED is a 64-bit parameter passed to the AFU when a context is
     started. Its format is up to the AFU hence the kernel has no
-    knowledge of what it represents. Typically it will be a virtual
-    address pointer to a work queue where the AFU and userspace can
-    share control and status information or work queues.
+    knowledge of what it represents.  Typically it will be the
+    effective address of a work queue or status block where the AFU
+    and userspace can share control and status information.
 
 
 
@@ -107,236 +111,245 @@ Work Element Descriptor (WED)
 User API
 ========
 
-    For AFUs operating in the AFU directed model, the driver will
-    create two character devices per AFU under /dev/cxl. One for
-    master and one for slave contexts.
+    For AFUs operating in AFU directed mode, the driver will create
+    two character devices per AFU under /dev/cxl. One for master and
+    one for slave contexts.
 
-    The master context (eg. /dev/cxl/afu0.0m), has access to all of
-    the MMIO space that an AFU provides. The slave context
-    (eg. /dev/cxl/afu0.0) has access to only the per process MMIO
-    space an AFU provides (AFU directed only).
+    For AFUs operating in AFU directed mode, two character device
+    files will be created AFU.  /dev/cxl/afu0.0m will correspond to a
+    master context and /dev/cxl/afu0.0s will correspond to a slave
+    context.  Master contexts have access to the full MMIO space an
+    AFU provides.  Slave context have access to only the per process
+    MMIO space an AFU provides.
 
-    For AFUs operating in the dedicated process model, the driver will
-    only create a single character device per AFU (e.g.
-    /dev/cxl/afu0.0), which has access to the entire MMIO space that
-    the AFU provides.
+    For AFUs operating in dedicated process mode, the driver will
+    only create a single character device per AFU called
+    /dev/cxl/afu0.0d.  This will have access to the entire MMIO space
+    that the AFU provides (like master contexts in AFU directed).
+
+    The following udev rules could be used to create a symlink to the
+    most logical chardev to use in any programming model (afuX.Yd for
+    dedicated, afuX.Ys for afu directed), since the API is virtually
+    identical for each:
+
+	SUBSYSTEM=="cxl", ATTRS{model}=="dedicated_process", SYMLINK="cxl/%b"
+	SUBSYSTEM=="cxl", ATTRS{model}=="afu_directed", \
+	                  KERNEL=="afu[0-9]*.[0-9]*s", SYMLINK="cxl/%b"
 
     The following file operations are supported on both slave and
     master devices:
 
-    open
+open
+----
+    Opens the device and allocates a file descriptor to be used with
+    the rest of the API.
 
-        Opens the device and allocates a file descriptor to be used
-        with the rest of the API.
+    A dedicated mode AFU only has one context and hence only allows
+    this device to be opened once.
 
-        A dedicated model AFU only has one context and hence only
-        allows this device to be opened once.
+    An AFU directed mode AFU can have many contexts and hence this
+    device can be opened by as many contexts as available.
 
-        An AFU directed model AFU can have many contexts and hence
-        this device can be opened by as many contexts as available.
+    The number of contexts that may be started is enforced by the
+    kernel returning -ENOSPC on open.
 
-        Note: IRQs also need to be allocated per context, which may
-              also limit the number of contexts that can be allocated,
-              and hence how many times the device may be opened. The
-              POWER8 CAPP supports 2040 IRQs and 3 are used by the
-              kernel, so 2037 are left. If 1 IRQ is needed per
-              context, then only 2037 contexts can be allocated. If 4
-              IRQs are needed per context, then only 2037/4 = 509
-              contexts can be allocated.
+    Note: IRQs also need to be allocated per context, which may also
+          limit the number of contexts that can be allocated, and
+          hence how many times the device may be opened. The POWER8
+          CAPP supports 2040 IRQs and 3 are used by the kernel, so
+          2037 are left. If 1 IRQ is needed per context, then only
+          2037 contexts can be allocated. If 4 IRQs are needed per
+          context, then only 2037/4 = 509 contexts can be allocated.
 
-    ioctl
+ioctl
+----
+    CXL_IOCTL_START_WORK:
+        Starts the AFU context and associates it with the current
+        process. Once this ioctl is successfully executed, all memory
+        mapped into this process is accessible to this AFU context
+        using the same virtual addresses. No additional calls are
+        required to map/unmap memory. The AFU memory context will be
+        updated as userspace allocates and frees memory. This ioctl
+        returns once the AFU context is started.
 
-        CXL_IOCTL_START_WORK:
-            Starts the AFU context and associates it with the process
-            memory. Once this ioctl is successfully executed, all
-            memory mapped into this process is accessible to this AFU
-            context using the same virtual addresses. No additional
-            calls are required to map/unmap memory. The AFU memory
-            context will be updated as userspace allocates and frees
-            memory. This ioctl returns once the AFU context is
-            started.
-
-            Takes a pointer to a struct cxl_ioctl_start_work
-                    struct cxl_ioctl_start_work {
-                            __u64 flags;
-                            __u64 work_element_descriptor;
-                            __u64 amr;
-                            __s16 num_interrupts;
-                            __s16 reserved1;
-                            __s32 reserved2;
-                            __u64 reserved3;
-                            __u64 reserved4;
-                            __u64 reserved5;
-                            __u64 reserved6;
-                    };
-
-                flags:
-                    Indicates which optional fields (e.g. amr,
-                    num_interrupts) in the structure are valid.
-
-                work_element_descriptor:
-                    The Work Element Descriptor (WED) is a 64bit
-                    argument defined by the AFU. Typically this is an
-                    virtual address pointing to an AFU specific
-                    structure describing what work to perform.
-
-                amr:
-                    Authority Mask Register (AMR), same as the powerpc
-                    AMR.
-
-                num_interrupt:
-                    Number of userspace interrupts to request. If not
-                    specified the minimum number required will be
-                    automatically allocated. The min and max number
-                    can be obtained from sysfs.
-
-                reserved fields:
-                    For ABI padding and future extensions
-
-        CXL_IOCTL_GET_PROCESS_ELEMENT:
-            Get info on current context id. This info is returned
-            from the kernel as an int.
-
-            Written by the kernel with the context id (AKA process
-            element) it has allocated. Slave contexts may want to
-            communicate this to a master process.
-
-    mmap
-
-        An AFU may have a MMIO space to facilitate communication with
-        the AFU and mmap allows access to this. The size and contents
-        of this area are specific to the particular AFU. The size can
-        be discovered via sysfs.
-
-        In the AFU directed model, master contexts will get all of the
-        MMIO space and slave contexts will get only the per process
-        space associated with its context. In the dedicated process
-        model the entire MMIO space is always mapped.
-
-        This mmap call must be done after the IOCTL is started.
-
-        Care should be taken when accessing MMIO space. Only 32 and
-        64bit accesses are supported by POWER8. Also, the AFU will be
-        designed with a specific endian, so all MMIO access should
-        consider endian (recommend endian(3) variants like: le64toh(),
-        be64toh() etc). These endian issues equally apply to shared
-        memory queues the WED may describe.
-
-    read
-
-        Reads an event from the AFU. Will return -EINVAL if the user
-        supplied buffer to read into is less than 4096 bytes. Blocks
-        if no events are pending (unless O_NONBLOCK is supplied). Will
-        return -EIO in the case of an unrecoverable error or if the
-        card is removed.
-
-        A read may return multiple events. A read will return the
-        length of the buffer written and it will be a integral number
-        of events up to the buffer size. Users must supply a buffer
-        size of at least 4K bytes.
-
-        All events will be return a struct cxl_event which varies in
-        size.
-
-                struct cxl_event {
-                        struct cxl_event_header header;
-                        union {
-                                struct cxl_event_afu_interrupt irq;
-                                struct cxl_event_data_storage fault;
-                                struct cxl_event_afu_error afu_err;
-                        };
-                };
-
-        A struct cxl_event_header at the start gives:
-                struct cxl_event_header {
-                        __u16 type;
-                        __u16 size;
-                        __u16 process_element;
-                        __u16 reserved1;
-                };
-
-            type:
-                This gives the type of event. The type determines how
-                the rest of the event will be structured. These types
-                are shown below.
-
-            size:
-                This is the size of the event in bytes including the
-                header. The start of the next event can be found at
-                this offset from the start of the current event.
-
-            process_element:
-                Context ID of the event. Currently this will always
-                be the current context. Future work may allow
-                interrupts from one context to be routed to another
-                (eg. a master contexts handling error interrupts on
-                behalf of a slave).
-
-            reserved field:
-                For future extensions and padding.
-
-        If an AFU interrupt event is received, the full structure received is:
-                struct cxl_event_afu_interrupt {
-                        __u16 flags;
-                        __u16 irq; /* Raised AFU interrupt number */
-                        __u32 reserved1;
-                };
-
-            flags:
-                These flags indicate which optional fields are present
-                in this struct. Currently all fields are Mandatory.
-
-            irq:
-                The IRQ number sent by the AFU.
-
-            reserved field:
-                For future extensions and padding.
-
-        If a data storage event is received, the full structure received is:
-                struct cxl_event_data_storage {
-                        __u16 flags;
-                        __u16 reserved1;
-                        __u32 reserved2;
-                        __u64 addr;
-                        __u64 dsisr;
+        Takes a pointer to a struct cxl_ioctl_start_work
+                struct cxl_ioctl_start_work {
+                        __u64 flags;
+                        __u64 work_element_descriptor;
+                        __u64 amr;
+                        __s16 num_interrupts;
+                        __s16 reserved1;
+                        __s32 reserved2;
                         __u64 reserved3;
+                        __u64 reserved4;
+                        __u64 reserved5;
+                        __u64 reserved6;
                 };
 
             flags:
-                These flags indicate which optional fields are present
-                in this struct. Currently all fields are Mandatory.
+                Indicates which optional fields in the structure are
+                valid.
 
-            address: Mandatory
-                Address of the data storage trying to be accessed by
-                the AFU. Valid accesses will handled transparently by
-                the kernel but invalid access will generate this
-                event.
+            work_element_descriptor:
+                The Work Element Descriptor (WED) is a 64-bit argument
+                defined by the AFU. Typically this is an virtual
+                address pointing to an AFU specific structure
+                describing what work to perform.
 
-            dsisr: Manditory
-                These fields give information on the type of
-                fault. Copy of the DSISR from PSL hardware when
-                address fault occured.
+            amr:
+                Authority Mask Register (AMR), same as the powerpc
+                AMR. This field is only used by the kernel when the
+                corresponding flag is also set. If not specified used
+                the amr will default to 0.
 
-            reserved fields:
-                For future extensions
-
-        If an AFU error event is received, the full structure received is:
-                struct cxl_event_afu_error {
-                        __u16 flags;
-                        __u16 reserved1;
-                        __u32 reserved2;
-                        __u64 err;
-                };
-
-            flags: Mandatory
-                These flags indicate which optional fields are present
-                in this struct. Currently all fields are Mandatory.
-
-            err:
-                Error status from the AFU. AFU defined.
+            num_interrupt:
+                Number of userspace interrupts to request. This field
+                is only used by the kernel when the corresponding flag
+                is also set. If not specified the minimum number
+                required by the AFU will be allocated. The min and max
+                number can be obtained from sysfs.
 
             reserved fields:
-                For future extensions and padding
+                For ABI padding and future extensions
+
+    CXL_IOCTL_GET_PROCESS_ELEMENT:
+        Get the current context id. This info is returned from the
+        kernel as a __u32.
+
+mmap
+----
+    An AFU may have an MMIO space to facilitate communication with the
+    AFU. If it does, the MMIO space can be accessed via mmap. The size
+    and contents of this area are specific to the particular AFU. The
+    size can be discovered via sysfs.
+
+    In AFU directed mode, master contexts are allowed to map all of
+    the MMIO space and slave contexts are allowed to only map the per
+    process MMIO space associated with its context. In dedicated
+    process mode the entire MMIO space is always mapped.
+
+    This mmap call must be done after the START_WORK IOCTL.
+
+    Care should be taken when accessing MMIO space. Only 32 and 64-bit
+    accesses are supported by POWER8. Also, the AFU will be designed
+    with a specific endianness, so all MMIO access should consider
+    endian (recommend endian(3) variants like: le64toh(), be64toh()
+    etc). These endian issues equally apply to shared memory queues
+    the WED may describe.
+
+read
+----
+
+    Reads events from the AFU.  Blocks if no events are pending
+    (unless O_NONBLOCK is supplied). Returns -EIO in the case of an
+    unrecoverable error or if the card is removed.
+
+    read() will return an integral number of events.
+
+    The buffer passed to read() must be at least 4K bytes
+
+    The result of the read will be a buffer of one or more events,
+    each event is of type struct cxl_event, of varying size.
+
+            struct cxl_event {
+                    struct cxl_event_header header;
+                    union {
+                            struct cxl_event_afu_interrupt irq;
+                            struct cxl_event_data_storage fault;
+                            struct cxl_event_afu_error afu_err;
+                    };
+            };
+
+    The struct cxl_event_header is defined as:
+            struct cxl_event_header {
+                    __u16 type;
+                    __u16 size;
+                    __u16 process_element;
+                    __u16 reserved1;
+            };
+
+        type:
+            This defines the type of event. The type determines how
+            the rest of the event is structured. These types are shown
+            below and enum cxl_event_type maps to these types.
+
+        size:
+            This is the size of the event in bytes including the
+            struct cxl_event_header. The start of the next event can
+            be found at this offset from the start of the current
+            event.
+
+        process_element:
+            Context ID of the event.
+
+        reserved field:
+            For future extensions and padding.
+
+    If the event type is CXL_EVENT_AFU_INTERRUPT then the event
+    structure is defined as:
+            struct cxl_event_afu_interrupt {
+                    __u16 flags;
+                    __u16 irq; /* Raised AFU interrupt number */
+                    __u32 reserved1;
+            };
+
+        flags:
+            These flags indicate which optional fields are present
+            in this struct. Currently all fields are mandatory.
+
+        irq:
+            The IRQ number sent by the AFU.
+
+        reserved field:
+            For future extensions and padding.
+
+    If the event type is CXL_EVENT_DATA_STORAGE then the event
+    structure is defined as:
+            struct cxl_event_data_storage {
+                    __u16 flags;
+                    __u16 reserved1;
+                    __u32 reserved2;
+                    __u64 addr;
+                    __u64 dsisr;
+                    __u64 reserved3;
+            };
+
+        flags:
+            These flags indicate which optional fields are present in
+            this struct. Currently all fields are mandatory.
+
+        address:
+            The address that the AFU unsuccessfully attempted to
+            access. Valid accesses will be handled transparently by the
+            kernel but invalid accesses will generate this event.
+
+        dsisr:
+
+            This field give information on the type of fault. Copy of
+            the DSISR from PSL hardware when address fault occurred.
+            This DSISR is as defined the CAIA.
+
+        reserved fields:
+            For future extensions
+
+    If the event type is CXL_EVENT_AFU_ERROR then the event structure
+    is defined as:
+            struct cxl_event_afu_error {
+                    __u16 flags;
+                    __u16 reserved1;
+                    __u32 reserved2;
+                    __u64 error;
+            };
+
+        flags:
+            These flags indicate which optional fields are present in
+            this struct. Currently all fields are Mandatory.
+
+        error:
+            Error status from the AFU. Defined by the AFU.
+
+        reserved fields:
+            For future extensions and padding
 
 Sysfs Class
 ===========

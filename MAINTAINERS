@@ -2717,6 +2717,11 @@ M:	Michael Neuling <mikey@neuling.org>
 L:	linuxppc-dev@lists.ozlabs.org
 S:	Supported
 F:	drivers/misc/cxl/
+F:      include/misc/cxl.h
+F:      include/uapi/misc/cxl.h
+F:      Documentation/powerpc/cxl.txt
+F:      Documentation/powerpc/cxl.txt
+F:      Documentation/ABI/testing/sysfs-class-cxl
 
 STMMAC ETHERNET DRIVER
 M:	Giuseppe Cavallaro <peppe.cavallaro@st.com>
