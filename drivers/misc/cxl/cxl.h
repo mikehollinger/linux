@@ -345,8 +345,8 @@ struct cxl_afu {
 	void __iomem *afu_desc_mmio;
 	struct cxl *adapter;
 	struct device dev;
-	struct cdev afu_cdev_s, afu_cdev_m;
-	struct device *chardev_s, *chardev_m;
+	struct cdev afu_cdev_s, afu_cdev_m, afu_cdev_d;
+	struct device *chardev_s, *chardev_m, *chardev_d;
 	struct idr contexts_idr;
 	struct dentry *debugfs;
 	spinlock_t contexts_lock;
@@ -544,6 +544,7 @@ int cxl_file_init(void);
 void cxl_file_exit(void);
 int cxl_register_adapter(struct cxl *adapter);
 int cxl_register_afu(struct cxl_afu *afu);
+int cxl_chardev_d_afu_add(struct cxl_afu *afu);
 int cxl_chardev_m_afu_add(struct cxl_afu *afu);
 int cxl_chardev_s_afu_add(struct cxl_afu *afu);
 void cxl_chardev_afu_remove(struct cxl_afu *afu);

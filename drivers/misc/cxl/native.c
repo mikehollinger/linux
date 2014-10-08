@@ -493,7 +493,7 @@ static int activate_dedicated_process(struct cxl_afu *afu)
 	afu->current_model = CXL_MODEL_DEDICATED;
 	afu->num_procs = 1;
 
-	return cxl_chardev_m_afu_add(afu);
+	return cxl_chardev_d_afu_add(afu);
 }
 
 static int attach_dedicated(struct cxl_context *ctx, u64 wed, u64 amr)

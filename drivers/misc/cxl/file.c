@@ -25,22 +25,20 @@
 #include "cxl.h"
 
 #define CXL_NUM_MINORS 256 /* Total to reserve */
-#define CXL_DEV_MINORS 9   /* 1 control + 4 AFUs * 2 (master/shared) */
+#define CXL_DEV_MINORS 13   /* 1 control + 4 AFUs * 3 (dedicated/master/shared) */
 
 #define CXL_CARD_MINOR(adapter) (adapter->adapter_num * CXL_DEV_MINORS)
-#define CXL_AFU_MINOR(afu) (CXL_CARD_MINOR(afu->adapter) + 1 + (2 * afu->slice))
-#define CXL_AFU_MINOR_M(afu) (CXL_AFU_MINOR(afu) + 1)
-#define CXL_AFU_MKDEV(afu) MKDEV(MAJOR(cxl_dev), CXL_AFU_MINOR(afu))
+#define CXL_AFU_MINOR_D(afu) (CXL_CARD_MINOR(afu->adapter) + 1 + (3 * afu->slice))
+#define CXL_AFU_MINOR_M(afu) (CXL_AFU_MINOR_D(afu) + 1)
+#define CXL_AFU_MINOR_S(afu) (CXL_AFU_MINOR_D(afu) + 2)
+#define CXL_AFU_MKDEV_D(afu) MKDEV(MAJOR(cxl_dev), CXL_AFU_MINOR_D(afu))
 #define CXL_AFU_MKDEV_M(afu) MKDEV(MAJOR(cxl_dev), CXL_AFU_MINOR_M(afu))
+#define CXL_AFU_MKDEV_S(afu) MKDEV(MAJOR(cxl_dev), CXL_AFU_MINOR_S(afu))
 
 #define CXL_DEVT_ADAPTER(dev) (MINOR(dev) / CXL_DEV_MINORS)
-#define CXL_DEVT_AFU(dev) ((MINOR(dev) % CXL_DEV_MINORS - 1) / 2)
+#define CXL_DEVT_AFU(dev) ((MINOR(dev) % CXL_DEV_MINORS - 1) / 3)
 
 #define CXL_DEVT_IS_CARD(dev) (MINOR(dev) % CXL_DEV_MINORS == 0)
-#define CXL_DEVT_IS_AFU(dev) (!CXL_DEVT_IS_CARD(dev))
-#define _CXL_DEVT_IS_AFU_S(dev) (((MINOR(dev) % CXL_DEV_MINORS) % 2) == 1)
-#define CXL_DEVT_IS_AFU_S(dev) (!CXL_DEVT_IS_CARD(dev) && _CXL_DEVT_IS_AFU_S(dev))
-#define CXL_DEVT_IS_AFU_M(dev) (!CXL_DEVT_IS_CARD(dev) && !_CXL_DEVT_IS_AFU_S(dev))
 
 dev_t cxl_dev;
 
@@ -365,31 +363,44 @@ static const struct file_operations afu_master_fops = {
 
 static char *cxl_devnode(struct device *dev, umode_t *mode)
 {
-	struct cxl_afu *afu;
-
 	if (CXL_DEVT_IS_CARD(dev->devt)) {
 		/*
 		 * These minor numbers will eventually be used to program the
 		 * PSL and AFUs once we have dynamic reprogramming support
 		 */
 		return NULL;
-	} else { /* CXL_DEVT_IS_AFU */
-		/*
-		 * Default character devices in each programming model just get
-		 * named /dev/cxl/afuX.Y
-		 */
-		afu = dev_get_drvdata(dev);
-		if ((afu->current_model == CXL_MODEL_DEDICATED) &&
-				CXL_DEVT_IS_AFU_M(dev->devt))
-			return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(&afu->dev));
-		if ((afu->current_model == CXL_MODEL_DIRECTED) &&
-				CXL_DEVT_IS_AFU_S(dev->devt))
-			return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(&afu->dev));
 	}
 	return kasprintf(GFP_KERNEL, "cxl/%s", dev_name(dev));
 }
 
 extern struct class *cxl_class;
+
+int cxl_chardev_d_afu_add(struct cxl_afu *afu)
+{
+	struct device *dev;
+	int rc;
+
+	cdev_init(&afu->afu_cdev_d, &afu_master_fops);
+	if ((rc = cdev_add(&afu->afu_cdev_d, CXL_AFU_MKDEV_D(afu), 1))) {
+		dev_err(&afu->dev, "Unable to add dedicated chardev: %i\n", rc);
+		return rc;
+	}
+
+	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_D(afu), afu,
+			"afu%i.%id", afu->adapter->adapter_num, afu->slice);
+	if (IS_ERR(dev)) {
+		dev_err(&afu->dev, "Unable to create dedicated chardev in sysfs: %i\n", rc);
+		rc = PTR_ERR(dev);
+		goto err;
+	}
+
+	afu->chardev_d = dev;
+
+	return 0;
+err:
+	cdev_del(&afu->afu_cdev_d);
+	return rc;
+}
 
 int cxl_chardev_m_afu_add(struct cxl_afu *afu)
 {
@@ -424,12 +435,12 @@ int cxl_chardev_s_afu_add(struct cxl_afu *afu)
 	int rc;
 
 	cdev_init(&afu->afu_cdev_s, &afu_fops);
-	if ((rc = cdev_add(&afu->afu_cdev_s, CXL_AFU_MKDEV(afu), 1))) {
+	if ((rc = cdev_add(&afu->afu_cdev_s, CXL_AFU_MKDEV_S(afu), 1))) {
 		dev_err(&afu->dev, "Unable to add shared chardev: %i\n", rc);
 		return rc;
 	}
 
-	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV(afu), afu,
+	dev = device_create(cxl_class, &afu->dev, CXL_AFU_MKDEV_S(afu), afu,
 			"afu%i.%is", afu->adapter->adapter_num, afu->slice);
 	if (IS_ERR(dev)) {
 		dev_err(&afu->dev, "Unable to create shared chardev in sysfs: %i\n", rc);
@@ -447,6 +458,10 @@ err:
 
 void cxl_chardev_afu_remove(struct cxl_afu *afu)
 {
+	if (afu->chardev_d) {
+		cdev_del(&afu->afu_cdev_d);
+		device_unregister(afu->chardev_d);
+	}
 	if (afu->chardev_m) {
 		cdev_del(&afu->afu_cdev_m);
 		device_unregister(afu->chardev_m);
