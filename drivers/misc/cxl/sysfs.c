@@ -61,8 +61,6 @@ static struct device_attribute adapter_attrs[] = {
 	__ATTR_RO(psl_revision),
 	__ATTR_RO(base_image),
 	__ATTR_RO(image_loaded),
-	/* __ATTR_RW(reset_loads_image); */
-	/* __ATTR_RW(reset_image_select); */
 };
 
 
