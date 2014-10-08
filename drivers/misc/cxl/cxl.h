@@ -557,6 +557,8 @@ int cxl_sysfs_adapter_add(struct cxl *adapter);
 void cxl_sysfs_adapter_remove(struct cxl *adapter);
 int cxl_sysfs_afu_add(struct cxl_afu *afu);
 void cxl_sysfs_afu_remove(struct cxl_afu *afu);
+int cxl_sysfs_afu_m_add(struct cxl_afu *afu);
+void cxl_sysfs_afu_m_remove(struct cxl_afu *afu);
 
 int cxl_afu_activate_mode(struct cxl_afu *afu, int mode);
 int _cxl_afu_deactivate_mode(struct cxl_afu *afu, int mode);

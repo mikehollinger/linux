@@ -385,10 +385,15 @@ static int activate_afu_directed(struct cxl_afu *afu)
 	if ((rc = cxl_chardev_m_afu_add(afu)))
 		return rc;
 
-	if ((rc = cxl_chardev_s_afu_add(afu)))
+	if ((rc = cxl_sysfs_afu_m_add(afu)))
 		goto err;
 
+	if ((rc = cxl_chardev_s_afu_add(afu)))
+		goto err1;
+
 	return 0;
+err1:
+	cxl_sysfs_afu_m_remove(afu);
 err:
 	cxl_chardev_afu_remove(afu);
 	return rc;
@@ -462,6 +467,7 @@ static int deactivate_afu_directed(struct cxl_afu *afu)
 	afu->current_mode = 0;
 	afu->num_procs = 0;
 
+	cxl_sysfs_afu_m_remove(afu);
 	cxl_chardev_afu_remove(afu);
 
 	cxl_afu_reset(afu);

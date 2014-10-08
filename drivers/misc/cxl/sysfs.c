@@ -336,25 +336,18 @@ void cxl_sysfs_adapter_remove(struct cxl *adapter)
 
 int cxl_sysfs_afu_add(struct cxl_afu *afu)
 {
-	int afu_attr, mstr_attr, rc = 0;
+	int i, rc;
 
-	for (afu_attr = 0; afu_attr < ARRAY_SIZE(afu_attrs); afu_attr++) {
-		if ((rc = device_create_file(&afu->dev, &afu_attrs[afu_attr])))
+	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++) {
+		if ((rc = device_create_file(&afu->dev, &afu_attrs[i])))
 			goto err;
-	}
-	for (mstr_attr = 0; mstr_attr < ARRAY_SIZE(afu_master_attrs); mstr_attr++) {
-		if ((rc = device_create_file(afu->chardev_m, &afu_master_attrs[mstr_attr])))
-			goto err1;
 	}
 
 	return 0;
 
-err1:
-	for (mstr_attr--; mstr_attr >= 0; mstr_attr--)
-		device_remove_file(afu->chardev_m, &afu_master_attrs[mstr_attr]);
 err:
-	for (afu_attr--; afu_attr >= 0; afu_attr--)
-		device_remove_file(&afu->dev, &afu_attrs[afu_attr]);
+	for (i--; i >= 0; i--)
+		device_remove_file(&afu->dev, &afu_attrs[i]);
 	return rc;
 }
 
@@ -362,8 +355,31 @@ void cxl_sysfs_afu_remove(struct cxl_afu *afu)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(afu_master_attrs); i++)
-		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
 	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++)
 		device_remove_file(&afu->dev, &afu_attrs[i]);
+}
+
+int cxl_sysfs_afu_m_add(struct cxl_afu *afu)
+{
+	int i, rc;
+
+	for (i = 0; i < ARRAY_SIZE(afu_master_attrs); i++) {
+		if ((rc = device_create_file(afu->chardev_m, &afu_master_attrs[i])))
+			goto err;
+	}
+
+	return 0;
+
+err:
+	for (i--; i >= 0; i--)
+		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
+	return rc;
+}
+
+void cxl_sysfs_afu_m_remove(struct cxl_afu *afu)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(afu_master_attrs); i++)
+		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
 }
