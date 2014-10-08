@@ -322,7 +322,7 @@ static ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 		pr_devel("afu_read delivering afu error\n");
 		event.header.size += sizeof(struct cxl_event_afu_error);
 		event.header.type = CXL_EVENT_AFU_ERROR;
-		event.afu_err.err = ctx->afu_err;
+		event.afu_err.error = ctx->afu_err;
 		ctx->pending_afu_err = false;
 	} else if (ctx->status == CLOSED) {
 		pr_devel("afu_read fatal error\n");

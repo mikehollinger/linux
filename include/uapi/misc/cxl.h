@@ -72,7 +72,7 @@ struct cxl_event_afu_error {
 	__u16 flags;
 	__u16 reserved1;
 	__u32 reserved2;
-	__u64 err;
+	__u64 error;
 };
 
 struct cxl_event {
