@@ -121,7 +121,7 @@ int afu_release(struct inode *inode, struct file *file)
 	cxl_context_detach(ctx);
 
 
-	/* 
+	/*
 	 * Delete the context's mapping pointer, unless it's created by the
 	 * kernel API, in which case leave it so it can be freed by reclaim_ctx()
 	 */
@@ -190,6 +190,8 @@ static long afu_ioctl_start_work(struct cxl_context *ctx,
 
 	if (work.flags & CXL_START_WORK_AMR)
 		amr = work.amr & mfspr(SPRN_UAMOR);
+
+	ctx->mmio_err_ff = !!(work.flags & CXL_START_WORK_ERR_FF);
 
 	/*
 	 * We grab the PID here and not in the file open to allow for the case
@@ -545,7 +547,7 @@ int __init cxl_file_init(void)
 	 * If these change we really need to update API.  Either change some
 	 * flags or update API version number CXL_API_VERSION.
 	 */
-	BUILD_BUG_ON(CXL_API_VERSION != 1);
+	BUILD_BUG_ON(CXL_API_VERSION != 2);
 	BUILD_BUG_ON(sizeof(struct cxl_ioctl_start_work) != 64);
 	BUILD_BUG_ON(sizeof(struct cxl_event_header) != 8);
 	BUILD_BUG_ON(sizeof(struct cxl_event_afu_interrupt) != 8);

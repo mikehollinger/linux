@@ -334,7 +334,7 @@ retry:
 	result = scsi_execute(sdev, scsi_cmd, DMA_FROM_DEVICE, cmd_buf,
 			      CMD_BUFSIZE, sense_buf, to, CMD_RETRIES, 0, NULL);
 	down_read(&cfg->ioctl_rwsem);
-	rc = check_state(cfg, true);
+	rc = check_state(cfg);
 	if (rc) {
 		dev_err(dev, "%s: Failed state! result=0x08%X\n",
 			__func__, result);
@@ -1187,10 +1187,7 @@ out:
 	return rc;
 }
 
-/*
- * Local fops for adapter file descriptor
- */
-static const struct file_operations cxlflash_cxl_fops = {
+const struct file_operations cxlflash_cxl_fops = {
 	.owner = THIS_MODULE,
 	.mmap = cxlflash_cxl_mmap,
 	.release = cxlflash_cxl_release,
@@ -1239,17 +1236,17 @@ static const struct file_operations null_fops = {
 /**
  * check_state() - checks and responds to the current adapter state
  * @cfg:	Internal structure associated with the host.
- * @ioctl:	Indicates if on an ioctl thread.
  *
  * This routine can block and should only be used on process context.
- * When blocking on an ioctl thread, the ioctl read semaphore should be
- * let up to allow for draining actively running ioctls. Also note that
- * when waking up from waiting in reset, the state is unknown and must
- * be checked again before proceeding.
+ * It assumes that the caller is an ioctl thread and holding the ioctl
+ * read semaphore. This is temporarily let up across the wait to allow
+ * for draining actively running ioctls. Also note that when waking up
+ * from waiting in reset, the state is unknown and must be checked again
+ * before proceeding.
  *
  * Return: 0 on success, -errno on failure
  */
-int check_state(struct cxlflash_cfg *cfg, bool ioctl)
+int check_state(struct cxlflash_cfg *cfg)
 {
 	struct device *dev = &cfg->dev->dev;
 	int rc = 0;
@@ -1258,12 +1255,10 @@ retry:
 	switch (cfg->state) {
 	case STATE_RESET:
 		dev_dbg(dev, "%s: Reset state, going to wait...\n", __func__);
-		if (ioctl)
-			up_read(&cfg->ioctl_rwsem);
+		up_read(&cfg->ioctl_rwsem);
 		rc = wait_event_interruptible(cfg->reset_waitq,
 					      cfg->state != STATE_RESET);
-		if (ioctl)
-			down_read(&cfg->ioctl_rwsem);
+		down_read(&cfg->ioctl_rwsem);
 		if (unlikely(rc))
 			break;
 		goto retry;
@@ -1310,10 +1305,6 @@ static int cxlflash_disk_attach(struct scsi_device *sdev,
 	struct cxl_context *ctx;
 
 	int fd = -1;
-
-	/* On very first attach set fileops for adapter */
-	if (cfg->cxl_fops.owner != THIS_MODULE)
-		cfg->cxl_fops = cxlflash_cxl_fops;
 
 	if (attach->num_interrupts > 4) {
 		dev_dbg(dev, "%s: Cannot support this many interrupts %llu\n",
@@ -1686,7 +1677,7 @@ retry_recover:
 		put_context(ctxi);
 		ctxi = NULL;
 		ssleep(1);
-		rc = check_state(cfg, true);
+		rc = check_state(cfg);
 		if (unlikely(rc))
 			goto out;
 		goto retry;
@@ -1989,7 +1980,7 @@ static int ioctl_common(struct scsi_device *sdev, int cmd)
 		goto out;
 	}
 
-	rc = check_state(cfg, true);
+	rc = check_state(cfg);
 	if (unlikely(rc) && (cfg->state == STATE_FAILTERM)) {
 		switch (cmd) {
 		case DK_CXLFLASH_VLUN_RESIZE:

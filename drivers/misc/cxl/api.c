@@ -27,8 +27,10 @@ struct cxl_context *cxl_dev_context_init(struct pci_dev *dev)
 
 	get_device(&afu->dev);
 	ctx = cxl_context_alloc();
-	if (IS_ERR(ctx))
-		return ctx;
+	if (IS_ERR(ctx)) {
+		rc = PTR_ERR(ctx);
+		goto err_dev;
+	}
 
 	ctx->kernelapi = true;
 
@@ -39,8 +41,10 @@ struct cxl_context *cxl_dev_context_init(struct pci_dev *dev)
 	 * address space as that can invalidate unrelated users:
 	 */
 	mapping = kmalloc(sizeof(struct address_space), GFP_KERNEL);
-	if (!mapping)
+	if (!mapping) {
+		rc = -ENOMEM;
 		goto err_ctx;
+	}
 	address_space_init_once(mapping);
 
 	/* Make it a slave context.  We can promote it later? */
@@ -56,7 +60,9 @@ err_mapping:
 	kfree(mapping);
 err_ctx:
 	kfree(ctx);
-	return ERR_PTR(-ENOMEM);
+err_dev:
+	put_device(&afu->dev);
+	return ERR_PTR(rc);
 }
 EXPORT_SYMBOL_GPL(cxl_dev_context_init);
 

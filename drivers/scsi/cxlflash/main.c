@@ -313,7 +313,7 @@ write_rrin:
  * @cmd:	AFU command to send.
  *
  * Return:
- *	0 on success or SCSI_MLQUEUE_HOST_BUSY
+ *	0 on success, SCSI_MLQUEUE_HOST_BUSY on failure
  */
 static int send_cmd(struct afu *afu, struct afu_cmd *cmd)
 {
@@ -400,7 +400,7 @@ static void wait_resp(struct afu *afu, struct afu_cmd *cmd)
  * @tmfcmd:	TMF command to send.
  *
  * Return:
- *	0 on success or SCSI_MLQUEUE_HOST_BUSY
+ *	0 on success, SCSI_MLQUEUE_HOST_BUSY on failure
  */
 static int send_tmf(struct afu *afu, struct scsi_cmnd *scp, u64 tmfcmd)
 {
@@ -489,7 +489,7 @@ static const char *cxlflash_driver_info(struct Scsi_Host *host)
  * @host:	SCSI host associated with device.
  * @scp:	SCSI command to send.
  *
- * Return: 0 on success or SCSI_MLQUEUE_HOST_BUSY
+ * Return: 0 on success, SCSI_MLQUEUE_HOST_BUSY on failure
  */
 static int cxlflash_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *scp)
 {
@@ -738,7 +738,6 @@ static void cxlflash_remove(struct pci_dev *pdev)
 	spin_unlock_irqrestore(&cfg->tmf_slock, lock_flags);
 
 	cfg->state = STATE_FAILTERM;
-	atomic_inc(&cfg->remove_active);
 	cxlflash_stop_term_user_contexts(cfg);
 
 	switch (cfg->init_state) {
@@ -1057,8 +1056,8 @@ static int afu_set_wwpn(struct afu *afu, int port, __be64 __iomem *fc_regs,
 
 	if (!wait_port_online(fc_regs, FC_PORT_STATUS_RETRY_INTERVAL_US,
 			      FC_PORT_STATUS_RETRY_CNT)) {
-		pr_debug("%s: wait on port %d to go online timed out\n",
-			 __func__, port);
+		pr_err("%s: wait on port %d to go online timed out\n",
+		       __func__, port);
 	}
 
 	pr_debug("%s: returning rc=%d\n", __func__, rc);
@@ -1216,12 +1215,8 @@ static void afu_err_intr_init(struct afu *afu)
 static irqreturn_t cxlflash_sync_err_irq(int irq, void *data)
 {
 	struct afu *afu = (struct afu *)data;
-	struct cxlflash_cfg *cfg = afu->parent;
 	u64 reg;
 	u64 reg_unmasked;
-
-	if (atomic_read(&cfg->remove_active))
-		goto out;
 
 	reg = readq_be(&afu->host_map->intr_status);
 	reg_unmasked = (reg & SISL_ISTATUS_UNMASK);
@@ -1229,7 +1224,7 @@ static irqreturn_t cxlflash_sync_err_irq(int irq, void *data)
 	if (reg_unmasked == 0UL) {
 		pr_err("%s: %llX: spurious interrupt, intr_status %016llX\n",
 		       __func__, (u64)afu, reg);
-		goto out;
+		goto cxlflash_sync_err_irq_exit;
 	}
 
 	pr_err("%s: %llX: unexpected interrupt, intr_status %016llX\n",
@@ -1237,7 +1232,7 @@ static irqreturn_t cxlflash_sync_err_irq(int irq, void *data)
 
 	writeq_be(reg_unmasked, &afu->host_map->intr_clear);
 
-out:
+cxlflash_sync_err_irq_exit:
 	pr_debug("%s: returning rc=%d\n", __func__, IRQ_HANDLED);
 	return IRQ_HANDLED;
 }
@@ -1252,7 +1247,6 @@ out:
 static irqreturn_t cxlflash_rrq_irq(int irq, void *data)
 {
 	struct afu *afu = (struct afu *)data;
-	struct cxlflash_cfg *cfg = afu->parent;
 	struct afu_cmd *cmd;
 	bool toggle = afu->toggle;
 	u64 entry,
@@ -1262,10 +1256,8 @@ static irqreturn_t cxlflash_rrq_irq(int irq, void *data)
 
 	/* Process however many RRQ entries that are ready */
 	while (true) {
-		if (atomic_read(&cfg->remove_active))
-			goto out;
-
 		entry = *hrrq_curr;
+
 		if ((entry & SISL_RESP_HANDLE_T_BIT) != toggle)
 			break;
 
@@ -1283,7 +1275,7 @@ static irqreturn_t cxlflash_rrq_irq(int irq, void *data)
 
 	afu->hrrq_curr = hrrq_curr;
 	afu->toggle = toggle;
-out:
+
 	return IRQ_HANDLED;
 }
 
@@ -1305,9 +1297,6 @@ static irqreturn_t cxlflash_async_err_irq(int irq, void *data)
 	u64 reg;
 	u8 port;
 	int i;
-
-	if (atomic_read(&cfg->remove_active))
-		goto out;
 
 	reg = readq_be(&global->regs.aintr_status);
 	reg_unmasked = (reg & SISL_ASTATUS_UNMASK);
@@ -2419,6 +2408,7 @@ static int cxlflash_probe(struct pci_dev *pdev,
 
 	cfg->init_state = INIT_STATE_NONE;
 	cfg->dev = pdev;
+	cfg->cxl_fops = cxlflash_cxl_fops;
 
 	/*
 	 * The promoted LUNs move to the top of the LUN table. The rest stay

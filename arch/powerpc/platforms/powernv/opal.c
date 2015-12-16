@@ -487,12 +487,12 @@ int opal_machine_check(struct pt_regs *regs)
 	 *    PRD component would have already got notified about this
 	 *    error through other channels.
 	 *
-	 * In any case, let us just fall through. We anyway heading
-	 * down to panic path.
+	 * If hardware marked this as an unrecoverable MCE, we are
+	 * going to panic anyway. Even if it didn't, it's not safe to
+	 * continue at this point, so we should explicitly panic.
 	 */
 
-	/* Above is not strictly true - we are going to die() which only Oops */
-	panic("PowerNV unrecovered Machine Check.");
+	panic("PowerNV Unrecovered Machine Check");
 	return 0;
 }
 
@@ -686,7 +686,7 @@ static void opal_init_heartbeat(void)
 
 static int __init opal_init(void)
 {
-	struct device_node *np, *consoles;
+	struct device_node *np, *consoles, *leds;
 	int rc;
 
 	opal_node = of_find_node_by_path("/ibm,opal");
@@ -726,6 +726,13 @@ static int __init opal_init(void)
 
 	/* Setup a heatbeat thread if requested by OPAL */
 	opal_init_heartbeat();
+
+	/* Create leds platform devices */
+	leds = of_find_node_by_path("/ibm,opal/leds");
+	if (leds) {
+		of_platform_device_create(leds, "opal_leds", NULL);
+		of_node_put(leds);
+	}
 
 	/* Create "opal" kobject under /sys/firmware */
 	rc = opal_sysfs_init();
@@ -879,3 +886,6 @@ EXPORT_SYMBOL_GPL(opal_rtc_write);
 EXPORT_SYMBOL_GPL(opal_tpo_read);
 EXPORT_SYMBOL_GPL(opal_tpo_write);
 EXPORT_SYMBOL_GPL(opal_i2c_request);
+/* Export these symbols for PowerNV LED class driver */
+EXPORT_SYMBOL_GPL(opal_leds_get_ind);
+EXPORT_SYMBOL_GPL(opal_leds_set_ind);

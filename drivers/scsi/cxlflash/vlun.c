@@ -457,7 +457,7 @@ static int write_same16(struct scsi_device *sdev,
 				      CMD_BUFSIZE, sense_buf, to, CMD_RETRIES,
 				      0, NULL);
 		down_read(&cfg->ioctl_rwsem);
-		rc = check_state(cfg, true);
+		rc = check_state(cfg);
 		if (rc) {
 			dev_err(dev, "%s: Failed state! result=0x08%X\n",
 				__func__, result);

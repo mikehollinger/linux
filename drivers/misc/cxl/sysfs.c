@@ -469,12 +469,7 @@ static ssize_t afu_read_config(struct file *filp, struct kobject *kobj,
 	struct afu_config_record *cr = to_cr(kobj);
 	struct cxl_afu *afu = to_cxl_afu(container_of(kobj->parent, struct device, kobj));
 
-	u64 i, j, val, size = afu->crs_len;
-
-	if (off > size)
-		return 0;
-	if (off + count > size)
-		count = size - off;
+	u64 i, j, val;
 
 	for (i = 0; i < count;) {
 		val = cxl_afu_cr_read64(afu, cr->cr, off & ~0x7);
@@ -597,6 +592,8 @@ int cxl_sysfs_afu_add(struct cxl_afu *afu)
 
 	/* conditionally create the add the binary file for error info buffer */
 	if (afu->eb_len) {
+		sysfs_attr_init(&afu->attr_eb.attr);
+
 		afu->attr_eb.attr.name = "afu_err_buff";
 		afu->attr_eb.attr.mode = S_IRUGO;
 		afu->attr_eb.size = afu->eb_len;

@@ -14,11 +14,6 @@
 
 struct device_node;
 
-enum pci_controller_type {
-	PCI_PLATFORM,
-	PCI_CXL,
-};
-
 /*
  * PCI controller operations
  */
@@ -47,6 +42,7 @@ struct pci_controller_ops {
 #endif
 
 	int             (*dma_set_mask)(struct pci_dev *dev, u64 dma_mask);
+	u64		(*dma_get_required_mask)(struct pci_dev *dev);
 
 	void		(*shutdown)(struct pci_controller *);
 };
@@ -70,9 +66,6 @@ struct pci_controller {
 	struct resource busn;
 
 	void __iomem *io_base_virt;
-
-	enum pci_controller_type type;
-
 #ifdef CONFIG_PPC64
 	void *io_base_alloc;
 #endif

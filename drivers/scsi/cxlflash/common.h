@@ -21,6 +21,7 @@
 #include <scsi/scsi.h>
 #include <scsi/scsi_device.h>
 
+extern const struct file_operations cxlflash_cxl_fops;
 
 #define MAX_CONTEXT  CXLFLASH_MAX_CONTEXT       /* num contexts per afu */
 
@@ -103,7 +104,6 @@ struct cxlflash_cfg {
 	enum cxlflash_lr_state lr_state;
 	int lr_port;
 	atomic_t scan_host_needed;
-	atomic_t remove_active;
 
 	struct cxl_afu *cxl_afu;
 	struct pci_dev *parent_dev;

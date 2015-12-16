@@ -134,7 +134,7 @@ u8 cxl_afu_cr_read8(struct cxl_afu *afu, int cr, u64 off)
 	return (val >> ((off & 0x3) * 8)) & 0xff;
 }
 
-static DEFINE_PCI_DEVICE_TABLE(cxl_pci_tbl) = {
+static const struct pci_device_id cxl_pci_tbl[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0477), },
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x044b), },
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x04cf), },
@@ -366,6 +366,55 @@ static int init_implementation_adapter_regs(struct cxl *adapter, struct pci_dev 
 	cxl_p1_write(adapter, CXL_PSL_FIR_CNTL, 0x0800000000000000ULL);
 	/* for debugging with trace arrays */
 	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x0000FF7C00000000ULL);
+
+	return 0;
+}
+
+#define TBSYNC_CNT(n) (((u64)n & 0x7) << (63-6))
+#define _2048_250MHZ_CYCLES 1
+
+static int cxl_setup_psl_timebase(struct cxl *adapter, struct pci_dev *dev)
+{
+	u64 psl_tb;
+	int delta;
+	unsigned int retry = 0;
+	struct device_node *np;
+
+	if (!(np = pnv_pci_get_phb_node(dev)))
+		return -ENODEV;
+
+	/* Do not fail when CAPP timebase sync is not supported by OPAL */
+	of_node_get(np);
+	if (! of_get_property(np, "ibm,capp-timebase-sync", NULL)) {
+		of_node_put(np);
+		pr_err("PSL: Timebase sync: OPAL support missing\n");
+		return 0;
+	}
+	of_node_put(np);
+
+	/*
+	 * Setup PSL Timebase Control and Status register
+	 * with the recommended Timebase Sync Count value
+	 */
+	cxl_p1_write(adapter, CXL_PSL_TB_CTLSTAT,
+		     TBSYNC_CNT(2 * _2048_250MHZ_CYCLES));
+
+	/* Enable PSL Timebase */
+	cxl_p1_write(adapter, CXL_PSL_Control, 0x0000000000000000);
+	cxl_p1_write(adapter, CXL_PSL_Control, CXL_PSL_Control_tb);
+
+	/* Wait until CORE TB and PSL TB difference <= 16usecs */
+	do {
+		msleep(1);
+		if (retry++ > 5) {
+			pr_err("PSL: Timebase sync: giving up!\n");
+			return -EIO;
+		}
+		psl_tb = cxl_p1_read(adapter, CXL_PSL_Timebase);
+		delta = mftb() - psl_tb;
+		if (delta < 0)
+			delta = -delta;
+	} while (cputime_to_usecs(delta) > 16);
 
 	return 0;
 }
@@ -758,40 +807,32 @@ static int cxl_configure_afu(struct cxl_afu *afu, struct cxl *adapter, struct pc
 {
 	int rc;
 
-	rc = cxl_map_slice_regs(afu, adapter, dev);
-	if (rc)
+	if ((rc = cxl_map_slice_regs(afu, adapter, dev)))
 		return rc;
 
-	rc = sanitise_afu_regs(afu);
-	if (rc)
+	if ((rc = sanitise_afu_regs(afu)))
 		goto err1;
 
 	/* We need to reset the AFU before we can read the AFU descriptor */
-	rc = __cxl_afu_reset(afu);
-	if (rc)
+	if ((rc = __cxl_afu_reset(afu)))
 		goto err1;
 
 	if (cxl_verbose)
 		dump_afu_descriptor(afu);
 
-	rc = cxl_read_afu_descriptor(afu);
-	if (rc)
+	if ((rc = cxl_read_afu_descriptor(afu)))
 		goto err1;
 
-	rc = cxl_afu_descriptor_looks_ok(afu);
-	if (rc)
+	if ((rc = cxl_afu_descriptor_looks_ok(afu)))
 		goto err1;
 
-	rc = init_implementation_afu_regs(afu);
-	if (rc)
+	if ((rc = init_implementation_afu_regs(afu)))
 		goto err1;
 
-	rc = cxl_register_serr_irq(afu);
-	if (rc)
+	if ((rc = cxl_register_serr_irq(afu)))
 		goto err1;
 
-	rc = cxl_register_psl_irq(afu);
-	if (rc)
+	if ((rc = cxl_register_psl_irq(afu)))
 		goto err2;
 
 	return 0;
@@ -834,18 +875,15 @@ static int cxl_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 	 * After we call this function we must not free the afu directly, even
 	 * if it returns an error!
 	 */
-	rc = cxl_register_afu(afu);
-	if (rc)
+	if ((rc = cxl_register_afu(afu)))
 		goto err_put1;
 
-	rc = cxl_sysfs_afu_add(afu);
-	if (rc)
+	if ((rc = cxl_sysfs_afu_add(afu)))
 		goto err_put1;
 
 	adapter->afu[afu->slice] = afu;
 
-	rc = cxl_pci_vphb_add(afu);
-	if (rc)
+	if ((rc = cxl_pci_vphb_add(afu)))
 		dev_info(&afu->dev, "Can't register vPHB\n");
 
 	return 0;
@@ -997,6 +1035,32 @@ static int cxl_read_vsec(struct cxl *adapter, struct pci_dev *dev)
 	return 0;
 }
 
+/*
+ * Workaround a PCIe Host Bridge defect on some cards, that can cause
+ * malformed Transaction Layer Packet (TLP) errors to be erroneously
+ * reported. Mask this error in the Uncorrectable Error Mask Register.
+ *
+ * The upper nibble of the PSL revision is used to distinguish between
+ * different cards. The affected ones have it set to 0.
+ */
+static void cxl_fixup_malformed_tlp(struct cxl *adapter, struct pci_dev *dev)
+{
+	int aer;
+	u32 data;
+
+	if (adapter->psl_rev & 0xf000)
+		return;
+	if (!(aer = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_ERR)))
+		return;
+	pci_read_config_dword(dev, aer + PCI_ERR_UNCOR_MASK, &data);
+	if (data & PCI_ERR_UNC_MALF_TLP)
+		if (data & PCI_ERR_UNC_INTN)
+			return;
+	data |= PCI_ERR_UNC_MALF_TLP;
+	data |= PCI_ERR_UNC_INTN;
+	pci_write_config_dword(dev, aer + PCI_ERR_UNCOR_MASK, data);
+}
+
 static int cxl_vsec_looks_ok(struct cxl *adapter, struct pci_dev *dev)
 {
 	if (adapter->vsec_status & CXL_STATUS_SECOND_PORT)
@@ -1064,9 +1128,12 @@ err1:
 	return NULL;
 }
 
+#define CXL_PSL_ErrIVTE_tberror (0x1ull << (63-31))
+
 static int sanitise_adapter_regs(struct cxl *adapter)
 {
-	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
+	/* Clear PSL tberror bit by writing 1 to it */
+	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, CXL_PSL_ErrIVTE_tberror);
 	return cxl_tlb_slb_invalidate(adapter);
 }
 
@@ -1087,50 +1154,44 @@ static int cxl_configure_adapter(struct cxl *adapter, struct pci_dev *dev)
 		return rc;
 	}
 
-	rc = cxl_read_vsec(adapter, dev);
-	if (rc)
+	if ((rc = cxl_read_vsec(adapter, dev)))
 		return rc;
 
-	rc = cxl_vsec_looks_ok(adapter, dev);
-	if (rc)
+	if ((rc = cxl_vsec_looks_ok(adapter, dev)))
 	        return rc;
 
-	rc = setup_cxl_bars(dev);
-	if (rc)
+	cxl_fixup_malformed_tlp(adapter, dev);
+
+	if ((rc = setup_cxl_bars(dev)))
 		return rc;
 
-	rc = switch_card_to_cxl(dev);
-	if (rc)
+	if ((rc = switch_card_to_cxl(dev)))
 		return rc;
 
-	rc = cxl_update_image_control(adapter);
-	if (rc)
+	if ((rc = cxl_update_image_control(adapter)))
 		return rc;
 
-	rc = cxl_map_adapter_regs(adapter, dev);
-	if (rc)
+	if ((rc = cxl_map_adapter_regs(adapter, dev)))
 		return rc;
 
-	rc = sanitise_adapter_regs(adapter);
-	if (rc)
+	if ((rc = sanitise_adapter_regs(adapter)))
 		goto err;
 
-	rc = init_implementation_adapter_regs(adapter, dev);
-	if (rc)
+	if ((rc = init_implementation_adapter_regs(adapter, dev)))
 		goto err;
 
-	rc = pnv_phb_to_cxl_mode(dev, OPAL_PHB_CAPI_MODE_CAPI);
-	if (rc)
+	if ((rc = pnv_phb_to_cxl_mode(dev, OPAL_PHB_CAPI_MODE_CAPI)))
 		goto err;
 
 	/* If recovery happened, the last step is to turn on snooping.
 	 * In the non-recovery case this has no effect */
-	rc = pnv_phb_to_cxl_mode(dev, OPAL_PHB_CAPI_MODE_SNOOP_ON);
-	if (rc)
+	if ((rc = pnv_phb_to_cxl_mode(dev, OPAL_PHB_CAPI_MODE_SNOOP_ON)))
 		goto err;
 
-	rc = cxl_register_psl_err_irq(adapter);
-	if (rc)
+	if ((rc = cxl_setup_psl_timebase(adapter, dev)))
+		goto err;
+
+	if ((rc = cxl_register_psl_err_irq(adapter)))
 		goto err;
 
 	return 0;
@@ -1180,12 +1241,10 @@ static struct cxl *cxl_init_adapter(struct pci_dev *dev)
 	 * After we call this function we must not free the adapter directly,
 	 * even if it returns an error!
 	 */
-	rc = cxl_register_adapter(adapter);
-	if (rc)
+	if ((rc = cxl_register_adapter(adapter)))
 		goto err_put1;
 
-	rc = cxl_sysfs_adapter_add(adapter);
-	if (rc)
+	if ((rc = cxl_sysfs_adapter_add(adapter)))
 		goto err_put1;
 
 	return adapter;
@@ -1228,8 +1287,7 @@ static int cxl_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	for (slice = 0; slice < adapter->slices; slice++) {
-		rc = cxl_init_afu(adapter, slice, dev);
-		if (rc) {
+		if ((rc = cxl_init_afu(adapter, slice, dev))) {
 			dev_err(&dev->dev, "AFU %i failed to initialise: %i\n", slice, rc);
 			continue;
 		}
