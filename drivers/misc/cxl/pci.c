@@ -1494,6 +1494,9 @@ static int __init cxl_pci_init(void)
 {
 	int rc;
 
+	if (!cpu_has_feature(CPU_FTR_HVMODE))
+		return 0;
+
 	pr_devel("in %s\n", __func__);
 	cxl_ops = &cxl_native_ops;
 	if ((rc = pci_register_driver(&cxl_pci_driver)))
