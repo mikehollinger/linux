@@ -31,6 +31,32 @@ static DEFINE_IDR(cxl_adapter_idr);
 uint cxl_verbose;
 module_param_named(verbose, cxl_verbose, uint, 0600);
 MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
+EXPORT_SYMBOL_GPL(cxl_verbose);
+
+const struct cxl_backend_ops *cxl_ops;
+EXPORT_SYMBOL_GPL(cxl_ops);
+
+int cxl_afu_slbia(struct cxl_afu *afu)
+{
+	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
+
+	pr_devel("%s issuing SLBIA command\n", __func__);
+	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_TLB_SLB_IQ_ALL);
+	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_TLB_SLB_P) {
+		if (time_after_eq(jiffies, timeout)) {
+			dev_warn(&afu->dev, "WARNING: CXL AFU SLBIA timed out!\n");
+			return -EBUSY;
+		}
+		/* If the adapter has gone down, we can assume that we
+		 * will PERST it and that will invalidate everything.
+		 */
+		if (!cxl_adapter_link_ok(afu->adapter, afu))
+			return -EIO;
+		cpu_relax();
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(cxl_afu_slbia);
 
 static inline void _cxl_slbia(struct cxl_context *ctx, struct mm_struct *mm)
 {
@@ -139,6 +165,19 @@ int cxl_alloc_sst(struct cxl_context *ctx)
 	return 0;
 }
 
+void cxl_assign_psn_space(struct cxl_context *ctx)
+{
+	if (!ctx->afu->pp_size || ctx->master) {
+		ctx->psn_phys = ctx->afu->psn_phys;
+		ctx->psn_size = ctx->afu->adapter->ps_size;
+	} else {
+		ctx->psn_phys = ctx->afu->psn_phys +
+			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->pe);
+		ctx->psn_size = ctx->afu->pp_size;
+	}
+}
+EXPORT_SYMBOL_GPL(cxl_assign_psn_space);
+
 /* Find a CXL adapter by it's number and increase it's refcount */
 struct cxl *get_cxl_adapter(int num)
 {
@@ -151,8 +190,9 @@ struct cxl *get_cxl_adapter(int num)
 
 	return adapter;
 }
+EXPORT_SYMBOL_GPL(get_cxl_adapter);
 
-int cxl_alloc_adapter_nr(struct cxl *adapter)
+static int cxl_alloc_adapter_nr(struct cxl *adapter)
 {
 	int i;
 
@@ -173,43 +213,89 @@ void cxl_remove_adapter_nr(struct cxl *adapter)
 {
 	idr_remove(&cxl_adapter_idr, adapter->adapter_num);
 }
+EXPORT_SYMBOL_GPL(cxl_remove_adapter_nr);
+
+struct cxl *cxl_alloc_adapter(void)
+{
+	struct cxl *adapter;
+
+	if (!(adapter = kzalloc(sizeof(struct cxl), GFP_KERNEL)))
+		return NULL;
+
+	spin_lock_init(&adapter->afu_list_lock);
+
+	if (cxl_alloc_adapter_nr(adapter))
+		goto err1;
+
+	if (dev_set_name(&adapter->dev, "card%i", adapter->adapter_num))
+		goto err2;
+
+	return adapter;
+
+err2:
+	cxl_remove_adapter_nr(adapter);
+err1:
+	kfree(adapter);
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(cxl_alloc_adapter);
+
+struct cxl_afu *cxl_alloc_afu(struct cxl *adapter, int slice)
+{
+	struct cxl_afu *afu;
+
+	if (!(afu = kzalloc(sizeof(struct cxl_afu), GFP_KERNEL)))
+		return NULL;
+
+	afu->adapter = adapter;
+	afu->dev.parent = &adapter->dev;
+	afu->dev.release = cxl_ops->release_afu;
+	afu->slice = slice;
+	idr_init(&afu->contexts_idr);
+	mutex_init(&afu->contexts_lock);
+	spin_lock_init(&afu->afu_cntl_lock);
+	mutex_init(&afu->spa_mutex);
+
+	afu->prefault_mode = CXL_PREFAULT_NONE;
+	afu->irqs_max = afu->adapter->user_irqs;
+
+	return afu;
+}
+EXPORT_SYMBOL_GPL(cxl_alloc_afu);
 
 int cxl_afu_select_best_mode(struct cxl_afu *afu)
 {
 	if (afu->modes_supported & CXL_MODE_DIRECTED)
-		return cxl_afu_activate_mode(afu, CXL_MODE_DIRECTED);
+		return cxl_ops->afu_activate_mode(afu, CXL_MODE_DIRECTED);
 
 	if (afu->modes_supported & CXL_MODE_DEDICATED)
-		return cxl_afu_activate_mode(afu, CXL_MODE_DEDICATED);
+		return cxl_ops->afu_activate_mode(afu, CXL_MODE_DEDICATED);
 
 	dev_warn(&afu->dev, "No supported programming modes available\n");
 	/* We don't fail this so the user can inspect sysfs */
 	return 0;
 }
+EXPORT_SYMBOL_GPL(cxl_afu_select_best_mode);
 
 static int __init init_cxl(void)
 {
 	int rc = 0;
 
-	if (!cpu_has_feature(CPU_FTR_HVMODE))
-		return -EPERM;
-
 	if ((rc = cxl_file_init()))
 		return rc;
 
-	cxl_debugfs_init();
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		cxl_debugfs_init();
 
 	if ((rc = register_cxl_calls(&cxl_calls)))
 		goto err;
 
-	if ((rc = pci_register_driver(&cxl_pci_driver)))
-		goto err1;
-
 	return 0;
-err1:
-	unregister_cxl_calls(&cxl_calls);
+
 err:
-	cxl_debugfs_exit();
+	unregister_cxl_calls(&cxl_calls);
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		cxl_debugfs_exit();
 	cxl_file_exit();
 
 	return rc;
@@ -217,9 +303,8 @@ err:
 
 static void exit_cxl(void)
 {
-	pci_unregister_driver(&cxl_pci_driver);
-
-	cxl_debugfs_exit();
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		cxl_debugfs_exit();
 	cxl_file_exit();
 	unregister_cxl_calls(&cxl_calls);
 	idr_destroy(&cxl_adapter_idr);

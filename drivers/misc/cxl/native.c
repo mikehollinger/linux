@@ -20,6 +20,22 @@
 #include "cxl.h"
 #include "trace.h"
 
+void cxl_stop_trace(struct cxl *adapter)
+{
+	int slice;
+
+	/* Stop the trace */
+	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x8000000000000017LL);
+
+	/* Stop the slice traces */
+	spin_lock(&adapter->afu_list_lock);
+	for (slice = 0; slice < adapter->slices; slice++) {
+		if (adapter->afu[slice])
+			cxl_p1n_write(adapter->afu[slice], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
+	}
+	spin_unlock(&adapter->afu_list_lock);
+}
+
 static int afu_control(struct cxl_afu *afu, u64 command,
 		       u64 result, u64 mask, bool enabled)
 {
@@ -42,7 +58,7 @@ static int afu_control(struct cxl_afu *afu, u64 command,
 			goto out;
 		}
 
-		if (!cxl_adapter_link_ok(afu->adapter)) {
+		if (!cxl_adapter_link_ok(afu->adapter, afu)) {
 			afu->enabled = enabled;
 			rc = -EIO;
 			goto out;
@@ -80,7 +96,7 @@ int cxl_afu_disable(struct cxl_afu *afu)
 }
 
 /* This will disable as well as reset */
-int __cxl_afu_reset(struct cxl_afu *afu)
+static int native_afu_reset(struct cxl_afu *afu)
 {
 	pr_devel("AFU reset request\n");
 
@@ -90,9 +106,9 @@ int __cxl_afu_reset(struct cxl_afu *afu)
 			   false);
 }
 
-int cxl_afu_check_and_enable(struct cxl_afu *afu)
+static int native_afu_check_and_enable(struct cxl_afu *afu)
 {
-	if (!cxl_adapter_link_ok(afu->adapter)) {
+	if (!cxl_adapter_link_ok(afu->adapter, afu)) {
 		WARN(1, "Refusing to enable afu while link down!\n");
 		return -EIO;
 	}
@@ -114,7 +130,7 @@ int cxl_psl_purge(struct cxl_afu *afu)
 
 	pr_devel("PSL purge request\n");
 
-	if (!cxl_adapter_link_ok(afu->adapter)) {
+	if (!cxl_adapter_link_ok(afu->adapter, afu)) {
 		dev_warn(&afu->dev, "PSL Purge called with link down, ignoring\n");
 		rc = -EIO;
 		goto out;
@@ -136,7 +152,7 @@ int cxl_psl_purge(struct cxl_afu *afu)
 			rc = -EBUSY;
 			goto out;
 		}
-		if (!cxl_adapter_link_ok(afu->adapter)) {
+		if (!cxl_adapter_link_ok(afu->adapter, afu)) {
 			rc = -EIO;
 			goto out;
 		}
@@ -247,7 +263,7 @@ int cxl_tlb_slb_invalidate(struct cxl *adapter)
 			dev_warn(&adapter->dev, "WARNING: CXL adapter wide TLBIA timed out!\n");
 			return -EBUSY;
 		}
-		if (!cxl_adapter_link_ok(adapter))
+		if (!cxl_adapter_link_ok(adapter, NULL))
 			return -EIO;
 		cpu_relax();
 	}
@@ -258,28 +274,7 @@ int cxl_tlb_slb_invalidate(struct cxl *adapter)
 			dev_warn(&adapter->dev, "WARNING: CXL adapter wide SLBIA timed out!\n");
 			return -EBUSY;
 		}
-		if (!cxl_adapter_link_ok(adapter))
-			return -EIO;
-		cpu_relax();
-	}
-	return 0;
-}
-
-int cxl_afu_slbia(struct cxl_afu *afu)
-{
-	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
-
-	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
-	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_TLB_SLB_IQ_ALL);
-	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_TLB_SLB_P) {
-		if (time_after_eq(jiffies, timeout)) {
-			dev_warn(&afu->dev, "WARNING: CXL AFU SLBIA timed out!\n");
-			return -EBUSY;
-		}
-		/* If the adapter has gone down, we can assume that we
-		 * will PERST it and that will invalidate everything.
-		 */
-		if (!cxl_adapter_link_ok(afu->adapter))
+		if (!cxl_adapter_link_ok(adapter, NULL))
 			return -EIO;
 		cpu_relax();
 	}
@@ -320,7 +315,7 @@ static void slb_invalid(struct cxl_context *ctx)
 	cxl_p1_write(adapter, CXL_PSL_SLBIA, CXL_TLB_SLB_IQ_LPIDPID);
 
 	while (1) {
-		if (!cxl_adapter_link_ok(adapter))
+		if (!cxl_adapter_link_ok(adapter, NULL))
 			break;
 		slbia = cxl_p1_read(adapter, CXL_PSL_SLBIA);
 		if (!(slbia & CXL_TLB_SLB_P))
@@ -351,7 +346,7 @@ static int do_process_element_cmd(struct cxl_context *ctx,
 			rc = -EBUSY;
 			goto out;
 		}
-		if (!cxl_adapter_link_ok(ctx->afu->adapter)) {
+		if (!cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu)) {
 			dev_warn(&ctx->afu->dev, "WARNING: Device link down, aborting Process Element Command!\n");
 			rc = -EIO;
 			goto out;
@@ -407,7 +402,7 @@ static int terminate_process_element(struct cxl_context *ctx)
 	 * should always succeed: it's not running if the hw has gone
 	 * away and is being reset.
 	 */
-	if (cxl_adapter_link_ok(ctx->afu->adapter))
+	if (cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu))
 		rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_TERMINATE,
 					    CXL_PE_SOFTWARE_STATE_V | CXL_PE_SOFTWARE_STATE_T);
 	ctx->elem->software_state = 0;	/* Remove Valid bit */
@@ -426,7 +421,7 @@ static int remove_process_element(struct cxl_context *ctx)
 	/* We could be asked to remove when the hw is down. Again, if
 	 * the hw is down, the PE is gone, so we succeed.
 	 */
-	if (cxl_adapter_link_ok(ctx->afu->adapter))
+	if (cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu))
 		rc = do_process_element_cmd(ctx, CXL_SPA_SW_CMD_REMOVE, 0);
 
 	if (!rc)
@@ -436,19 +431,6 @@ static int remove_process_element(struct cxl_context *ctx)
 	mutex_unlock(&ctx->afu->spa_mutex);
 
 	return rc;
-}
-
-
-void cxl_assign_psn_space(struct cxl_context *ctx)
-{
-	if (!ctx->afu->pp_size || ctx->master) {
-		ctx->psn_phys = ctx->afu->psn_phys;
-		ctx->psn_size = ctx->afu->adapter->ps_size;
-	} else {
-		ctx->psn_phys = ctx->afu->psn_phys +
-			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->pe);
-		ctx->psn_size = ctx->afu->pp_size;
-	}
 }
 
 static int activate_afu_directed(struct cxl_afu *afu)
@@ -497,7 +479,6 @@ static u64 calculate_sr(struct cxl_context *ctx)
 {
 	u64 sr = 0;
 
-	set_endian(sr);
 	if (ctx->master)
 		sr |= CXL_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
@@ -507,6 +488,7 @@ static u64 calculate_sr(struct cxl_context *ctx)
 		sr |= CXL_PSL_SR_An_HV;
 	} else {
 		sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
+		set_endian(sr);
 		sr &= ~(CXL_PSL_SR_An_HV);
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
 			sr |= CXL_PSL_SR_An_SF;
@@ -552,7 +534,7 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 	ctx->elem->common.wed = cpu_to_be64(wed);
 
 	/* first guy needs to enable */
-	if ((result = cxl_afu_check_and_enable(ctx->afu)))
+	if ((result = cxl_ops->afu_check_and_enable(ctx->afu)))
 		return result;
 
 	return add_process_element(ctx);
@@ -568,7 +550,7 @@ static int deactivate_afu_directed(struct cxl_afu *afu)
 	cxl_sysfs_afu_m_remove(afu);
 	cxl_chardev_afu_remove(afu);
 
-	__cxl_afu_reset(afu);
+	cxl_ops->afu_reset(afu);
 	cxl_afu_disable(afu);
 	cxl_psl_purge(afu);
 
@@ -632,7 +614,7 @@ static int attach_dedicated(struct cxl_context *ctx, u64 wed, u64 amr)
 	/* master only context for dedicated */
 	cxl_assign_psn_space(ctx);
 
-	if ((rc = __cxl_afu_reset(afu)))
+	if ((rc = cxl_ops->afu_reset(afu)))
 		return rc;
 
 	cxl_p2n_write(afu, CXL_PSL_WED_An, wed);
@@ -652,7 +634,7 @@ static int deactivate_dedicated_process(struct cxl_afu *afu)
 	return 0;
 }
 
-int _cxl_afu_deactivate_mode(struct cxl_afu *afu, int mode)
+static int native_afu_deactivate_mode(struct cxl_afu *afu, int mode)
 {
 	if (mode == CXL_MODE_DIRECTED)
 		return deactivate_afu_directed(afu);
@@ -661,19 +643,14 @@ int _cxl_afu_deactivate_mode(struct cxl_afu *afu, int mode)
 	return 0;
 }
 
-int cxl_afu_deactivate_mode(struct cxl_afu *afu)
-{
-	return _cxl_afu_deactivate_mode(afu, afu->current_mode);
-}
-
-int cxl_afu_activate_mode(struct cxl_afu *afu, int mode)
+static int native_afu_activate_mode(struct cxl_afu *afu, int mode)
 {
 	if (!mode)
 		return 0;
 	if (!(mode & afu->modes_supported))
 		return -EINVAL;
 
-	if (!cxl_adapter_link_ok(afu->adapter)) {
+	if (!cxl_adapter_link_ok(afu->adapter, afu)) {
 		WARN(1, "Device link is down, refusing to activate!\n");
 		return -EIO;
 	}
@@ -686,9 +663,10 @@ int cxl_afu_activate_mode(struct cxl_afu *afu, int mode)
 	return -EINVAL;
 }
 
-int cxl_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
+static int native_attach_process(struct cxl_context *ctx, bool kernel,
+				u64 wed, u64 amr)
 {
-	if (!cxl_adapter_link_ok(ctx->afu->adapter)) {
+	if (!cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu)) {
 		WARN(1, "Device link is down, refusing to attach process!\n");
 		return -EIO;
 	}
@@ -705,7 +683,7 @@ int cxl_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
 
 static inline int detach_process_native_dedicated(struct cxl_context *ctx)
 {
-	__cxl_afu_reset(ctx->afu);
+	cxl_ops->afu_reset(ctx->afu);
 	cxl_afu_disable(ctx->afu);
 	cxl_psl_purge(ctx->afu);
 	return 0;
@@ -723,7 +701,7 @@ static inline int detach_process_native_afu_directed(struct cxl_context *ctx)
 	return 0;
 }
 
-int cxl_detach_process(struct cxl_context *ctx)
+static int native_detach_process(struct cxl_context *ctx)
 {
 	trace_cxl_detach(ctx);
 
@@ -733,14 +711,14 @@ int cxl_detach_process(struct cxl_context *ctx)
 	return detach_process_native_afu_directed(ctx);
 }
 
-int cxl_get_irq(struct cxl_afu *afu, struct cxl_irq_info *info)
+static int native_get_irq_info(struct cxl_afu *afu, struct cxl_irq_info *info)
 {
 	u64 pidtid;
 
 	/* If the adapter has gone away, we can't get any meaningful
 	 * information.
 	 */
-	if (!cxl_adapter_link_ok(afu->adapter))
+	if (!cxl_adapter_link_ok(afu->adapter, afu))
 		return -EIO;
 
 	info->dsisr = cxl_p2n_read(afu, CXL_PSL_DSISR_An);
@@ -751,8 +729,213 @@ int cxl_get_irq(struct cxl_afu *afu, struct cxl_irq_info *info)
 	info->tid = pidtid & 0xffffffff;
 	info->afu_err = cxl_p2n_read(afu, CXL_AFU_ERR_An);
 	info->errstat = cxl_p2n_read(afu, CXL_PSL_ErrStat_An);
+	info->proc_handle = 0;
 
 	return 0;
+}
+
+static irqreturn_t native_handle_psl_slice_error(struct cxl_context *ctx,
+						u64 dsisr, u64 errstat)
+{
+	u64 fir1, fir2, fir_slice, serr, afu_debug;
+
+	fir1 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR1);
+	fir2 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR2);
+	fir_slice = cxl_p1n_read(ctx->afu, CXL_PSL_FIR_SLICE_An);
+	serr = cxl_p1n_read(ctx->afu, CXL_PSL_SERR_An);
+	afu_debug = cxl_p1n_read(ctx->afu, CXL_AFU_DEBUG_An);
+
+	dev_crit(&ctx->afu->dev, "PSL ERROR STATUS: 0x%016llx\n", errstat);
+	dev_crit(&ctx->afu->dev, "PSL_FIR1: 0x%016llx\n", fir1);
+	dev_crit(&ctx->afu->dev, "PSL_FIR2: 0x%016llx\n", fir2);
+	dev_crit(&ctx->afu->dev, "PSL_SERR_An: 0x%016llx\n", serr);
+	dev_crit(&ctx->afu->dev, "PSL_FIR_SLICE_An: 0x%016llx\n", fir_slice);
+	dev_crit(&ctx->afu->dev, "CXL_PSL_AFU_DEBUG_An: 0x%016llx\n", afu_debug);
+
+	dev_crit(&ctx->afu->dev, "STOPPING CXL TRACE\n");
+	cxl_stop_trace(ctx->afu->adapter);
+
+	return cxl_ops->ack_irq(ctx, 0, errstat);
+}
+
+static irqreturn_t fail_psl_irq(struct cxl_afu *afu, struct cxl_irq_info *irq_info)
+{
+	if (irq_info->dsisr & CXL_PSL_DSISR_TRANS)
+		cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_AE);
+	else
+		cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_A);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t native_irq_multiplexed(int irq, void *data)
+{
+	struct cxl_afu *afu = data;
+	struct cxl_context *ctx;
+	struct cxl_irq_info irq_info;
+	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
+	int ret;
+
+	if ((ret = native_get_irq_info(afu, &irq_info))) {
+		WARN(1, "Unable to get CXL IRQ Info: %i\n", ret);
+		return fail_psl_irq(afu, &irq_info);
+	}
+
+	rcu_read_lock();
+	ctx = idr_find(&afu->contexts_idr, ph);
+	if (ctx) {
+		ret = cxl_irq(irq, ctx, &irq_info);
+		rcu_read_unlock();
+		return ret;
+	}
+	rcu_read_unlock();
+
+
+	WARN(1, "Unable to demultiplex CXL PSL IRQ for PE %i DSISR %016llx DAR"
+		" %016llx\n(Possible AFU HW issue - was a term/remove acked"
+		" with outstanding transactions?)\n", ph, irq_info.dsisr,
+		irq_info.dar);
+	return fail_psl_irq(afu, &irq_info);
+}
+
+static irqreturn_t native_slice_irq_err(int irq, void *data)
+{
+	struct cxl_afu *afu = data;
+	u64 fir_slice, errstat, serr, afu_debug;
+
+	WARN(irq, "CXL SLICE ERROR interrupt %i\n", irq);
+
+	serr = cxl_p1n_read(afu, CXL_PSL_SERR_An);
+	fir_slice = cxl_p1n_read(afu, CXL_PSL_FIR_SLICE_An);
+	errstat = cxl_p2n_read(afu, CXL_PSL_ErrStat_An);
+	afu_debug = cxl_p1n_read(afu, CXL_AFU_DEBUG_An);
+	dev_crit(&afu->dev, "PSL_SERR_An: 0x%016llx\n", serr);
+	dev_crit(&afu->dev, "PSL_FIR_SLICE_An: 0x%016llx\n", fir_slice);
+	dev_crit(&afu->dev, "CXL_PSL_ErrStat_An: 0x%016llx\n", errstat);
+	dev_crit(&afu->dev, "CXL_PSL_AFU_DEBUG_An: 0x%016llx\n", afu_debug);
+
+	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t native_irq_err(int irq, void *data)
+{
+	struct cxl *adapter = data;
+	u64 fir1, fir2, err_ivte;
+
+	WARN(1, "CXL ERROR interrupt %i\n", irq);
+
+	err_ivte = cxl_p1_read(adapter, CXL_PSL_ErrIVTE);
+	dev_crit(&adapter->dev, "PSL_ErrIVTE: 0x%016llx\n", err_ivte);
+
+	dev_crit(&adapter->dev, "STOPPING CXL TRACE\n");
+	cxl_stop_trace(adapter);
+
+	fir1 = cxl_p1_read(adapter, CXL_PSL_FIR1);
+	fir2 = cxl_p1_read(adapter, CXL_PSL_FIR2);
+
+	dev_crit(&adapter->dev, "PSL_FIR1: 0x%016llx\nPSL_FIR2: 0x%016llx\n", fir1, fir2);
+
+	return IRQ_HANDLED;
+}
+
+int native_register_psl_err_irq(struct cxl *adapter)
+{
+	int rc;
+
+	adapter->irq_name = kasprintf(GFP_KERNEL, "cxl-%s-err",
+				      dev_name(&adapter->dev));
+	if (!adapter->irq_name)
+		return -ENOMEM;
+
+	if ((rc = cxl_register_one_irq(adapter, native_irq_err, adapter,
+				       &adapter->err_hwirq,
+				       &adapter->err_virq,
+				       adapter->irq_name))) {
+		kfree(adapter->irq_name);
+		adapter->irq_name = NULL;
+		return rc;
+	}
+
+	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, adapter->err_hwirq & 0xffff);
+
+	return 0;
+}
+
+void native_release_psl_err_irq(struct cxl *adapter)
+{
+	if (adapter->err_virq != irq_find_mapping(NULL, adapter->err_hwirq))
+		return;
+
+	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
+	cxl_unmap_irq(adapter->err_virq, adapter);
+	cxl_ops->release_one_irq(adapter, adapter->err_hwirq);
+	kfree(adapter->irq_name);
+}
+
+int native_register_serr_irq(struct cxl_afu *afu)
+{
+	u64 serr;
+	int rc;
+
+	afu->err_irq_name = kasprintf(GFP_KERNEL, "cxl-%s-err",
+				      dev_name(&afu->dev));
+	if (!afu->err_irq_name)
+		return -ENOMEM;
+
+	if ((rc = cxl_register_one_irq(afu->adapter, native_slice_irq_err, afu,
+				       &afu->serr_hwirq,
+				       &afu->serr_virq, afu->err_irq_name))) {
+		kfree(afu->err_irq_name);
+		afu->err_irq_name = NULL;
+		return rc;
+	}
+
+	serr = cxl_p1n_read(afu, CXL_PSL_SERR_An);
+	serr = (serr & 0x00ffffffffff0000ULL) | (afu->serr_hwirq & 0xffff);
+	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
+
+	return 0;
+}
+
+void native_release_serr_irq(struct cxl_afu *afu)
+{
+	if (afu->serr_virq != irq_find_mapping(NULL, afu->serr_hwirq))
+		return;
+
+	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
+	cxl_unmap_irq(afu->serr_virq, afu);
+	cxl_ops->release_one_irq(afu->adapter, afu->serr_hwirq);
+	kfree(afu->err_irq_name);
+}
+
+int native_register_psl_irq(struct cxl_afu *afu)
+{
+	int rc;
+
+	afu->psl_irq_name = kasprintf(GFP_KERNEL, "cxl-%s",
+				      dev_name(&afu->dev));
+	if (!afu->psl_irq_name)
+		return -ENOMEM;
+
+	if ((rc = cxl_register_one_irq(afu->adapter, native_irq_multiplexed,
+				    afu, &afu->psl_hwirq, &afu->psl_virq,
+				    afu->psl_irq_name))) {
+		kfree(afu->psl_irq_name);
+		afu->psl_irq_name = NULL;
+	}
+	return rc;
+}
+
+void native_release_psl_irq(struct cxl_afu *afu)
+{
+	if (afu->psl_virq != irq_find_mapping(NULL, afu->psl_hwirq))
+		return;
+
+	cxl_unmap_irq(afu->psl_virq, afu);
+	cxl_ops->release_one_irq(afu->adapter, afu->psl_hwirq);
+	kfree(afu->psl_irq_name);
 }
 
 static void recover_psl_err(struct cxl_afu *afu, u64 errstat)
@@ -769,7 +952,7 @@ static void recover_psl_err(struct cxl_afu *afu, u64 errstat)
 	cxl_p2n_write(afu, CXL_PSL_ErrStat_An, errstat);
 }
 
-int cxl_ack_irq(struct cxl_context *ctx, u64 tfc, u64 psl_reset_mask)
+static int native_ack_irq(struct cxl_context *ctx, u64 tfc, u64 psl_reset_mask)
 {
 	trace_cxl_psl_irq_ack(ctx, tfc);
 	if (tfc)
@@ -784,3 +967,131 @@ int cxl_check_error(struct cxl_afu *afu)
 {
 	return (cxl_p1n_read(afu, CXL_PSL_SCNTL_An) == ~0ULL);
 }
+
+static bool native_support_attributes(const char *attr_name)
+{
+	return true;
+}
+
+static int native_afu_cr_read64(struct cxl_afu *afu, int cr, u64 off, u64 *out)
+{
+	if (unlikely(!cxl_adapter_link_ok(afu->adapter, afu)))
+		return -EIO;
+	if (unlikely(off >= afu->crs_len))
+		return -ERANGE;
+	*out = in_le64(afu->afu_desc_mmio + afu->crs_offset +
+		(cr * afu->crs_len) + off);
+	return 0;
+}
+
+static int native_afu_cr_read32(struct cxl_afu *afu, int cr, u64 off, u32 *out)
+{
+	if (unlikely(!cxl_adapter_link_ok(afu->adapter, afu)))
+		return -EIO;
+	if (unlikely(off >= afu->crs_len))
+		return -ERANGE;
+	*out = in_le32(afu->afu_desc_mmio + afu->crs_offset +
+		(cr * afu->crs_len) + off);
+	return 0;
+}
+
+static int native_afu_cr_read16(struct cxl_afu *afu, int cr, u64 off, u16 *out)
+{
+	u64 aligned_off = off & ~0x3L;
+	u32 val;
+	int rc;
+
+	rc = native_afu_cr_read32(afu, cr, aligned_off, &val);
+	if (!rc)
+		*out = (val >> ((off & 0x3) * 8)) & 0xffff;
+	return rc;
+}
+
+static int native_afu_cr_read8(struct cxl_afu *afu, int cr, u64 off, u8 *out)
+{
+	u64 aligned_off = off & ~0x3L;
+	u32 val;
+	int rc;
+
+	rc = native_afu_cr_read32(afu, cr, aligned_off, &val);
+	if (!rc)
+		*out = (val >> ((off & 0x3) * 8)) & 0xff;
+	return rc;
+}
+
+static int native_afu_cr_write32(struct cxl_afu *afu, int cr, u64 off, u32 in)
+{
+	if (unlikely(!cxl_adapter_link_ok(afu->adapter, afu)))
+		return -EIO;
+	if (unlikely(off >= afu->crs_len))
+		return -ERANGE;
+	out_le32(afu->afu_desc_mmio + afu->crs_offset +
+		(cr * afu->crs_len) + off, in);
+	return 0;
+}
+
+static int native_afu_cr_write16(struct cxl_afu *afu, int cr, u64 off, u16 in)
+{
+	u64 aligned_off = off & ~0x3L;
+	u32 val32, mask, shift;
+	int rc;
+
+	rc = native_afu_cr_read32(afu, cr, aligned_off, &val32);
+	if (rc)
+		return rc;
+	shift = (off & 0x3) * 8;
+	WARN_ON(shift == 24);
+	mask = 0xffff << shift;
+	val32 = (val32 & ~mask) | (in << shift);
+
+	rc = native_afu_cr_write32(afu, cr, aligned_off, val32);
+	return rc;
+}
+
+static int native_afu_cr_write8(struct cxl_afu *afu, int cr, u64 off, u8 in)
+{
+	u64 aligned_off = off & ~0x3L;
+	u32 val32, mask, shift;
+	int rc;
+
+	rc = native_afu_cr_read32(afu, cr, aligned_off, &val32);
+	if (rc)
+		return rc;
+	shift = (off & 0x3) * 8;
+	mask = 0xff << shift;
+	val32 = (val32 & ~mask) | (in << shift);
+
+	rc = native_afu_cr_write32(afu, cr, aligned_off, val32);
+	return rc;
+}
+
+const struct cxl_backend_ops cxl_native_ops = {
+	.module = THIS_MODULE,
+	.adapter_reset = pci_reset,
+	.update_image_control = pci_update_image_control,
+	.alloc_one_irq = pci_alloc_one_irq,
+	.release_one_irq = pci_release_one_irq,
+	.alloc_irq_ranges = pci_alloc_irq_ranges,
+	.release_irq_ranges = pci_release_irq_ranges,
+	.setup_irq = pci_setup_irq,
+	.handle_psl_slice_error = native_handle_psl_slice_error,
+	.psl_interrupt = NULL,
+	.ack_irq = native_ack_irq,
+	.attach_process = native_attach_process,
+	.detach_process = native_detach_process,
+	.support_attributes = native_support_attributes,
+	.release_afu = pci_release_afu,
+	.afu_read_err_buffer = pci_afu_read_err_buffer,
+	.afu_check_and_enable = native_afu_check_and_enable,
+	.afu_activate_mode = native_afu_activate_mode,
+	.afu_deactivate_mode = native_afu_deactivate_mode,
+	.afu_reset = native_afu_reset,
+	.afu_cr_read8 = native_afu_cr_read8,
+	.afu_cr_read16 = native_afu_cr_read16,
+	.afu_cr_read32 = native_afu_cr_read32,
+	.afu_cr_read64 = native_afu_cr_read64,
+	.afu_cr_write8 = native_afu_cr_write8,
+	.afu_cr_write16 = native_afu_cr_write16,
+	.afu_cr_write32 = native_afu_cr_write32,
+	.read_adapter_vpd = pci_read_adapter_vpd,
+};

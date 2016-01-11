@@ -69,7 +69,7 @@ static ssize_t reset_adapter_store(struct device *device,
 	if ((rc != 1) || (val != 1))
 		return -EINVAL;
 
-	if ((rc = cxl_reset(adapter)))
+	if ((rc = cxl_ops->adapter_reset(adapter)))
 		return rc;
 	return count;
 }
@@ -106,7 +106,7 @@ static ssize_t load_image_on_perst_store(struct device *device,
 	} else
 		return -EINVAL;
 
-	if ((rc = cxl_update_image_control(adapter)))
+	if ((rc = cxl_ops->update_image_control(adapter)))
 		return rc;
 
 	return count;
@@ -185,6 +185,14 @@ static struct device_attribute afu_master_attrs[] = {
 
 
 /*********  AFU attributes  **************************************************/
+static ssize_t procs_max_show(struct device *device,
+			      struct device_attribute *attr,
+			      char *buf)
+{
+	struct cxl_afu *afu = to_cxl_afu(device);
+
+	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->max_procs_virtualised);
+}
 
 static ssize_t mmio_size_show(struct device *device,
 			      struct device_attribute *attr,
@@ -211,7 +219,7 @@ static ssize_t reset_store_afu(struct device *device,
 		goto err;
 	}
 
-	if ((rc = __cxl_afu_reset(afu)))
+	if ((rc = cxl_ops->afu_reset(afu)))
 		goto err;
 
 	rc = count;
@@ -253,8 +261,14 @@ static ssize_t irqs_max_store(struct device *device,
 	if (irqs_max < afu->pp_irqs)
 		return -EINVAL;
 
-	if (irqs_max > afu->adapter->user_irqs)
-		return -EINVAL;
+	if (cpu_has_feature(CPU_FTR_HVMODE)) {
+		if (irqs_max > afu->adapter->user_irqs)
+			return -EINVAL;
+	} else {
+		/* pHyp sets a per-AFU limit */
+		if (irqs_max > afu->max_ints)
+			return -EINVAL;
+	}
 
 	afu->irqs_max = irqs_max;
 	return count;
@@ -348,7 +362,7 @@ static ssize_t mode_store(struct device *device, struct device_attribute *attr,
 	}
 
 	/*
-	 * cxl_afu_deactivate_mode needs to be done outside the lock, prevent
+	 * afu_deactivate_mode needs to be done outside the lock, prevent
 	 * other contexts coming in before we are ready:
 	 */
 	old_mode = afu->current_mode;
@@ -357,9 +371,9 @@ static ssize_t mode_store(struct device *device, struct device_attribute *attr,
 
 	mutex_unlock(&afu->contexts_lock);
 
-	if ((rc = _cxl_afu_deactivate_mode(afu, old_mode)))
+	if ((rc = cxl_ops->afu_deactivate_mode(afu, old_mode)))
 		return rc;
-	if ((rc = cxl_afu_activate_mode(afu, mode)))
+	if ((rc = cxl_ops->afu_activate_mode(afu, mode)))
 		return rc;
 
 	return count;
@@ -389,10 +403,11 @@ static ssize_t afu_eb_read(struct file *filp, struct kobject *kobj,
 	struct cxl_afu *afu = to_cxl_afu(container_of(kobj,
 						      struct device, kobj));
 
-	return cxl_afu_read_err_buffer(afu, buf, off, count);
+	return cxl_ops->afu_read_err_buffer(afu, buf, off, count);
 }
 
 static struct device_attribute afu_attrs[] = {
+	__ATTR_RO(procs_max),
 	__ATTR_RO(mmio_size),
 	__ATTR_RO(irqs_min),
 	__ATTR_RW(irqs_max),
@@ -406,25 +421,39 @@ static struct device_attribute afu_attrs[] = {
 
 int cxl_sysfs_adapter_add(struct cxl *adapter)
 {
+	struct device_attribute *dev_attr;
 	int i, rc;
 
 	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++) {
-		if ((rc = device_create_file(&adapter->dev, &adapter_attrs[i])))
-			goto err;
+		dev_attr = &adapter_attrs[i];
+		if (cxl_ops->support_attributes(dev_attr->attr.name)) {
+			if ((rc = device_create_file(&adapter->dev, dev_attr)))
+				goto err;
+		}
 	}
 	return 0;
 err:
-	for (i--; i >= 0; i--)
-		device_remove_file(&adapter->dev, &adapter_attrs[i]);
+	for (i--; i >= 0; i--) {
+		dev_attr = &adapter_attrs[i];
+		if (cxl_ops->support_attributes(dev_attr->attr.name))
+			device_remove_file(&adapter->dev, dev_attr);
+	}
 	return rc;
 }
+EXPORT_SYMBOL_GPL(cxl_sysfs_adapter_add);
+
 void cxl_sysfs_adapter_remove(struct cxl *adapter)
 {
+	struct device_attribute *dev_attr;
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++)
-		device_remove_file(&adapter->dev, &adapter_attrs[i]);
+	for (i = 0; i < ARRAY_SIZE(adapter_attrs); i++) {
+		dev_attr = &adapter_attrs[i];
+		if (cxl_ops->support_attributes(dev_attr->attr.name))
+			device_remove_file(&adapter->dev, dev_attr);
+	}
 }
+EXPORT_SYMBOL_GPL(cxl_sysfs_adapter_remove);
 
 struct afu_config_record {
 	struct kobject kobj;
@@ -469,10 +498,12 @@ static ssize_t afu_read_config(struct file *filp, struct kobject *kobj,
 	struct afu_config_record *cr = to_cr(kobj);
 	struct cxl_afu *afu = to_cxl_afu(container_of(kobj->parent, struct device, kobj));
 
-	u64 i, j, val;
+	u64 i, j, val, rc;
 
 	for (i = 0; i < count;) {
-		val = cxl_afu_cr_read64(afu, cr->cr, off & ~0x7);
+		rc = cxl_ops->afu_cr_read64(afu, cr->cr, off & ~0x7, &val);
+		if (rc)
+			val = ~0ULL;
 		for (j = off & 0x7; j < 8 && i < count; i++, j++, off++)
 			buf[i] = (val >> (j * 8)) & 0xff;
 	}
@@ -517,14 +548,22 @@ static struct afu_config_record *cxl_sysfs_afu_new_cr(struct cxl_afu *afu, int c
 		return ERR_PTR(-ENOMEM);
 
 	cr->cr = cr_idx;
-	cr->device = cxl_afu_cr_read16(afu, cr_idx, PCI_DEVICE_ID);
-	cr->vendor = cxl_afu_cr_read16(afu, cr_idx, PCI_VENDOR_ID);
-	cr->class = cxl_afu_cr_read32(afu, cr_idx, PCI_CLASS_REVISION) >> 8;
+
+	rc = cxl_ops->afu_cr_read16(afu, cr_idx, PCI_DEVICE_ID, &cr->device);
+	if (rc)
+		goto err;
+	rc = cxl_ops->afu_cr_read16(afu, cr_idx, PCI_VENDOR_ID, &cr->vendor);
+	if (rc)
+		goto err;
+	rc = cxl_ops->afu_cr_read32(afu, cr_idx, PCI_CLASS_REVISION, &cr->class);
+	if (rc)
+		goto err;
+	cr->class >>= 8;
 
 	/*
 	 * Export raw AFU PCIe like config record. For now this is read only by
 	 * root - we can expand that later to be readable by non-root and maybe
-	 * even writable provided we have a good use-case. Once we suport
+	 * even writable provided we have a good use-case. Once we support
 	 * exposing AFUs through a virtual PHB they will get that for free from
 	 * Linux' PCI infrastructure, but until then it's not clear that we
 	 * need it for anything since the main use case is just identifying
@@ -577,6 +616,7 @@ void cxl_sysfs_afu_remove(struct cxl_afu *afu)
 		kobject_put(&cr->kobj);
 	}
 }
+EXPORT_SYMBOL_GPL(cxl_sysfs_afu_remove);
 
 int cxl_sysfs_afu_add(struct cxl_afu *afu)
 {
@@ -630,6 +670,7 @@ err:
 		device_remove_file(&afu->dev, &afu_attrs[i]);
 	return rc;
 }
+EXPORT_SYMBOL_GPL(cxl_sysfs_afu_add);
 
 int cxl_sysfs_afu_m_add(struct cxl_afu *afu)
 {
@@ -647,6 +688,7 @@ err:
 		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
 	return rc;
 }
+EXPORT_SYMBOL_GPL(cxl_sysfs_afu_m_add);
 
 void cxl_sysfs_afu_m_remove(struct cxl_afu *afu)
 {
@@ -655,3 +697,4 @@ void cxl_sysfs_afu_m_remove(struct cxl_afu *afu)
 	for (i = 0; i < ARRAY_SIZE(afu_master_attrs); i++)
 		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
 }
+EXPORT_SYMBOL_GPL(cxl_sysfs_afu_m_remove);

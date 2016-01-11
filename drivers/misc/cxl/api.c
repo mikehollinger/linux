@@ -95,27 +95,10 @@ int cxl_release_context(struct cxl_context *ctx)
 }
 EXPORT_SYMBOL_GPL(cxl_release_context);
 
-int cxl_allocate_afu_irqs(struct cxl_context *ctx, int num)
-{
-	if (num == 0)
-		num = ctx->afu->pp_irqs;
-	return afu_allocate_irqs(ctx, num);
-}
-EXPORT_SYMBOL_GPL(cxl_allocate_afu_irqs);
-
-void cxl_free_afu_irqs(struct cxl_context *ctx)
-{
-	afu_irq_name_free(ctx);
-	cxl_release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
-}
-EXPORT_SYMBOL_GPL(cxl_free_afu_irqs);
-
 static irq_hw_number_t cxl_find_afu_irq(struct cxl_context *ctx, int num)
 {
 	__u16 range;
 	int r;
-
-	WARN_ON(num == 0);
 
 	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		range = ctx->irqs.range[r];
@@ -126,6 +109,44 @@ static irq_hw_number_t cxl_find_afu_irq(struct cxl_context *ctx, int num)
 	}
 	return 0;
 }
+
+int cxl_allocate_afu_irqs(struct cxl_context *ctx, int num)
+{
+	int res;
+	irq_hw_number_t hwirq;
+
+	if (num == 0)
+		num = ctx->afu->pp_irqs;
+	res = afu_allocate_irqs(ctx, num);
+	if (!res && !cpu_has_feature(CPU_FTR_HVMODE)) {
+		/* In a guest, the PSL interrupt is not multiplexed. It was
+		 * allocated above, and we need to set its handler
+		 */
+		hwirq = cxl_find_afu_irq(ctx, 0);
+		if (hwirq)
+			cxl_map_irq(ctx->afu->adapter, hwirq, cxl_ops->psl_interrupt, ctx, "psl");
+	}
+	return res;
+}
+EXPORT_SYMBOL_GPL(cxl_allocate_afu_irqs);
+
+void cxl_free_afu_irqs(struct cxl_context *ctx)
+{
+	irq_hw_number_t hwirq;
+	unsigned int virq;
+
+	if (!cpu_has_feature(CPU_FTR_HVMODE)) {
+		hwirq = cxl_find_afu_irq(ctx, 0);
+		if (hwirq) {
+			virq = irq_find_mapping(NULL, hwirq);
+			if (virq)
+				cxl_unmap_irq(virq, ctx);
+		}
+	}
+	afu_irq_name_free(ctx);
+	cxl_ops->release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
+}
+EXPORT_SYMBOL_GPL(cxl_free_afu_irqs);
 
 int cxl_map_afu_irq(struct cxl_context *ctx, int num,
 		    irq_handler_t handler, void *cookie, char *name)
@@ -182,7 +203,7 @@ int cxl_start_context(struct cxl_context *ctx, u64 wed,
 
 	cxl_ctx_get();
 
-	if ((rc = cxl_attach_process(ctx, kernel, wed , 0))) {
+	if ((rc = cxl_ops->attach_process(ctx, kernel, wed, 0))) {
 		put_pid(ctx->pid);
 		cxl_ctx_put();
 		goto out;
@@ -197,7 +218,7 @@ EXPORT_SYMBOL_GPL(cxl_start_context);
 
 int cxl_process_element(struct cxl_context *ctx)
 {
-	return ctx->pe;
+	return atomic_read(&ctx->external_pe);
 }
 EXPORT_SYMBOL_GPL(cxl_process_element);
 
@@ -332,7 +353,7 @@ void __iomem *cxl_psa_map(struct cxl_context *ctx)
 	struct cxl_afu *afu = ctx->afu;
 	int rc;
 
-	rc = cxl_afu_check_and_enable(afu);
+	rc = cxl_ops->afu_check_and_enable(afu);
 	if (rc)
 		return NULL;
 
@@ -353,11 +374,11 @@ int cxl_afu_reset(struct cxl_context *ctx)
 	struct cxl_afu *afu = ctx->afu;
 	int rc;
 
-	rc = __cxl_afu_reset(afu);
+	rc = cxl_ops->afu_reset(afu);
 	if (rc)
 		return rc;
 
-	return cxl_afu_check_and_enable(afu);
+	return cxl_ops->afu_check_and_enable(afu);
 }
 EXPORT_SYMBOL_GPL(cxl_afu_reset);
 
@@ -367,3 +388,11 @@ void cxl_perst_reloads_same_image(struct cxl_afu *afu,
 	afu->adapter->perst_same_image = perst_reloads_same_image;
 }
 EXPORT_SYMBOL_GPL(cxl_perst_reloads_same_image);
+
+ssize_t cxl_read_adapter_vpd(struct pci_dev *dev, void *buf, size_t count)
+{
+	struct cxl_afu *afu = cxl_pci_to_afu(dev);
+
+	return cxl_ops->read_adapter_vpd(afu->adapter, buf, count);
+}
+EXPORT_SYMBOL_GPL(cxl_read_adapter_vpd);

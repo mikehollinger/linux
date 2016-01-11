@@ -33,3 +33,20 @@ config CXL
 	  CAPI adapters are found in POWER8 based systems.
 
 	  If unsure, say N.
+
+config CXL_PCI
+	tristate "Support for CXL devices via PCI"
+	depends on CXL && PPC_POWERNV
+	default y
+	help
+	  Select this option to support CXL devices detected via PCI, e.g.
+	  when running under Sapphire. This has no effect on CXL devices
+	  detected via the device tree, such as when running under PowerVM.
+
+config CXL_OF
+	tristate "Support for CXL devices on PowerVM"
+	depends on CXL
+	default y
+	help
+	  Select this option to support CXL devices detected via the device
+	  tree, such as when running under PowerVM.

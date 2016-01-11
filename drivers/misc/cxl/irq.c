@@ -19,71 +19,6 @@
 #include "cxl.h"
 #include "trace.h"
 
-/* XXX: This is implementation specific */
-static irqreturn_t handle_psl_slice_error(struct cxl_context *ctx, u64 dsisr, u64 errstat)
-{
-	u64 fir1, fir2, fir_slice, serr, afu_debug;
-
-	fir1 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR1);
-	fir2 = cxl_p1_read(ctx->afu->adapter, CXL_PSL_FIR2);
-	fir_slice = cxl_p1n_read(ctx->afu, CXL_PSL_FIR_SLICE_An);
-	serr = cxl_p1n_read(ctx->afu, CXL_PSL_SERR_An);
-	afu_debug = cxl_p1n_read(ctx->afu, CXL_AFU_DEBUG_An);
-
-	dev_crit(&ctx->afu->dev, "PSL ERROR STATUS: 0x%016llx\n", errstat);
-	dev_crit(&ctx->afu->dev, "PSL_FIR1: 0x%016llx\n", fir1);
-	dev_crit(&ctx->afu->dev, "PSL_FIR2: 0x%016llx\n", fir2);
-	dev_crit(&ctx->afu->dev, "PSL_SERR_An: 0x%016llx\n", serr);
-	dev_crit(&ctx->afu->dev, "PSL_FIR_SLICE_An: 0x%016llx\n", fir_slice);
-	dev_crit(&ctx->afu->dev, "CXL_PSL_AFU_DEBUG_An: 0x%016llx\n", afu_debug);
-
-	dev_crit(&ctx->afu->dev, "STOPPING CXL TRACE\n");
-	cxl_stop_trace(ctx->afu->adapter);
-
-	return cxl_ack_irq(ctx, 0, errstat);
-}
-
-irqreturn_t cxl_slice_irq_err(int irq, void *data)
-{
-	struct cxl_afu *afu = data;
-	u64 fir_slice, errstat, serr, afu_debug;
-
-	WARN(irq, "CXL SLICE ERROR interrupt %i\n", irq);
-
-	serr = cxl_p1n_read(afu, CXL_PSL_SERR_An);
-	fir_slice = cxl_p1n_read(afu, CXL_PSL_FIR_SLICE_An);
-	errstat = cxl_p2n_read(afu, CXL_PSL_ErrStat_An);
-	afu_debug = cxl_p1n_read(afu, CXL_AFU_DEBUG_An);
-	dev_crit(&afu->dev, "PSL_SERR_An: 0x%016llx\n", serr);
-	dev_crit(&afu->dev, "PSL_FIR_SLICE_An: 0x%016llx\n", fir_slice);
-	dev_crit(&afu->dev, "CXL_PSL_ErrStat_An: 0x%016llx\n", errstat);
-	dev_crit(&afu->dev, "CXL_PSL_AFU_DEBUG_An: 0x%016llx\n", afu_debug);
-
-	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
-
-	return IRQ_HANDLED;
-}
-
-static irqreturn_t cxl_irq_err(int irq, void *data)
-{
-	struct cxl *adapter = data;
-	u64 fir1, fir2, err_ivte;
-
-	WARN(1, "CXL ERROR interrupt %i\n", irq);
-
-	err_ivte = cxl_p1_read(adapter, CXL_PSL_ErrIVTE);
-	dev_crit(&adapter->dev, "PSL_ErrIVTE: 0x%016llx\n", err_ivte);
-
-	dev_crit(&adapter->dev, "STOPPING CXL TRACE\n");
-	cxl_stop_trace(adapter);
-
-	fir1 = cxl_p1_read(adapter, CXL_PSL_FIR1);
-	fir2 = cxl_p1_read(adapter, CXL_PSL_FIR2);
-
-	dev_crit(&adapter->dev, "PSL_FIR1: 0x%016llx\nPSL_FIR2: 0x%016llx\n", fir1, fir2);
-
-	return IRQ_HANDLED;
-}
 
 static irqreturn_t schedule_cxl_fault(struct cxl_context *ctx, u64 dsisr, u64 dar)
 {
@@ -93,9 +28,8 @@ static irqreturn_t schedule_cxl_fault(struct cxl_context *ctx, u64 dsisr, u64 da
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t cxl_irq(int irq, void *data, struct cxl_irq_info *irq_info)
+irqreturn_t cxl_irq(int irq, struct cxl_context *ctx, struct cxl_irq_info *irq_info)
 {
-	struct cxl_context *ctx = data;
 	u64 dsisr, dar;
 
 	dsisr = irq_info->dsisr;
@@ -145,7 +79,8 @@ static irqreturn_t cxl_irq(int irq, void *data, struct cxl_irq_info *irq_info)
 	if (dsisr & CXL_PSL_DSISR_An_UR)
 		pr_devel("CXL interrupt: AURP PTE not found\n");
 	if (dsisr & CXL_PSL_DSISR_An_PE)
-		return handle_psl_slice_error(ctx, dsisr, irq_info->errstat);
+		return cxl_ops->handle_psl_slice_error(ctx, dsisr,
+						irq_info->errstat);
 	if (dsisr & CXL_PSL_DSISR_An_AE) {
 		pr_devel("CXL interrupt: AFU Error 0x%016llx\n", irq_info->afu_err);
 
@@ -169,7 +104,7 @@ static irqreturn_t cxl_irq(int irq, void *data, struct cxl_irq_info *irq_info)
 			wake_up_all(&ctx->wq);
 		}
 
-		cxl_ack_irq(ctx, CXL_PSL_TFC_An_A, 0);
+		cxl_ops->ack_irq(ctx, CXL_PSL_TFC_An_A, 0);
 		return IRQ_HANDLED;
 	}
 	if (dsisr & CXL_PSL_DSISR_An_OC)
@@ -178,55 +113,17 @@ static irqreturn_t cxl_irq(int irq, void *data, struct cxl_irq_info *irq_info)
 	WARN(1, "Unhandled CXL PSL IRQ\n");
 	return IRQ_HANDLED;
 }
-
-static irqreturn_t fail_psl_irq(struct cxl_afu *afu, struct cxl_irq_info *irq_info)
-{
-	if (irq_info->dsisr & CXL_PSL_DSISR_TRANS)
-		cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_AE);
-	else
-		cxl_p2n_write(afu, CXL_PSL_TFC_An, CXL_PSL_TFC_An_A);
-
-	return IRQ_HANDLED;
-}
-
-static irqreturn_t cxl_irq_multiplexed(int irq, void *data)
-{
-	struct cxl_afu *afu = data;
-	struct cxl_context *ctx;
-	struct cxl_irq_info irq_info;
-	int ph = cxl_p2n_read(afu, CXL_PSL_PEHandle_An) & 0xffff;
-	int ret;
-
-	if ((ret = cxl_get_irq(afu, &irq_info))) {
-		WARN(1, "Unable to get CXL IRQ Info: %i\n", ret);
-		return fail_psl_irq(afu, &irq_info);
-	}
-
-	rcu_read_lock();
-	ctx = idr_find(&afu->contexts_idr, ph);
-	if (ctx) {
-		ret = cxl_irq(irq, ctx, &irq_info);
-		rcu_read_unlock();
-		return ret;
-	}
-	rcu_read_unlock();
-
-	WARN(1, "Unable to demultiplex CXL PSL IRQ for PE %i DSISR %016llx DAR"
-		" %016llx\n(Possible AFU HW issue - was a term/remove acked"
-		" with outstanding transactions?)\n", ph, irq_info.dsisr,
-		irq_info.dar);
-	return fail_psl_irq(afu, &irq_info);
-}
+EXPORT_SYMBOL_GPL(cxl_irq);
 
 static irqreturn_t cxl_irq_afu(int irq, void *data)
 {
 	struct cxl_context *ctx = data;
 	irq_hw_number_t hwirq = irqd_to_hwirq(irq_get_irq_data(irq));
-	int irq_off, afu_irq = 1;
+	int irq_off, afu_irq = 0;
 	__u16 range;
 	int r;
 
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		irq_off = hwirq - ctx->irqs.offset[r];
 		range = ctx->irqs.range[r];
 		if (irq_off >= 0 && irq_off < range) {
@@ -236,7 +133,7 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 		afu_irq += range;
 	}
 	if (unlikely(r >= CXL_IRQ_RANGES)) {
-		WARN(1, "Recieved AFU IRQ out of range for pe %i (virq %i hwirq %lx)\n",
+		WARN(1, "Received AFU IRQ out of range for pe %i (virq %i hwirq %lx)\n",
 		     ctx->pe, irq, hwirq);
 		return IRQ_HANDLED;
 	}
@@ -246,7 +143,7 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 	       afu_irq, ctx->pe, irq, hwirq);
 
 	if (unlikely(!ctx->irq_bitmap)) {
-		WARN(1, "Recieved AFU IRQ for context with no IRQ bitmap\n");
+		WARN(1, "Received AFU IRQ for context with no IRQ bitmap\n");
 		return IRQ_HANDLED;
 	}
 	spin_lock(&ctx->lock);
@@ -272,7 +169,8 @@ unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 		return 0;
 	}
 
-	cxl_setup_irq(adapter, hwirq, virq);
+	if (cxl_ops->setup_irq)
+		cxl_ops->setup_irq(adapter, hwirq, virq);
 
 	pr_devel("hwirq %#lx mapped to virq %u\n", hwirq, virq);
 
@@ -284,23 +182,25 @@ unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 
 	return virq;
 }
+EXPORT_SYMBOL_GPL(cxl_map_irq);
 
 void cxl_unmap_irq(unsigned int virq, void *cookie)
 {
 	free_irq(virq, cookie);
 	irq_dispose_mapping(virq);
 }
+EXPORT_SYMBOL_GPL(cxl_unmap_irq);
 
-static int cxl_register_one_irq(struct cxl *adapter,
-				irq_handler_t handler,
-				void *cookie,
-				irq_hw_number_t *dest_hwirq,
-				unsigned int *dest_virq,
-				const char *name)
+int cxl_register_one_irq(struct cxl *adapter,
+			irq_handler_t handler,
+			void *cookie,
+			irq_hw_number_t *dest_hwirq,
+			unsigned int *dest_virq,
+			const char *name)
 {
 	int hwirq, virq;
 
-	if ((hwirq = cxl_alloc_one_irq(adapter)) < 0)
+	if ((hwirq = cxl_ops->alloc_one_irq(adapter)) < 0)
 		return hwirq;
 
 	if (!(virq = cxl_map_irq(adapter, hwirq, handler, cookie, name)))
@@ -312,107 +212,10 @@ static int cxl_register_one_irq(struct cxl *adapter,
 	return 0;
 
 err:
-	cxl_release_one_irq(adapter, hwirq);
+	cxl_ops->release_one_irq(adapter, hwirq);
 	return -ENOMEM;
 }
-
-int cxl_register_psl_err_irq(struct cxl *adapter)
-{
-	int rc;
-
-	adapter->irq_name = kasprintf(GFP_KERNEL, "cxl-%s-err",
-				      dev_name(&adapter->dev));
-	if (!adapter->irq_name)
-		return -ENOMEM;
-
-	if ((rc = cxl_register_one_irq(adapter, cxl_irq_err, adapter,
-				       &adapter->err_hwirq,
-				       &adapter->err_virq,
-				       adapter->irq_name))) {
-		kfree(adapter->irq_name);
-		adapter->irq_name = NULL;
-		return rc;
-	}
-
-	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, adapter->err_hwirq & 0xffff);
-
-	return 0;
-}
-
-void cxl_release_psl_err_irq(struct cxl *adapter)
-{
-	if (adapter->err_virq != irq_find_mapping(NULL, adapter->err_hwirq))
-		return;
-
-	cxl_p1_write(adapter, CXL_PSL_ErrIVTE, 0x0000000000000000);
-	cxl_unmap_irq(adapter->err_virq, adapter);
-	cxl_release_one_irq(adapter, adapter->err_hwirq);
-	kfree(adapter->irq_name);
-}
-
-int cxl_register_serr_irq(struct cxl_afu *afu)
-{
-	u64 serr;
-	int rc;
-
-	afu->err_irq_name = kasprintf(GFP_KERNEL, "cxl-%s-err",
-				      dev_name(&afu->dev));
-	if (!afu->err_irq_name)
-		return -ENOMEM;
-
-	if ((rc = cxl_register_one_irq(afu->adapter, cxl_slice_irq_err, afu,
-				       &afu->serr_hwirq,
-				       &afu->serr_virq, afu->err_irq_name))) {
-		kfree(afu->err_irq_name);
-		afu->err_irq_name = NULL;
-		return rc;
-	}
-
-	serr = cxl_p1n_read(afu, CXL_PSL_SERR_An);
-	serr = (serr & 0x00ffffffffff0000ULL) | (afu->serr_hwirq & 0xffff);
-	cxl_p1n_write(afu, CXL_PSL_SERR_An, serr);
-
-	return 0;
-}
-
-void cxl_release_serr_irq(struct cxl_afu *afu)
-{
-	if (afu->serr_virq != irq_find_mapping(NULL, afu->serr_hwirq))
-		return;
-
-	cxl_p1n_write(afu, CXL_PSL_SERR_An, 0x0000000000000000);
-	cxl_unmap_irq(afu->serr_virq, afu);
-	cxl_release_one_irq(afu->adapter, afu->serr_hwirq);
-	kfree(afu->err_irq_name);
-}
-
-int cxl_register_psl_irq(struct cxl_afu *afu)
-{
-	int rc;
-
-	afu->psl_irq_name = kasprintf(GFP_KERNEL, "cxl-%s",
-				      dev_name(&afu->dev));
-	if (!afu->psl_irq_name)
-		return -ENOMEM;
-
-	if ((rc = cxl_register_one_irq(afu->adapter, cxl_irq_multiplexed, afu,
-				    &afu->psl_hwirq, &afu->psl_virq,
-				    afu->psl_irq_name))) {
-		kfree(afu->psl_irq_name);
-		afu->psl_irq_name = NULL;
-	}
-	return rc;
-}
-
-void cxl_release_psl_irq(struct cxl_afu *afu)
-{
-	if (afu->psl_virq != irq_find_mapping(NULL, afu->psl_hwirq))
-		return;
-
-	cxl_unmap_irq(afu->psl_virq, afu);
-	cxl_release_one_irq(afu->adapter, afu->psl_hwirq);
-	kfree(afu->psl_irq_name);
-}
+EXPORT_SYMBOL_GPL(cxl_register_one_irq);
 
 void afu_irq_name_free(struct cxl_context *ctx)
 {
@@ -424,21 +227,42 @@ void afu_irq_name_free(struct cxl_context *ctx)
 		kfree(irq_name);
 	}
 }
+EXPORT_SYMBOL_GPL(afu_irq_name_free);
 
 int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 {
-	int rc, r, i, j = 1;
+	int rc, r, i, j = 1, range_start;
 	struct cxl_irq_name *irq_name;
+	int alloc_count;
+
+	/*
+	 * In native mode, range 0 is reserved for the multiplexed
+	 * PSL interrupt. It has been allocated when the AFU was initialized.
+	 *
+	 * In a guest, the PSL interrupt is not mutliplexed, but per-context,
+	 * and is the first interrupt from range 0. It still need to be
+	 * allocated, so bump the count by one.
+	 */
+	if (cpu_has_feature(CPU_FTR_HVMODE)) {
+		alloc_count = count;
+		range_start = 1;
+	} else {
+		alloc_count = count + 1;
+		range_start = 0;
+	}
 
 	/* Initialize the list head to hold irq names */
 	INIT_LIST_HEAD(&ctx->irq_names);
 
-	if ((rc = cxl_alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter, count)))
+	if ((rc = cxl_ops->alloc_irq_ranges(&ctx->irqs, ctx->afu->adapter,
+							alloc_count)))
 		return rc;
 
-	/* Multiplexed PSL Interrupt */
-	ctx->irqs.offset[0] = ctx->afu->psl_hwirq;
-	ctx->irqs.range[0] = 1;
+	if (cpu_has_feature(CPU_FTR_HVMODE)) {
+		/* Multiplexed PSL Interrupt */
+		ctx->irqs.offset[0] = ctx->afu->psl_hwirq;
+		ctx->irqs.range[0] = 1;
+	}
 
 	ctx->irq_count = count;
 	ctx->irq_bitmap = kcalloc(BITS_TO_LONGS(count),
@@ -450,7 +274,7 @@ int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 	 * Allocate names first.  If any fail, bail out before allocating
 	 * actual hardware IRQs.
 	 */
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = range_start; r < CXL_IRQ_RANGES; r++) {
 		for (i = 0; i < ctx->irqs.range[r]; i++) {
 			irq_name = kmalloc(sizeof(struct cxl_irq_name),
 					   GFP_KERNEL);
@@ -471,24 +295,36 @@ int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 	return 0;
 
 out:
-	cxl_release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
+	cxl_ops->release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
 	afu_irq_name_free(ctx);
 	return -ENOMEM;
 }
+EXPORT_SYMBOL_GPL(afu_allocate_irqs);
 
 static void afu_register_hwirqs(struct cxl_context *ctx)
 {
 	irq_hw_number_t hwirq;
 	struct cxl_irq_name *irq_name;
-	int r,i;
+	int r, i, range_start;
+	irqreturn_t (*handler)(int irq, void *data);
+
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		range_start = 1;
+	else
+		range_start = 0;
 
 	/* We've allocated all memory now, so let's do the irq allocations */
 	irq_name = list_first_entry(&ctx->irq_names, struct cxl_irq_name, list);
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	for (r = range_start; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
-			cxl_map_irq(ctx->afu->adapter, hwirq,
-				    cxl_irq_afu, ctx, irq_name->name);
+			if (r == 0 && i == 0)
+				/* PSL interrupt, only for guest */
+				handler = cxl_ops->psl_interrupt;
+			else
+				handler = cxl_irq_afu;
+			cxl_map_irq(ctx->afu->adapter, hwirq, handler, ctx,
+				irq_name->name);
 			irq_name = list_next_entry(irq_name, list);
 		}
 	}
@@ -504,15 +340,21 @@ int afu_register_irqs(struct cxl_context *ctx, u32 count)
 
 	afu_register_hwirqs(ctx);
 	return 0;
- }
+}
+EXPORT_SYMBOL_GPL(afu_register_irqs);
 
 void afu_release_irqs(struct cxl_context *ctx, void *cookie)
 {
 	irq_hw_number_t hwirq;
 	unsigned int virq;
-	int r, i;
+	int r, i, range_start;
 
-	for (r = 1; r < CXL_IRQ_RANGES; r++) {
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		range_start = 1;
+	else
+		range_start = 0;
+
+	for (r = range_start; r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			virq = irq_find_mapping(NULL, hwirq);
@@ -522,7 +364,8 @@ void afu_release_irqs(struct cxl_context *ctx, void *cookie)
 	}
 
 	afu_irq_name_free(ctx);
-	cxl_release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
+	cxl_ops->release_irq_ranges(&ctx->irqs, ctx->afu->adapter);
 
 	ctx->irq_count = 0;
 }
+EXPORT_SYMBOL_GPL(afu_release_irqs);
