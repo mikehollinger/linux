@@ -534,9 +534,9 @@ static int __init cxl_of_init(void)
 
 	pr_devel("in %s\n", __func__);
 	cxl_ops = &cxl_guest_ops;
-	if ((rc = platform_driver_register(&cxl_of_driver)))
-		cxl_ops = NULL;
-
+	rc = common_init();
+	if (!rc)
+		rc = platform_driver_register(&cxl_of_driver);
 	return rc;
 }
 
@@ -544,7 +544,7 @@ static void __exit cxl_of_exit(void)
 {
 	pr_devel("cxl_of_exit\n");
 	platform_driver_unregister(&cxl_of_driver);
-	cxl_ops = NULL;
+	common_exit();
 }
 
 module_init(cxl_of_init);

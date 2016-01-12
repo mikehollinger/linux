@@ -440,7 +440,6 @@ err:
 	}
 	return rc;
 }
-EXPORT_SYMBOL_GPL(cxl_sysfs_adapter_add);
 
 void cxl_sysfs_adapter_remove(struct cxl *adapter)
 {
@@ -453,7 +452,6 @@ void cxl_sysfs_adapter_remove(struct cxl *adapter)
 			device_remove_file(&adapter->dev, dev_attr);
 	}
 }
-EXPORT_SYMBOL_GPL(cxl_sysfs_adapter_remove);
 
 struct afu_config_record {
 	struct kobject kobj;
@@ -616,7 +614,6 @@ void cxl_sysfs_afu_remove(struct cxl_afu *afu)
 		kobject_put(&cr->kobj);
 	}
 }
-EXPORT_SYMBOL_GPL(cxl_sysfs_afu_remove);
 
 int cxl_sysfs_afu_add(struct cxl_afu *afu)
 {
@@ -670,7 +667,6 @@ err:
 		device_remove_file(&afu->dev, &afu_attrs[i]);
 	return rc;
 }
-EXPORT_SYMBOL_GPL(cxl_sysfs_afu_add);
 
 int cxl_sysfs_afu_m_add(struct cxl_afu *afu)
 {
@@ -688,7 +684,6 @@ err:
 		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
 	return rc;
 }
-EXPORT_SYMBOL_GPL(cxl_sysfs_afu_m_add);
 
 void cxl_sysfs_afu_m_remove(struct cxl_afu *afu)
 {
@@ -697,4 +692,3 @@ void cxl_sysfs_afu_m_remove(struct cxl_afu *afu)
 	for (i = 0; i < ARRAY_SIZE(afu_master_attrs); i++)
 		device_remove_file(afu->chardev_m, &afu_master_attrs[i]);
 }
-EXPORT_SYMBOL_GPL(cxl_sysfs_afu_m_remove);

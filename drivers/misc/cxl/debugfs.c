@@ -59,13 +59,11 @@ int cxl_debugfs_adapter_add(struct cxl *adapter)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(cxl_debugfs_adapter_add);
 
 void cxl_debugfs_adapter_remove(struct cxl *adapter)
 {
 	debugfs_remove_recursive(adapter->debugfs);
 }
-EXPORT_SYMBOL_GPL(cxl_debugfs_adapter_remove);
 
 int cxl_debugfs_afu_add(struct cxl_afu *afu)
 {
@@ -96,13 +94,11 @@ int cxl_debugfs_afu_add(struct cxl_afu *afu)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(cxl_debugfs_afu_add);
 
 void cxl_debugfs_afu_remove(struct cxl_afu *afu)
 {
 	debugfs_remove_recursive(afu->debugfs);
 }
-EXPORT_SYMBOL_GPL(cxl_debugfs_afu_remove);
 
 int __init cxl_debugfs_init(void)
 {

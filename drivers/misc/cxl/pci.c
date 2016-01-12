@@ -1499,15 +1499,16 @@ static int __init cxl_pci_init(void)
 
 	pr_devel("in %s\n", __func__);
 	cxl_ops = &cxl_native_ops;
-	if ((rc = pci_register_driver(&cxl_pci_driver)))
-		cxl_ops = NULL;
+	rc = common_init();
+	if (!rc)
+		rc = pci_register_driver(&cxl_pci_driver);
 	return rc;
 }
 
 static void __exit cxl_pci_exit(void)
 {
 	pci_unregister_driver(&cxl_pci_driver);
-	cxl_ops = NULL;
+	common_exit();
 }
 
 module_init(cxl_pci_init);

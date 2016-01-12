@@ -315,4 +315,3 @@ void cxl_prefault(struct cxl_context *ctx, u64 wed)
 		break;
 	}
 }
-EXPORT_SYMBOL_GPL(cxl_prefault);

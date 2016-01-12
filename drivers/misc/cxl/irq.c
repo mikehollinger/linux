@@ -113,7 +113,6 @@ irqreturn_t cxl_irq(int irq, struct cxl_context *ctx, struct cxl_irq_info *irq_i
 	WARN(1, "Unhandled CXL PSL IRQ\n");
 	return IRQ_HANDLED;
 }
-EXPORT_SYMBOL_GPL(cxl_irq);
 
 static irqreturn_t cxl_irq_afu(int irq, void *data)
 {
@@ -182,14 +181,12 @@ unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 
 	return virq;
 }
-EXPORT_SYMBOL_GPL(cxl_map_irq);
 
 void cxl_unmap_irq(unsigned int virq, void *cookie)
 {
 	free_irq(virq, cookie);
 	irq_dispose_mapping(virq);
 }
-EXPORT_SYMBOL_GPL(cxl_unmap_irq);
 
 int cxl_register_one_irq(struct cxl *adapter,
 			irq_handler_t handler,
@@ -215,7 +212,6 @@ err:
 	cxl_ops->release_one_irq(adapter, hwirq);
 	return -ENOMEM;
 }
-EXPORT_SYMBOL_GPL(cxl_register_one_irq);
 
 void afu_irq_name_free(struct cxl_context *ctx)
 {
@@ -227,7 +223,6 @@ void afu_irq_name_free(struct cxl_context *ctx)
 		kfree(irq_name);
 	}
 }
-EXPORT_SYMBOL_GPL(afu_irq_name_free);
 
 int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 {
@@ -299,7 +294,6 @@ out:
 	afu_irq_name_free(ctx);
 	return -ENOMEM;
 }
-EXPORT_SYMBOL_GPL(afu_allocate_irqs);
 
 static void afu_register_hwirqs(struct cxl_context *ctx)
 {
@@ -341,7 +335,6 @@ int afu_register_irqs(struct cxl_context *ctx, u32 count)
 	afu_register_hwirqs(ctx);
 	return 0;
 }
-EXPORT_SYMBOL_GPL(afu_register_irqs);
 
 void afu_release_irqs(struct cxl_context *ctx, void *cookie)
 {
@@ -368,4 +361,3 @@ void afu_release_irqs(struct cxl_context *ctx, void *cookie)
 
 	ctx->irq_count = 0;
 }
-EXPORT_SYMBOL_GPL(afu_release_irqs);

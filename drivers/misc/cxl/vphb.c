@@ -234,7 +234,6 @@ pci_ers_result_t cxl_pci_vphb_error_detected(struct cxl_afu *afu,
 	}
 	return result;
 }
-EXPORT_SYMBOL_GPL(cxl_pci_vphb_error_detected);
 
 int cxl_pci_vphb_add(struct cxl_afu *afu)
 {
@@ -286,7 +285,6 @@ int cxl_pci_vphb_add(struct cxl_afu *afu)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(cxl_pci_vphb_add);
 
 void cxl_pci_vphb_remove(struct cxl_afu *afu)
 {
@@ -302,7 +300,6 @@ void cxl_pci_vphb_remove(struct cxl_afu *afu)
 	pci_remove_root_bus(phb->bus);
 	pcibios_free_controller(phb); 
 }
-EXPORT_SYMBOL_GPL(cxl_pci_vphb_remove);
 
 struct cxl_afu *cxl_pci_to_afu(struct pci_dev *dev)
 {

@@ -10,13 +10,4 @@
 #ifndef __CHECKER__
 #define CREATE_TRACE_POINTS
 #include "trace.h"
-
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_llcmd);
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_detach);
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_afu_ctrl);
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_psl_ctrl_done);
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_psl_ctrl);
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_afu_ctrl_done);
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_llcmd_done);
-EXPORT_SYMBOL_GPL(__tracepoint_cxl_psl_irq_ack);
 #endif

@@ -808,6 +808,8 @@ int guest_add_chardev(struct cxl *adapter);
 void guest_remove_chardev(struct cxl *adapter);
 void guest_reload_module(struct cxl *adapter);
 int cxl_of_probe(struct platform_device *pdev);
+int common_init(void);
+void common_exit(void);
 
 struct cxl_backend_ops {
 	struct module *module;

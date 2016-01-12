@@ -30,7 +30,6 @@ struct cxl_context *cxl_context_alloc(void)
 {
 	return kzalloc(sizeof(struct cxl_context), GFP_KERNEL);
 }
-EXPORT_SYMBOL_GPL(cxl_context_alloc);
 
 /*
  * Initialises a CXL context.
@@ -105,7 +104,6 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master,
 	ctx->pe_inserted = false;
 	return 0;
 }
-EXPORT_SYMBOL_GPL(cxl_context_init);
 
 static int cxl_mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
@@ -222,7 +220,6 @@ int __detach_context(struct cxl_context *ctx)
 	cxl_ctx_put();
 	return 0;
 }
-EXPORT_SYMBOL_GPL(__detach_context);
 
 /*
  * Detach the given context from the AFU. This doesn't actually
@@ -271,7 +268,6 @@ void cxl_context_detach_all(struct cxl_afu *afu)
 	}
 	mutex_unlock(&afu->contexts_lock);
 }
-EXPORT_SYMBOL_GPL(cxl_context_detach_all);
 
 static void reclaim_ctx(struct rcu_head *rcu)
 {
@@ -297,4 +293,3 @@ void cxl_context_free(struct cxl_context *ctx)
 	mutex_unlock(&ctx->afu->contexts_lock);
 	call_rcu(&ctx->rcu, reclaim_ctx);
 }
-EXPORT_SYMBOL_GPL(cxl_context_free);

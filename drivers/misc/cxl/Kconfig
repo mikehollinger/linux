@@ -15,8 +15,8 @@ config CXL_EEH
 	bool
 	default n
 
-config CXL
-	tristate "Support for IBM Coherent Accelerators (CXL)"
+config CXL_PCI
+	tristate "Support for IBM Coherent Accelerators (CXL) via PCI"
 	depends on PPC_POWERNV && PCI_MSI && EEH
 	select CXL_BASE
 	select CXL_KERNEL_API
@@ -31,22 +31,25 @@ config CXL
 	  devices.
 
 	  CAPI adapters are found in POWER8 based systems.
+	  This option enables CAPI devices detected via PCI, e.g. when
+	  running under OPAL. This has no effect on CXL devices detected
+	  via the device tree, such as when running under PowerVM.
 
 	  If unsure, say N.
 
-config CXL_PCI
-	tristate "Support for CXL devices via PCI"
-	depends on CXL && PPC_POWERNV
-	default y
-	help
-	  Select this option to support CXL devices detected via PCI, e.g.
-	  when running under Sapphire. This has no effect on CXL devices
-	  detected via the device tree, such as when running under PowerVM.
-
 config CXL_OF
-	tristate "Support for CXL devices on PowerVM"
-	depends on CXL
-	default y
+	tristate "Support for IBM Coherent Accelerators (CXL) on PowerVM"
+	select CXL_BASE
+	default m
 	help
-	  Select this option to support CXL devices detected via the device
+	  Select this option to enable driver support for IBM Coherent
+	  Accelerators (CXL).  CXL is otherwise known as Coherent Accelerator
+	  Processor Interface (CAPI).  CAPI allows accelerators in FPGAs to be
+	  coherently attached to a CPU via an MMU.  This driver enables
+	  userspace programs to access these accelerators via /dev/cxl/afuM.N
+	  devices.
+
+	  CAPI adapters are found in POWER8 based systems.
+
+	  This option enables CAPI devices detected via the device
 	  tree, such as when running under PowerVM.

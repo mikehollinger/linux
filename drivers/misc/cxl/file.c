@@ -103,7 +103,6 @@ int afu_open(struct inode *inode, struct file *file)
 {
 	return __afu_open(inode, file, false);
 }
-EXPORT_SYMBOL_GPL(afu_open);
 
 static int afu_master_open(struct inode *inode, struct file *file)
 {
@@ -141,7 +140,6 @@ int afu_release(struct inode *inode, struct file *file)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(afu_release);
 
 static long afu_ioctl_start_work(struct cxl_context *ctx,
 				 struct cxl_ioctl_start_work __user *uwork)
@@ -270,7 +268,6 @@ long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 	return -EINVAL;
 }
-EXPORT_SYMBOL_GPL(afu_ioctl);
 
 static long afu_compat_ioctl(struct file *file, unsigned int cmd,
 			     unsigned long arg)
@@ -291,7 +288,6 @@ int afu_mmap(struct file *file, struct vm_area_struct *vm)
 
 	return cxl_context_iomap(ctx, vm);
 }
-EXPORT_SYMBOL_GPL(afu_mmap);
 
 unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 {
@@ -318,7 +314,6 @@ unsigned int afu_poll(struct file *file, struct poll_table_struct *poll)
 
 	return mask;
 }
-EXPORT_SYMBOL_GPL(afu_poll);
 
 static inline int ctx_event_pending(struct cxl_context *ctx)
 {
@@ -414,7 +409,6 @@ out:
 	spin_unlock_irqrestore(&ctx->lock, flags);
 	return rc;
 }
-EXPORT_SYMBOL_GPL(afu_read);
 
 /* 
  * Note: if this is updated, we need to update api.c to patch the new ones in
@@ -430,7 +424,6 @@ const struct file_operations afu_fops = {
 	.compat_ioctl   = afu_compat_ioctl,
 	.mmap           = afu_mmap,
 };
-EXPORT_SYMBOL_GPL(afu_fops);
 
 static const struct file_operations afu_master_fops = {
 	.owner		= THIS_MODULE,
@@ -494,7 +487,6 @@ int cxl_chardev_d_afu_add(struct cxl_afu *afu)
 			       &afu->chardev_d, "d", "dedicated",
 			       &afu_master_fops); /* Uses master fops */
 }
-EXPORT_SYMBOL_GPL(cxl_chardev_d_afu_add);
 
 int cxl_chardev_m_afu_add(struct cxl_afu *afu)
 {
@@ -502,7 +494,6 @@ int cxl_chardev_m_afu_add(struct cxl_afu *afu)
 			       &afu->chardev_m, "m", "master",
 			       &afu_master_fops);
 }
-EXPORT_SYMBOL_GPL(cxl_chardev_m_afu_add);
 
 int cxl_chardev_s_afu_add(struct cxl_afu *afu)
 {
@@ -510,7 +501,6 @@ int cxl_chardev_s_afu_add(struct cxl_afu *afu)
 			       &afu->chardev_s, "s", "shared",
 			       &afu_fops);
 }
-EXPORT_SYMBOL_GPL(cxl_chardev_s_afu_add);
 
 void cxl_chardev_afu_remove(struct cxl_afu *afu)
 {
@@ -530,7 +520,6 @@ void cxl_chardev_afu_remove(struct cxl_afu *afu)
 		afu->chardev_s = NULL;
 	}
 }
-EXPORT_SYMBOL_GPL(cxl_chardev_afu_remove);
 
 int cxl_register_afu(struct cxl_afu *afu)
 {
@@ -538,7 +527,6 @@ int cxl_register_afu(struct cxl_afu *afu)
 
 	return device_register(&afu->dev);
 }
-EXPORT_SYMBOL_GPL(cxl_register_afu);
 
 int cxl_register_adapter(struct cxl *adapter)
 {
@@ -552,13 +540,11 @@ int cxl_register_adapter(struct cxl *adapter)
 
 	return device_register(&adapter->dev);
 }
-EXPORT_SYMBOL_GPL(cxl_register_adapter);
 
 dev_t cxl_get_dev(void)
 {
 	return cxl_dev;
 }
-EXPORT_SYMBOL_GPL(cxl_get_dev);
 
 int __init cxl_file_init(void)
 {

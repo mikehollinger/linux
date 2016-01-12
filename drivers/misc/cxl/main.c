@@ -34,7 +34,6 @@ MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
 EXPORT_SYMBOL_GPL(cxl_verbose);
 
 const struct cxl_backend_ops *cxl_ops;
-EXPORT_SYMBOL_GPL(cxl_ops);
 
 int cxl_afu_slbia(struct cxl_afu *afu)
 {
@@ -56,7 +55,6 @@ int cxl_afu_slbia(struct cxl_afu *afu)
 	}
 	return 0;
 }
-EXPORT_SYMBOL_GPL(cxl_afu_slbia);
 
 static inline void _cxl_slbia(struct cxl_context *ctx, struct mm_struct *mm)
 {
@@ -176,7 +174,6 @@ void cxl_assign_psn_space(struct cxl_context *ctx)
 		ctx->psn_size = ctx->afu->pp_size;
 	}
 }
-EXPORT_SYMBOL_GPL(cxl_assign_psn_space);
 
 /* Find a CXL adapter by it's number and increase it's refcount */
 struct cxl *get_cxl_adapter(int num)
@@ -190,7 +187,6 @@ struct cxl *get_cxl_adapter(int num)
 
 	return adapter;
 }
-EXPORT_SYMBOL_GPL(get_cxl_adapter);
 
 static int cxl_alloc_adapter_nr(struct cxl *adapter)
 {
@@ -213,7 +209,6 @@ void cxl_remove_adapter_nr(struct cxl *adapter)
 {
 	idr_remove(&cxl_adapter_idr, adapter->adapter_num);
 }
-EXPORT_SYMBOL_GPL(cxl_remove_adapter_nr);
 
 struct cxl *cxl_alloc_adapter(void)
 {
@@ -238,7 +233,6 @@ err1:
 	kfree(adapter);
 	return NULL;
 }
-EXPORT_SYMBOL_GPL(cxl_alloc_adapter);
 
 struct cxl_afu *cxl_alloc_afu(struct cxl *adapter, int slice)
 {
@@ -261,7 +255,6 @@ struct cxl_afu *cxl_alloc_afu(struct cxl *adapter, int slice)
 
 	return afu;
 }
-EXPORT_SYMBOL_GPL(cxl_alloc_afu);
 
 int cxl_afu_select_best_mode(struct cxl_afu *afu)
 {
@@ -275,9 +268,8 @@ int cxl_afu_select_best_mode(struct cxl_afu *afu)
 	/* We don't fail this so the user can inspect sysfs */
 	return 0;
 }
-EXPORT_SYMBOL_GPL(cxl_afu_select_best_mode);
 
-static int __init init_cxl(void)
+int common_init(void)
 {
 	int rc = 0;
 
@@ -301,7 +293,7 @@ err:
 	return rc;
 }
 
-static void exit_cxl(void)
+void common_exit(void)
 {
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		cxl_debugfs_exit();
@@ -309,10 +301,3 @@ static void exit_cxl(void)
 	unregister_cxl_calls(&cxl_calls);
 	idr_destroy(&cxl_adapter_idr);
 }
-
-module_init(init_cxl);
-module_exit(exit_cxl);
-
-MODULE_DESCRIPTION("IBM Coherent Accelerator");
-MODULE_AUTHOR("Ian Munsie <imunsie@au1.ibm.com>");
-MODULE_LICENSE("GPL");
