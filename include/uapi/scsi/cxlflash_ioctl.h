@@ -180,6 +180,5 @@ union cxlflash_ioctls {
 #define DK_CXLFLASH_USER_VIRTUAL	CXL_IOWR(0x87, dk_cxlflash_uvirtual)
 #define DK_CXLFLASH_VLUN_RESIZE		CXL_IOWR(0x88, dk_cxlflash_resize)
 #define DK_CXLFLASH_VLUN_CLONE		CXL_IOWR(0x89, dk_cxlflash_clone)
-#define DK_CXLFLASH_CLONE		DK_CXLFLASH_VLUN_CLONE
 
 #endif /* ifndef _CXLFLASH_IOCTL_H */
