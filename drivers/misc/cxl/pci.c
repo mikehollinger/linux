@@ -1489,31 +1489,3 @@ struct pci_driver cxl_pci_driver = {
 	.shutdown = cxl_remove,
 	.err_handler = &cxl_err_handler,
 };
-
-static int __init cxl_pci_init(void)
-{
-	int rc;
-
-	if (!cpu_has_feature(CPU_FTR_HVMODE))
-		return 0;
-
-	pr_devel("in %s\n", __func__);
-	cxl_ops = &cxl_native_ops;
-	rc = common_init();
-	if (!rc)
-		rc = pci_register_driver(&cxl_pci_driver);
-	return rc;
-}
-
-static void __exit cxl_pci_exit(void)
-{
-	pci_unregister_driver(&cxl_pci_driver);
-	common_exit();
-}
-
-module_init(cxl_pci_init);
-module_exit(cxl_pci_exit);
-
-MODULE_DESCRIPTION("IBM Coherent Accelerator");
-MODULE_AUTHOR("Ian Munsie <imunsie@au1.ibm.com>");
-MODULE_LICENSE("GPL");

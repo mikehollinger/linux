@@ -31,7 +31,6 @@ static DEFINE_IDR(cxl_adapter_idr);
 uint cxl_verbose;
 module_param_named(verbose, cxl_verbose, uint, 0600);
 MODULE_PARM_DESC(verbose, "Enable verbose dmesg output");
-EXPORT_SYMBOL_GPL(cxl_verbose);
 
 const struct cxl_backend_ops *cxl_ops;
 
@@ -269,7 +268,7 @@ int cxl_afu_select_best_mode(struct cxl_afu *afu)
 	return 0;
 }
 
-int common_init(void)
+static int __init init_cxl(void)
 {
 	int rc = 0;
 
@@ -282,10 +281,19 @@ int common_init(void)
 	if ((rc = register_cxl_calls(&cxl_calls)))
 		goto err;
 
+	if (cpu_has_feature(CPU_FTR_HVMODE)) {
+		cxl_ops = &cxl_native_ops;
+		rc = pci_register_driver(&cxl_pci_driver);
+	} else {
+		cxl_ops = &cxl_guest_ops;
+		rc = platform_driver_register(&cxl_of_driver);
+	}
+	if (rc)
+		goto err1;
 	return 0;
-
-err:
+err1:
 	unregister_cxl_calls(&cxl_calls);
+err:
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		cxl_debugfs_exit();
 	cxl_file_exit();
@@ -293,11 +301,23 @@ err:
 	return rc;
 }
 
-void common_exit(void)
+static void exit_cxl(void)
 {
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		pci_unregister_driver(&cxl_pci_driver);
+	else
+		platform_driver_unregister(&cxl_of_driver);
+
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		cxl_debugfs_exit();
 	cxl_file_exit();
 	unregister_cxl_calls(&cxl_calls);
 	idr_destroy(&cxl_adapter_idr);
 }
+
+module_init(init_cxl);
+module_exit(exit_cxl);
+
+MODULE_DESCRIPTION("IBM Coherent Accelerator");
+MODULE_AUTHOR("Ian Munsie <imunsie@au1.ibm.com>");
+MODULE_LICENSE("GPL");

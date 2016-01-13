@@ -517,7 +517,7 @@ static const struct of_device_id cxl_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, cxl_of_match);
 
-static struct platform_driver cxl_of_driver = {
+struct platform_driver cxl_of_driver = {
 	.driver = {
 		.name = "cxl_of",
 		.of_match_table = cxl_of_match,
@@ -527,29 +527,3 @@ static struct platform_driver cxl_of_driver = {
 	.remove = cxl_of_remove,
 	.shutdown = cxl_of_shutdown,
 };
-
-static int __init cxl_of_init(void)
-{
-	int rc;
-
-	pr_devel("in %s\n", __func__);
-	cxl_ops = &cxl_guest_ops;
-	rc = common_init();
-	if (!rc)
-		rc = platform_driver_register(&cxl_of_driver);
-	return rc;
-}
-
-static void __exit cxl_of_exit(void)
-{
-	pr_devel("cxl_of_exit\n");
-	platform_driver_unregister(&cxl_of_driver);
-	common_exit();
-}
-
-module_init(cxl_of_init);
-module_exit(cxl_of_exit);
-
-MODULE_DESCRIPTION("IBM Coherent Accelerator");
-MODULE_AUTHOR("Ian Munsie <imunsie@au1.ibm.com>");
-MODULE_LICENSE("GPL");

@@ -784,6 +784,8 @@ pci_ers_result_t cxl_pci_vphb_error_detected(struct cxl_afu *afu,
 int cxl_pci_vphb_add(struct cxl_afu *afu);
 void cxl_pci_vphb_remove(struct cxl_afu *afu);
 
+extern struct pci_driver cxl_pci_driver;
+extern struct platform_driver cxl_of_driver;
 int afu_allocate_irqs(struct cxl_context *ctx, u32 count);
 
 int afu_open(struct inode *inode, struct file *file);
@@ -808,8 +810,6 @@ int guest_add_chardev(struct cxl *adapter);
 void guest_remove_chardev(struct cxl *adapter);
 void guest_reload_module(struct cxl *adapter);
 int cxl_of_probe(struct platform_device *pdev);
-int common_init(void);
-void common_exit(void);
 
 struct cxl_backend_ops {
 	struct module *module;
