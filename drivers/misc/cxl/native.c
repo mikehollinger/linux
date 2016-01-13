@@ -479,6 +479,7 @@ static u64 calculate_sr(struct cxl_context *ctx)
 {
 	u64 sr = 0;
 
+	set_endian(sr);
 	if (ctx->master)
 		sr |= CXL_PSL_SR_An_MP;
 	if (mfspr(SPRN_LPCR) & LPCR_TC)
@@ -488,7 +489,6 @@ static u64 calculate_sr(struct cxl_context *ctx)
 		sr |= CXL_PSL_SR_An_HV;
 	} else {
 		sr |= CXL_PSL_SR_An_PR | CXL_PSL_SR_An_R;
-		set_endian(sr);
 		sr &= ~(CXL_PSL_SR_An_HV);
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
 			sr |= CXL_PSL_SR_An_SF;
