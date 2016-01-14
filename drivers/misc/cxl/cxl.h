@@ -718,7 +718,6 @@ int native_register_psl_err_irq(struct cxl *adapter);
 void native_release_psl_err_irq(struct cxl *adapter);
 int native_register_serr_irq(struct cxl_afu *afu);
 void native_release_serr_irq(struct cxl_afu *afu);
-
 int afu_register_irqs(struct cxl_context *ctx, u32 count);
 void afu_release_irqs(struct cxl_context *ctx, void *cookie);
 void afu_irq_name_free(struct cxl_context *ctx);
@@ -779,6 +778,7 @@ int cxl_tlb_slb_invalidate(struct cxl *adapter);
 int cxl_afu_disable(struct cxl_afu *afu);
 int cxl_psl_purge(struct cxl_afu *afu);
 
+void cxl_stop_trace(struct cxl *cxl);
 pci_ers_result_t cxl_pci_vphb_error_detected(struct cxl_afu *afu,
 					     pci_channel_state_t state);
 int cxl_pci_vphb_add(struct cxl_afu *afu);
@@ -796,7 +796,7 @@ unsigned int afu_poll(struct file *file, struct poll_table_struct *poll);
 ssize_t afu_read(struct file *file, char __user *buf, size_t count, loff_t *off);
 extern const struct file_operations afu_fops;
 
-struct cxl *guest_init_adapter(struct device_node *np, struct platform_device *pdev);
+struct cxl *guest_init_adapter(struct device_node *np, struct platform_device *dev);
 void guest_remove_adapter(struct cxl *adapter);
 int read_adapter_handle(struct cxl *adapter, struct device_node *np);
 int read_adapter_properties(struct cxl *adapter, struct device_node *np);

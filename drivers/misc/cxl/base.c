@@ -100,7 +100,7 @@ static int __init cxl_base_init(void)
 	int count = 0;
 
 	/*
-	 * Scan for compatible device in guest only
+	 * Scan for compatible devices in guest only
 	 */
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		return 0;

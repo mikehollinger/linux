@@ -15,6 +15,21 @@
 
 static struct dentry *cxl_debugfs;
 
+void cxl_stop_trace(struct cxl *adapter)
+{
+	int slice;
+
+	/* Stop the trace */
+	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x8000000000000017LL);
+
+	/* Stop the slice traces */
+	spin_lock(&adapter->afu_list_lock);
+	for (slice = 0; slice < adapter->slices; slice++) {
+		if (adapter->afu[slice])
+			cxl_p1n_write(adapter->afu[slice], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
+	}
+	spin_unlock(&adapter->afu_list_lock);
+}
 
 /* Helpers to export CXL mmaped IO registers via debugfs */
 static int debugfs_io_u64_get(void *data, u64 *val)

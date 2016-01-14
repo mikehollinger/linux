@@ -20,22 +20,6 @@
 #include "cxl.h"
 #include "trace.h"
 
-void cxl_stop_trace(struct cxl *adapter)
-{
-	int slice;
-
-	/* Stop the trace */
-	cxl_p1_write(adapter, CXL_PSL_TRACE, 0x8000000000000017LL);
-
-	/* Stop the slice traces */
-	spin_lock(&adapter->afu_list_lock);
-	for (slice = 0; slice < adapter->slices; slice++) {
-		if (adapter->afu[slice])
-			cxl_p1n_write(adapter->afu[slice], CXL_PSL_SLICE_TRACE, 0x8000000000000000LL);
-	}
-	spin_unlock(&adapter->afu_list_lock);
-}
-
 static int afu_control(struct cxl_afu *afu, u64 command,
 		       u64 result, u64 mask, bool enabled)
 {
@@ -789,7 +773,6 @@ static irqreturn_t native_irq_multiplexed(int irq, void *data)
 		return ret;
 	}
 	rcu_read_unlock();
-
 
 	WARN(1, "Unable to demultiplex CXL PSL IRQ for PE %i DSISR %016llx DAR"
 		" %016llx\n(Possible AFU HW issue - was a term/remove acked"

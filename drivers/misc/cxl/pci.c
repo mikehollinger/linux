@@ -806,7 +806,7 @@ err1:
 	return rc;
 }
 
-static void cxl_deconfigure_afu(struct cxl_afu *afu)
+static void pci_deconfigure_afu(struct cxl_afu *afu)
 {
 	native_release_psl_irq(afu);
 	native_release_serr_irq(afu);
@@ -851,7 +851,7 @@ static int pci_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 	return 0;
 
 err_put1:
-	cxl_deconfigure_afu(afu);
+	pci_deconfigure_afu(afu);
 	cxl_debugfs_afu_remove(afu);
 	device_unregister(&afu->dev);
 	return rc;
@@ -880,7 +880,7 @@ static void cxl_remove_afu(struct cxl_afu *afu)
 	cxl_context_detach_all(afu);
 	cxl_ops->afu_deactivate_mode(afu, afu->current_mode);
 
-	cxl_deconfigure_afu(afu);
+	pci_deconfigure_afu(afu);
 	device_unregister(&afu->dev);
 }
 
@@ -1376,7 +1376,7 @@ static pci_ers_result_t cxl_pci_error_detected(struct pci_dev *pdev,
 
 		cxl_context_detach_all(afu);
 		cxl_ops->afu_deactivate_mode(afu, afu->current_mode);
-		cxl_deconfigure_afu(afu);
+		pci_deconfigure_afu(afu);
 	}
 	cxl_deconfigure_adapter(adapter);
 

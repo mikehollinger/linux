@@ -324,14 +324,14 @@ long cxl_h_terminate_process(u64 unit_address, u64 process_token)
 
 /**
  * cxl_h_collect_vpd - Collect VPD for the coherent platform function.
- * Parameter1 = # of VPD record to retrieve, valid values are between 0 
+ * Parameter1 = # of VPD record to retrieve, valid values are between 0
  *              and (ibm,#config-records – 1).
- * Parameter2 = 4K naturally aligned real buffer containing block 
+ * Parameter2 = 4K naturally aligned real buffer containing block
  *              list entries
- * Parameter3 = number of block list entries in the block list, valid 
+ * Parameter3 = number of block list entries in the block list, valid
  *              values are between 0 and 256
  */
-long cxl_h_collect_vpd(u64 unit_address, u64 record, u64 list_address, 
+long cxl_h_collect_vpd(u64 unit_address, u64 record, u64 list_address,
 		       u64 num, u64 *out)
 {
 	return cxl_h_control_function(unit_address,
@@ -503,12 +503,12 @@ long cxl_h_reset_adapter(u64 unit_address)
 
 /**
  * cxl_h_collect_vpd - Collect VPD for the coherent platform function.
- * Parameter1 = 4K naturally aligned real buffer containing block 
+ * Parameter1 = 4K naturally aligned real buffer containing block
  *              list entries
- * Parameter2 = number of block list entries in the block list, valid 
+ * Parameter2 = number of block list entries in the block list, valid
  *              values are between 0 and 256
  */
-long cxl_h_collect_vpd_adapter(u64 unit_address, u64 list_address, 
+long cxl_h_collect_vpd_adapter(u64 unit_address, u64 list_address,
 			       u64 num, u64 *out)
 {
 	return cxl_h_control_facility(unit_address,
@@ -550,7 +550,7 @@ static long cxl_h_download_facility(u64 unit_address, u64 op,
 
 	memset(retbuf, 0, sizeof(retbuf));
 	while (1) {
-		rc = plpar_hcall(H_DOWNLOAD_CA_FACILITY, retbuf, 
+		rc = plpar_hcall(H_DOWNLOAD_CA_FACILITY, retbuf,
 				 unit_address, op, list_address, num,
 				 token);
 		token = retbuf[0];
@@ -562,7 +562,7 @@ static long cxl_h_download_facility(u64 unit_address, u64 op,
 			total_delay += delay;
 			if (total_delay > CXL_HCALL_TIMEOUT_DOWNLOAD) {
 				WARN(1, "Warning: Giving up waiting for CXL hcall "
-					"%#x after %u msec\n", 
+					"%#x after %u msec\n",
 					H_DOWNLOAD_CA_FACILITY, total_delay);
 				rc = H_BUSY;
 				break;

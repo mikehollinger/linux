@@ -16,7 +16,6 @@
 #include "hcalls.h"
 #include "trace.h"
 
-
 irqreturn_t guest_handle_psl_slice_error(struct cxl_context *ctx, u64 dsisr,
 					u64 errstat)
 {
@@ -800,7 +799,7 @@ static int afu_check_state(struct cxl_afu *afu)
 
 	state = atomic_read(&afu->error_state);
 	if (afu->previous_error_state == state) {
-		if ((state != H_STATE_NORMAL) && 
+		if ((state != H_STATE_NORMAL) &&
 		    (afu->count_error_state++ == CXL_COUNT_MAX)) {
 			pr_err("Bad AFU(%d) error state: %#x\n",
 			       afu->slice, state);
@@ -841,7 +840,7 @@ static int afu_check_state(struct cxl_afu *afu)
 		afu->previous_error_state = state;
 		break;
 	default:
-		pr_err("Unexpected AFU(%d) error state: %#x\n", 
+		pr_err("Unexpected AFU(%d) error state: %#x\n",
 		       afu->slice, state);
 		return -EINVAL;
 	}

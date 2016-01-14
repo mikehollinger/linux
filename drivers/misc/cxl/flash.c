@@ -31,7 +31,7 @@ static struct semaphore sem;
 unsigned long *buffer[SG_MAX_ENTRIES];
 struct sg_list *le;
 static u64 token;
-static unsigned int transfer; 
+static unsigned int transfer;
 
 struct update_props_workarea {
 	__be32 phandle;
@@ -67,7 +67,7 @@ static int rcall(int token, char *buf, s32 scope)
 	return rc;
 }
 
-static int update_property(struct device_node *dn, const char *name, 
+static int update_property(struct device_node *dn, const char *name,
 			   u32 vd, char *value)
 {
 	struct property *new_prop;
@@ -201,7 +201,7 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 		while (be32_to_cpu(*data) & NODE_ACTION_MASK) {
 			action = be32_to_cpu(*data) & NODE_ACTION_MASK;
 			node_count = be32_to_cpu(*data) & NODE_COUNT_MASK;
-			pr_devel("device reconfiguration - action: %#x, nodes: %#x\n", 
+			pr_devel("device reconfiguration - action: %#x, nodes: %#x\n",
 				 action, node_count);
 			data++;
 

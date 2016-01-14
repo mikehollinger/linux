@@ -38,7 +38,7 @@ int cxl_afu_slbia(struct cxl_afu *afu)
 {
 	unsigned long timeout = jiffies + (HZ * CXL_TIMEOUT);
 
-	pr_devel("%s issuing SLBIA command\n", __func__);
+	pr_devel("cxl_afu_slbia issuing SLBIA command\n");
 	cxl_p2n_write(afu, CXL_SLBIA_An, CXL_TLB_SLB_IQ_ALL);
 	while (cxl_p2n_read(afu, CXL_SLBIA_An) & CXL_TLB_SLB_P) {
 		if (time_after_eq(jiffies, timeout)) {
@@ -290,6 +290,7 @@ static int __init init_cxl(void)
 	}
 	if (rc)
 		goto err1;
+
 	return 0;
 err1:
 	unregister_cxl_calls(&cxl_calls);

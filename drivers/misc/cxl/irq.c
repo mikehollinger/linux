@@ -19,7 +19,6 @@
 #include "cxl.h"
 #include "trace.h"
 
-
 static irqreturn_t schedule_cxl_fault(struct cxl_context *ctx, u64 dsisr, u64 dar)
 {
 	ctx->dsisr = dsisr;
@@ -235,7 +234,7 @@ int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 	 * PSL interrupt. It has been allocated when the AFU was initialized.
 	 *
 	 * In a guest, the PSL interrupt is not mutliplexed, but per-context,
-	 * and is the first interrupt from range 0. It still need to be
+	 * and is the first interrupt from range 0. It still needs to be
 	 * allocated, so bump the count by one.
 	 */
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
