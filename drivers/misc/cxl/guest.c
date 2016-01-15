@@ -663,6 +663,7 @@ static bool guest_support_attributes(const char *attr_name)
 {
 	if ((strcmp(attr_name, "base_image") == 0) ||
 		(strcmp(attr_name, "load_image_on_perst") == 0) ||
+		(strcmp(attr_name, "perst_reloads_same_image") == 0) ||
 		(strcmp(attr_name, "image_loaded") == 0))
 		return false;
 
