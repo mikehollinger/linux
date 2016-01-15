@@ -122,19 +122,6 @@ static irqreturn_t guest_psl_irq(int irq, void *data)
 	struct cxl_irq_info irq_info;
 	int rc;
 
-	/* FIXME: to be discussed during code reviews: the native version
-	 * define a rcu read-side critical section here, which help protect
-	 * against deletion of the context while processing an interrupt.
-	 *
-	 * The PSL interrupt is not mutliplexed on powerVM, so when we enter
-	 * this function, it's theoretically possible that the context has
-	 * already been deleted. That's unlikely though, because we cannot
-	 * detach if there's a pending interrupt. But we could timeout when
-	 * detaching...
-	 * Note that even with the native code, I believe we have the same
-	 * issue if there's a pending bottom half, or more generally when
-	 * an AFU interrupt is received (in cxl_irq_afu())
-	 */
 	pr_devel("%d: received PSL interrupt %i\n", ctx->pe, irq);
 	rc = guest_get_irq_info(ctx, &irq_info);
 	if (rc) {
@@ -545,8 +532,13 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 		}
 		if (ctx->afu->pp_psa && mmio_size &&
 			ctx->afu->pp_size == 0) {
-			/* FIXME this is way too late + would require locking
-			 * Need to check with pHyp to do better
+			/*
+			 * There's no property in the device tree to read the
+			 * pp_size. We only find out at the 1st attach.
+			 * Compared to bare-metal, it is too late and we
+			 * should really lock here. However, on powerVM,
+			 * pp_size is really only used to display in /sys.
+			 * Being discussed with pHyp for their next release.
 			 */
 			ctx->afu->pp_size = mmio_size;
 		}
@@ -925,12 +917,13 @@ int guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_np)
 	if ((rc = cxl_sysfs_afu_add(afu)))
 		goto err_put1;
 
-	/* FIXME pHyp doesn't expose the programming models supported by the
+	/*
+	 * pHyp doesn't expose the programming models supported by the
 	 * AFU. pHyp currently only supports directed mode. If it adds
 	 * dedicated mode later, this version of cxl has no way to
 	 * detect it. So we'll initialize the driver, but the first
 	 * attach will fail.
-	 * Need to check with pHyp to do better
+	 * Being discussed with pHyp to do better (likely new property)
 	 */
 	if (afu->max_procs_virtualised == 1)
 		afu->modes_supported = CXL_MODE_DEDICATED;
