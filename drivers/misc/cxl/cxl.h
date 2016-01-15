@@ -814,7 +814,6 @@ int cxl_of_probe(struct platform_device *pdev);
 struct cxl_backend_ops {
 	struct module *module;
 	int (*adapter_reset)(struct cxl *adapter);
-	int (*update_image_control)(struct cxl *adapter);
 	int (*alloc_one_irq)(struct cxl *adapter);
 	void (*release_one_irq)(struct cxl *adapter, int hwirq);
 	int (*alloc_irq_ranges)(struct cxl_irq_ranges *irqs,

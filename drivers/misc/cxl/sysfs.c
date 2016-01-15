@@ -106,7 +106,7 @@ static ssize_t load_image_on_perst_store(struct device *device,
 	} else
 		return -EINVAL;
 
-	if ((rc = cxl_ops->update_image_control(adapter)))
+	if ((rc = pci_update_image_control(adapter)))
 		return rc;
 
 	return count;

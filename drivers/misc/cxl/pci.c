@@ -1112,7 +1112,7 @@ static int cxl_configure_adapter(struct cxl *adapter, struct pci_dev *dev)
 	if ((rc = switch_card_to_cxl(dev)))
 		return rc;
 
-	if ((rc = cxl_ops->update_image_control(adapter)))
+	if ((rc = pci_update_image_control(adapter)))
 		return rc;
 
 	if ((rc = cxl_map_adapter_regs(adapter, dev)))

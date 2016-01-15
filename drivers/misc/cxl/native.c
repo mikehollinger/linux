@@ -1051,7 +1051,6 @@ static int native_afu_cr_write8(struct cxl_afu *afu, int cr, u64 off, u8 in)
 const struct cxl_backend_ops cxl_native_ops = {
 	.module = THIS_MODULE,
 	.adapter_reset = pci_reset,
-	.update_image_control = pci_update_image_control,
 	.alloc_one_irq = pci_alloc_one_irq,
 	.release_one_irq = pci_release_one_irq,
 	.alloc_irq_ranges = pci_alloc_irq_ranges,

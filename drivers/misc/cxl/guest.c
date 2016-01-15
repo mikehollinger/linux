@@ -230,11 +230,6 @@ static int guest_reset(struct cxl *adapter)
 	return cxl_h_reset_adapter(adapter->handle);
 }
 
-static int guest_update_image_control(struct cxl *adapter)
-{
-	return 0;
-}
-
 static int guest_alloc_one_irq(struct cxl *adapter)
 {
 	int irq;
@@ -1129,7 +1124,6 @@ void guest_reload_module(struct cxl *adapter)
 const struct cxl_backend_ops cxl_guest_ops = {
 	.module = THIS_MODULE,
 	.adapter_reset = guest_reset,
-	.update_image_control = guest_update_image_control,
 	.alloc_one_irq = guest_alloc_one_irq,
 	.release_one_irq = guest_release_one_irq,
 	.alloc_irq_ranges = guest_alloc_irq_ranges,
