@@ -102,7 +102,7 @@ long cxl_h_read_error_state(u64 unit_address, u64 *state);
 /**
  * cxl_h_get_afu_err - collect the AFU error buffer
  * Parameter1 = byte offset into error buffer to retrieve, valid values
- *              are between 0 and (ibm,error-buffer-size – 1)
+ *              are between 0 and (ibm,error-buffer-size - 1)
  * Parameter2 = 4K aligned real address of error buffer, to be filled in
  * Parameter3 = length of error buffer, valid values are 4K or less
  */
@@ -112,9 +112,9 @@ long cxl_h_get_afu_err(u64 unit_address, u64 offset, u64 buf_address, u64 len);
  * cxl_h_get_config - collect configuration record for the
  *                    coherent platform function
  * Parameter1 = # of configuration record to retrieve, valid values are
- *              between 0 and (ibm,#config-records – 1)
+ *              between 0 and (ibm,#config-records - 1)
  * Parameter2 = byte offset into configuration record to retrieve,
- *              valid values are between 0 and (ibm,config-record-size – 1)
+ *              valid values are between 0 and (ibm,config-record-size - 1)
  * Parameter3 = 4K aligned real address of configuration record buffer,
  *              to be filled in
  * Parameter4 = length of configuration buffer, valid values are 4K or less
@@ -132,7 +132,7 @@ long cxl_h_terminate_process(u64 unit_address, u64 process_token);
 /**
  * cxl_h_collect_vpd - Collect VPD for the coherent platform function.
  * Parameter1 = # of VPD record to retrieve, valid values are between 0
- *              and (ibm,#config-records – 1).
+ *              and (ibm,#config-records - 1).
  * Parameter2 = 4K naturally aligned real buffer containing block
  *              list entries
  * Parameter3 = number of block list entries in the block list, valid
