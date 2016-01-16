@@ -129,7 +129,7 @@ static int read_vpd(struct cxl *adapter, struct cxl_afu *afu)
 
 	if (rc > 0) {
 		len = rc;
-		buf = (u32*) vpd;
+		buf = (u32 *) vpd;
 		for (i = 0; i*4 < len; i += 4) {
 			if ((i+3)*4 < len)
 				pr_devel("%.8x %.8x %.8x %.8x\n",

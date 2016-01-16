@@ -133,7 +133,7 @@ static int cxl_pcie_read_config(struct pci_bus *bus, unsigned int devfn,
 	if (rc)
 		return rc;
 
-	switch(len) {
+	switch (len) {
 	case 1:
 		rc = cxl_ops->afu_cr_read8(afu, record, offset,	&val8);
 		*val = val8;
@@ -166,7 +166,7 @@ static int cxl_pcie_write_config(struct pci_bus *bus, unsigned int devfn,
 	if (rc)
 		return rc;
 
-	switch(len) {
+	switch (len) {
 	case 1:
 		rc = cxl_ops->afu_cr_write8(afu, record, offset, val & 0xff);
 		break;

@@ -93,9 +93,9 @@ static int update_property(struct device_node *dn, const char *name,
 	}
 	memcpy(new_prop->value, value, vd);
 
-	val = (u32*)new_prop->value;
+	val = (u32 *)new_prop->value;
 	rc = cxl_update_properties(dn, new_prop);
-	pr_devel("%s: update property (%s, lenght: %i, value: %#x)\n",
+	pr_devel("%s: update property (%s, length: %i, value: %#x)\n",
 		  dn->name, name, vd, be32_to_cpu(*val));
 
 	if (rc) {
@@ -178,7 +178,7 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 	struct update_nodes_workarea *unwa;
 	u32 action, node_count;
 	int token, rc, i;
-	__be32 *data;
+	__be32 *data, drc_index, phandle;
 	char *buf;
 
 	token = rtas_token("ibm,update-nodes");
@@ -206,8 +206,8 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 			data++;
 
 			for (i = 0; i < node_count; i++) {
-				__be32 phandle = *data++;
-				__be32 drc_index;
+				phandle = *data++;
+
 				switch (action) {
 				case OPCODE_DELETE:
 					/* nothing to do */

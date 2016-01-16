@@ -767,7 +767,7 @@ static int guest_map_slice_regs(struct cxl_afu *afu)
 {
 	if (!(afu->p2n_mmio = ioremap(afu->p2n_phys, afu->p2n_size))) {
 		dev_err(&afu->dev, "Error mapping AFU(%d) MMIO regions\n",
-		        afu->slice);
+			afu->slice);
 		return -ENOMEM;
 	}
 	return 0;
