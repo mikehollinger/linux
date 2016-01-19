@@ -382,8 +382,6 @@ struct cxl_afu {
 			phys_addr_t p2n_phys;
 			u64 p2n_size;
 			atomic_t error_state;
-			int previous_error_state;
-			int count_error_state;
 			struct work_struct errstate_work;
 			int paged_resolution_response;
 			int max_ints;
@@ -520,7 +518,6 @@ struct cxl {
 			u64 ps_off;
 		};
 		struct { /* guest */
-			struct task_struct *task;
 			struct platform_device *pdev;
 			int irq_nranges;
 			struct cdev cdev;
@@ -603,10 +600,6 @@ static inline bool cxl_adapter_link_ok(struct cxl *cxl, struct cxl_afu *afu)
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
 		pdev = to_pci_dev(cxl->dev.parent);
 		return !pci_channel_offline(pdev);
-	} else {
-		if ((afu) && atomic_read(&afu->error_state) != 1){
-			return false;
-		}
 	}
 	return true;
 }
@@ -779,8 +772,6 @@ int cxl_afu_disable(struct cxl_afu *afu);
 int cxl_psl_purge(struct cxl_afu *afu);
 
 void cxl_stop_trace(struct cxl *cxl);
-pci_ers_result_t cxl_pci_vphb_error_detected(struct cxl_afu *afu,
-					     pci_channel_state_t state);
 int cxl_pci_vphb_add(struct cxl_afu *afu);
 void cxl_pci_vphb_remove(struct cxl_afu *afu);
 
@@ -830,6 +821,7 @@ struct cxl_backend_ops {
 			u64 wed, u64 amr);
 	int (*detach_process)(struct cxl_context *ctx);
 	bool (*support_attributes)(const char *attr_name);
+	bool (*link_ok)(struct cxl *cxl, struct cxl_afu *afu);
 	void (*release_afu)(struct device *dev);
 	ssize_t (*afu_read_err_buffer)(struct cxl_afu *afu, char *buf,
 				loff_t off, size_t count);

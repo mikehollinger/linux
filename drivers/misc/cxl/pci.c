@@ -1261,6 +1261,35 @@ static void cxl_remove(struct pci_dev *dev)
 	cxl_remove_adapter(adapter);
 }
 
+static pci_ers_result_t cxl_vphb_error_detected(struct cxl_afu *afu,
+						pci_channel_state_t state)
+{
+	struct pci_dev *afu_dev;
+	pci_ers_result_t result = PCI_ERS_RESULT_NEED_RESET;
+	pci_ers_result_t afu_result = PCI_ERS_RESULT_NEED_RESET;
+
+	/* There should only be one entry, but go through the list
+	 * anyway
+	 */
+	list_for_each_entry(afu_dev, &afu->phb->bus->devices, bus_list) {
+		if (!afu_dev->driver)
+			continue;
+
+		afu_dev->error_state = state;
+
+		if (afu_dev->driver->err_handler)
+			afu_result = afu_dev->driver->err_handler->error_detected(afu_dev,
+										  state);
+		/* Disconnect trumps all, NONE trumps NEED_RESET */
+		if (afu_result == PCI_ERS_RESULT_DISCONNECT)
+			result = PCI_ERS_RESULT_DISCONNECT;
+		else if ((afu_result == PCI_ERS_RESULT_NONE) &&
+			 (result == PCI_ERS_RESULT_NEED_RESET))
+			result = PCI_ERS_RESULT_NONE;
+	}
+	return result;
+}
+
 static pci_ers_result_t cxl_pci_error_detected(struct pci_dev *pdev,
 					       pci_channel_state_t state)
 {
@@ -1282,7 +1311,7 @@ static pci_ers_result_t cxl_pci_error_detected(struct pci_dev *pdev,
 		 */
 		for (i = 0; i < adapter->slices; i++) {
 			afu = adapter->afu[i];
-			cxl_pci_vphb_error_detected(afu, state);
+			cxl_vphb_error_detected(afu, state);
 		}
 		return PCI_ERS_RESULT_DISCONNECT;
 	}
@@ -1368,7 +1397,7 @@ static pci_ers_result_t cxl_pci_error_detected(struct pci_dev *pdev,
 	for (i = 0; i < adapter->slices; i++) {
 		afu = adapter->afu[i];
 
-		result = cxl_pci_vphb_error_detected(afu, state);
+		result = cxl_vphb_error_detected(afu, state);
 
 		/* Only continue if everyone agrees on NEED_RESET */
 		if (result != PCI_ERS_RESULT_NEED_RESET)

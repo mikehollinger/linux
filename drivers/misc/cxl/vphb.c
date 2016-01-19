@@ -49,7 +49,7 @@ static bool cxl_pci_enable_device_hook(struct pci_dev *dev)
 	phb = pci_bus_to_host(dev->bus);
 	afu = (struct cxl_afu *)phb->private_data;
 
-	if (!cxl_adapter_link_ok(afu->adapter, afu)) {
+	if (!cxl_ops->link_ok(afu->adapter, afu)) {
 		dev_warn(&dev->dev, "%s: Device link is down, refusing to enable AFU\n", __func__);
 		return false;
 	}
@@ -205,35 +205,6 @@ static struct pci_controller_ops cxl_pci_controller_ops =
 	.teardown_msi_irqs = cxl_teardown_msi_irqs,
 	.dma_set_mask = cxl_dma_set_mask,
 };
-
-pci_ers_result_t cxl_pci_vphb_error_detected(struct cxl_afu *afu,
-					     pci_channel_state_t state)
-{
-	struct pci_dev *afu_dev;
-	pci_ers_result_t result = PCI_ERS_RESULT_NEED_RESET;
-	pci_ers_result_t afu_result = PCI_ERS_RESULT_NEED_RESET;
-
-	/* There should only be one entry, but go through the list
-	 * anyway
-	 */
-	list_for_each_entry(afu_dev, &afu->phb->bus->devices, bus_list) {
-		if (!afu_dev->driver)
-			continue;
-
-		afu_dev->error_state = state;
-
-		if (afu_dev->driver->err_handler)
-			afu_result = afu_dev->driver->err_handler->error_detected(afu_dev,
-										  state);
-		/* Disconnect trumps all, NONE trumps NEED_RESET */
-		if (afu_result == PCI_ERS_RESULT_DISCONNECT)
-			result = PCI_ERS_RESULT_DISCONNECT;
-		else if ((afu_result == PCI_ERS_RESULT_NONE) &&
-			 (result == PCI_ERS_RESULT_NEED_RESET))
-			result = PCI_ERS_RESULT_NONE;
-	}
-	return result;
-}
 
 int cxl_pci_vphb_add(struct cxl_afu *afu)
 {

@@ -503,8 +503,10 @@ int cxl_of_probe(struct platform_device *pdev)
 			slice_ok++;
 	}
 
-	if (slice_ok == 0)
+	if (slice_ok == 0) {
 		dev_info(&pdev->dev, "No active AFU");
+		adapter->slices = 0;
+	}
 
 	if (afu_np)
 		of_node_put(afu_np);

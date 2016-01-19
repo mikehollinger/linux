@@ -70,7 +70,7 @@ static int __afu_open(struct inode *inode, struct file *file, bool master)
 	if (!afu->current_mode)
 		goto err_put_afu;
 
-	if (!cxl_adapter_link_ok(adapter, afu)) {
+	if (!cxl_ops->link_ok(adapter, afu)) {
 		rc = -EIO;
 		goto err_put_afu;
 	}
@@ -253,7 +253,7 @@ long afu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	if (ctx->status == CLOSED)
 		return -EIO;
 
-	if (!cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu))
+	if (!cxl_ops->link_ok(ctx->afu->adapter, ctx->afu))
 		return -EIO;
 
 	pr_devel("afu_ioctl\n");
@@ -283,7 +283,7 @@ int afu_mmap(struct file *file, struct vm_area_struct *vm)
 	if (ctx->status != STARTED)
 		return -EIO;
 
-	if (!cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu))
+	if (!cxl_ops->link_ok(ctx->afu->adapter, ctx->afu))
 		return -EIO;
 
 	return cxl_context_iomap(ctx, vm);
@@ -330,7 +330,7 @@ ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 	int rc;
 	DEFINE_WAIT(wait);
 
-	if (!cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu))
+	if (!cxl_ops->link_ok(ctx->afu->adapter, ctx->afu))
 		return -EIO;
 
 	if (count < CXL_READ_MIN_SIZE)
@@ -343,7 +343,7 @@ ssize_t afu_read(struct file *file, char __user *buf, size_t count,
 		if (ctx_event_pending(ctx))
 			break;
 
-		if (!cxl_adapter_link_ok(ctx->afu->adapter, ctx->afu)) {
+		if (!cxl_ops->link_ok(ctx->afu->adapter, ctx->afu)) {
 			rc = -EIO;
 			goto out;
 		}
