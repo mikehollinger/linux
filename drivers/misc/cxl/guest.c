@@ -718,7 +718,10 @@ static inline bool guest_link_ok(struct cxl *cxl, struct cxl_afu *afu)
 {
 	int rc = 0;
 
-	if (afu && !afu_read_error_state(afu)) {
+	if (afu) {
+		if (( rc = afu_read_error_state(afu)))
+			return false;
+
 		if (atomic_read(&afu->error_state) == H_STATE_DISABLE) {
 			if ((rc = cxl_ops->afu_reset(afu))) {
 				pr_devel("reset hcall failed %d\n", rc);
