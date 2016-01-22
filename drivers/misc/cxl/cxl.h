@@ -740,7 +740,19 @@ unsigned int cxl_map_irq(struct cxl *adapter, irq_hw_number_t hwirq,
 void cxl_unmap_irq(unsigned int virq, void *cookie);
 int __detach_context(struct cxl_context *ctx);
 
-/* This matches the layout of the H_COLLECT_CA_INT_INFO retbuf */
+/*
+ * This must match the layout of the H_COLLECT_CA_INT_INFO retbuf defined
+ * in PAPR.
+ * A word about endianness: a pointer to this structure is passed when
+ * calling the hcall. However, it is not a block of memory filled up by
+ * the hypervisor. The return values are found in registers, and copied
+ * one by one when returning from the hcall. See the end of the call to
+ * plpar_hcall9() in hvCall.S
+ * As a consequence:
+ * - we don't need to do any endianness conversion
+ * - the pid and tid are an exception. They are 32-bit values returned in
+ *   the same 64-bit register. So we do need to worry about byte ordering.
+ */
 struct cxl_irq_info {
 	u64 dsisr;
 	u64 dar;

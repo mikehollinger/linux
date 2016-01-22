@@ -19,6 +19,13 @@
 #include "cxl.h"
 #include "trace.h"
 
+static int afu_irq_range_start(void)
+{
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		return 1;
+	return 0;
+}
+
 static irqreturn_t schedule_cxl_fault(struct cxl_context *ctx, u64 dsisr, u64 dar)
 {
 	ctx->dsisr = dsisr;
@@ -121,6 +128,18 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 	__u16 range;
 	int r;
 
+	/*
+	 * Look for the interrupt number.
+	 * On bare-metal, we know the range 0 only contains the PSL
+	 * interrupt so, we could start counting at range 1 and initialize
+	 * afu_irq at 1.
+	 * In a guest, range 0 also contains AFU interrupts, so it must
+	 * be counted for, but we initialize afu_irq at 0 to take into
+	 * account the PSL interrupt.
+	 *
+	 * For code-readability, it just seems easier to go over all
+	 * the ranges.
+	 */
 	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		irq_off = hwirq - ctx->irqs.offset[r];
 		range = ctx->irqs.range[r];
@@ -225,7 +244,7 @@ void afu_irq_name_free(struct cxl_context *ctx)
 
 int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 {
-	int rc, r, i, j = 1, range_start;
+	int rc, r, i, j = 1;
 	struct cxl_irq_name *irq_name;
 	int alloc_count;
 
@@ -239,10 +258,8 @@ int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 	 */
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
 		alloc_count = count;
-		range_start = 1;
 	} else {
 		alloc_count = count + 1;
-		range_start = 0;
 	}
 
 	/* Initialize the list head to hold irq names */
@@ -268,7 +285,7 @@ int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 	 * Allocate names first.  If any fail, bail out before allocating
 	 * actual hardware IRQs.
 	 */
-	for (r = range_start; r < CXL_IRQ_RANGES; r++) {
+	for (r = afu_irq_range_start(); r < CXL_IRQ_RANGES; r++) {
 		for (i = 0; i < ctx->irqs.range[r]; i++) {
 			irq_name = kmalloc(sizeof(struct cxl_irq_name),
 					   GFP_KERNEL);
@@ -298,17 +315,12 @@ static void afu_register_hwirqs(struct cxl_context *ctx)
 {
 	irq_hw_number_t hwirq;
 	struct cxl_irq_name *irq_name;
-	int r, i, range_start;
+	int r, i;
 	irqreturn_t (*handler)(int irq, void *data);
-
-	if (cpu_has_feature(CPU_FTR_HVMODE))
-		range_start = 1;
-	else
-		range_start = 0;
 
 	/* We've allocated all memory now, so let's do the irq allocations */
 	irq_name = list_first_entry(&ctx->irq_names, struct cxl_irq_name, list);
-	for (r = range_start; r < CXL_IRQ_RANGES; r++) {
+	for (r = afu_irq_range_start(); r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			if (r == 0 && i == 0)
@@ -339,14 +351,9 @@ void afu_release_irqs(struct cxl_context *ctx, void *cookie)
 {
 	irq_hw_number_t hwirq;
 	unsigned int virq;
-	int r, i, range_start;
+	int r, i;
 
-	if (cpu_has_feature(CPU_FTR_HVMODE))
-		range_start = 1;
-	else
-		range_start = 0;
-
-	for (r = range_start; r < CXL_IRQ_RANGES; r++) {
+	for (r = afu_irq_range_start(); r < CXL_IRQ_RANGES; r++) {
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			virq = irq_find_mapping(NULL, hwirq);
