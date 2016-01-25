@@ -275,8 +275,7 @@ static int __init init_cxl(void)
 	if ((rc = cxl_file_init()))
 		return rc;
 
-	if (cpu_has_feature(CPU_FTR_HVMODE))
-		cxl_debugfs_init();
+	cxl_debugfs_init();
 
 	if ((rc = register_cxl_calls(&cxl_calls)))
 		goto err;
@@ -295,8 +294,7 @@ static int __init init_cxl(void)
 err1:
 	unregister_cxl_calls(&cxl_calls);
 err:
-	if (cpu_has_feature(CPU_FTR_HVMODE))
-		cxl_debugfs_exit();
+	cxl_debugfs_exit();
 	cxl_file_exit();
 
 	return rc;
@@ -309,8 +307,7 @@ static void exit_cxl(void)
 	else
 		platform_driver_unregister(&cxl_of_driver);
 
-	if (cpu_has_feature(CPU_FTR_HVMODE))
-		cxl_debugfs_exit();
+	cxl_debugfs_exit();
 	cxl_file_exit();
 	unregister_cxl_calls(&cxl_calls);
 	idr_destroy(&cxl_adapter_idr);
