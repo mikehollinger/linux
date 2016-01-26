@@ -515,7 +515,7 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 	u32 pid, idx;
 	int rc, r, i;
 	u64 mmio_addr, mmio_size;
-
+	__be64 flags = 0;
 
 	/* Must be 8 byte aligned and cannot cross a 4096 byte boundary */
 	if (!(elem = (struct cxl_process_element_hcall *)
@@ -525,20 +525,22 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 	elem->version = cpu_to_be64(CXL_PROCESS_ELEMENT_VERSION);
 	if (ctx->kernel) {
 		pid = 0;
-		elem->translationEnabled = 1;
-		elem->isPrivilegedProcess = 1;
+		flags |= CXL_PE_TRANSLATION_ENABLED;
+		flags |= CXL_PE_PRIVILEGED_PROCESS;
 		if (mfmsr() & MSR_SF)
-			elem->sixtyFourBit = 1;
+			flags |= CXL_PE_64_BIT;
 	} else {
 		pid = current->pid;
-		elem->problemState = 1;
-		elem->translationEnabled = 1;
+		flags |= CXL_PE_PROBLEM_STATE;
+		flags |= CXL_PE_TRANSLATION_ENABLED;
 		if (!test_tsk_thread_flag(current, TIF_32BIT))
-			elem->sixtyFourBit = 1;
+			flags |= CXL_PE_64_BIT;
 		cred = get_current_cred();
-		elem->isPrivilegedProcess = uid_eq(cred->euid, GLOBAL_ROOT_UID);
+		if (uid_eq(cred->euid, GLOBAL_ROOT_UID))
+			flags |= CXL_PE_PRIVILEGED_PROCESS;
 		put_cred(cred);
 	}
+	elem->flags         = cpu_to_be64(flags);
 	elem->common.tid    = cpu_to_be32(0); /* Unused */
 	elem->common.pid    = cpu_to_be32(pid);
 	elem->common.csrp   = cpu_to_be64(0); /* disable */

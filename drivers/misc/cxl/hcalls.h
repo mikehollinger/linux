@@ -25,31 +25,22 @@ struct sg_list {
 /*
  * This is straight out of PAPR, but replacing some of the compound fields with
  * a single field, where they were identical to the register layout.
+ *
+ * The 'flags' parameter regroups the various bit-fields
  */
+#define CXL_PE_CSRP_VALID			(1ULL << 63)
+#define CXL_PE_PROBLEM_STATE			(1ULL << 62)
+#define CXL_PE_SECONDARY_SEGMENT_TBL_SRCH	(1ULL << 61)
+#define CXL_PE_TAGS_ACTIVE			(1ULL << 60)
+#define CXL_PE_USER_STATE			(1ULL << 59)
+#define CXL_PE_TRANSLATION_ENABLED		(1ULL << 58)
+#define CXL_PE_64_BIT				(1ULL << 57)
+#define CXL_PE_PRIVILEGED_PROCESS		(1ULL << 56)
+
 #define CXL_PROCESS_ELEMENT_VERSION 1
 struct cxl_process_element_hcall {
 	__be64 version;
-#ifndef CONFIG_CPU_LITTLE_ENDIAN
-	__be64 csrpValid:1,
-	       problemState:1,
-	       secondarySegmentTableSearchEnabled:1,
-	       tagsActive:1,
-	       userState:1,
-	       translationEnabled:1,
-	       sixtyFourBit:1,
-	       isPrivilegedProcess:1,
-	       reservedFlags:56;
-#else
-	__be64 isPrivilegedProcess:1,
-	       sixtyFourBit:1,
-	       translationEnabled:1,
-	       userState:1,
-	       tagsActive:1,
-	       secondarySegmentTableSearchEnabled:1,
-	       problemState:1,
-	       csrpValid:1,
-	       reservedFlags:56;
-#endif /* CONFIG_CPU_LITTLE_ENDIAN */
+	__be64 flags;
 	u8     reserved0[12];
 	__be32 pslVirtualIsn;
 	u8     applicationVirtualIsnBitmap[256];
