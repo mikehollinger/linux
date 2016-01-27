@@ -417,6 +417,18 @@ static int remove_process_element(struct cxl_context *ctx)
 	return rc;
 }
 
+void cxl_assign_psn_space(struct cxl_context *ctx)
+{
+	if (!ctx->afu->pp_size || ctx->master) {
+		ctx->psn_phys = ctx->afu->psn_phys;
+		ctx->psn_size = ctx->afu->adapter->ps_size;
+	} else {
+		ctx->psn_phys = ctx->afu->psn_phys +
+			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->pe);
+		ctx->psn_size = ctx->afu->pp_size;
+	}
+}
+
 static int activate_afu_directed(struct cxl_afu *afu)
 {
 	int rc;
@@ -823,7 +835,7 @@ static irqreturn_t native_irq_err(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-int native_register_psl_err_irq(struct cxl *adapter)
+int cxl_native_register_psl_err_irq(struct cxl *adapter)
 {
 	int rc;
 
@@ -846,7 +858,7 @@ int native_register_psl_err_irq(struct cxl *adapter)
 	return 0;
 }
 
-void native_release_psl_err_irq(struct cxl *adapter)
+void cxl_native_release_psl_err_irq(struct cxl *adapter)
 {
 	if (adapter->err_virq != irq_find_mapping(NULL, adapter->err_hwirq))
 		return;
@@ -857,7 +869,7 @@ void native_release_psl_err_irq(struct cxl *adapter)
 	kfree(adapter->irq_name);
 }
 
-int native_register_serr_irq(struct cxl_afu *afu)
+int cxl_native_register_serr_irq(struct cxl_afu *afu)
 {
 	u64 serr;
 	int rc;
@@ -882,7 +894,7 @@ int native_register_serr_irq(struct cxl_afu *afu)
 	return 0;
 }
 
-void native_release_serr_irq(struct cxl_afu *afu)
+void cxl_native_release_serr_irq(struct cxl_afu *afu)
 {
 	if (afu->serr_virq != irq_find_mapping(NULL, afu->serr_hwirq))
 		return;
@@ -893,7 +905,7 @@ void native_release_serr_irq(struct cxl_afu *afu)
 	kfree(afu->err_irq_name);
 }
 
-int native_register_psl_irq(struct cxl_afu *afu)
+int cxl_native_register_psl_irq(struct cxl_afu *afu)
 {
 	int rc;
 
@@ -911,7 +923,7 @@ int native_register_psl_irq(struct cxl_afu *afu)
 	return rc;
 }
 
-void native_release_psl_irq(struct cxl_afu *afu)
+void cxl_native_release_psl_irq(struct cxl_afu *afu)
 {
 	if (afu->psl_virq != irq_find_mapping(NULL, afu->psl_hwirq))
 		return;
@@ -1050,12 +1062,12 @@ static int native_afu_cr_write8(struct cxl_afu *afu, int cr, u64 off, u8 in)
 
 const struct cxl_backend_ops cxl_native_ops = {
 	.module = THIS_MODULE,
-	.adapter_reset = pci_reset,
-	.alloc_one_irq = pci_alloc_one_irq,
-	.release_one_irq = pci_release_one_irq,
-	.alloc_irq_ranges = pci_alloc_irq_ranges,
-	.release_irq_ranges = pci_release_irq_ranges,
-	.setup_irq = pci_setup_irq,
+	.adapter_reset = cxl_pci_reset,
+	.alloc_one_irq = cxl_pci_alloc_one_irq,
+	.release_one_irq = cxl_pci_release_one_irq,
+	.alloc_irq_ranges = cxl_pci_alloc_irq_ranges,
+	.release_irq_ranges = cxl_pci_release_irq_ranges,
+	.setup_irq = cxl_pci_setup_irq,
 	.handle_psl_slice_error = native_handle_psl_slice_error,
 	.psl_interrupt = NULL,
 	.ack_irq = native_ack_irq,
@@ -1063,8 +1075,8 @@ const struct cxl_backend_ops cxl_native_ops = {
 	.detach_process = native_detach_process,
 	.support_attributes = native_support_attributes,
 	.link_ok = cxl_adapter_link_ok,
-	.release_afu = pci_release_afu,
-	.afu_read_err_buffer = pci_afu_read_err_buffer,
+	.release_afu = cxl_pci_release_afu,
+	.afu_read_err_buffer = cxl_pci_afu_read_err_buffer,
 	.afu_check_and_enable = native_afu_check_and_enable,
 	.afu_activate_mode = native_afu_activate_mode,
 	.afu_deactivate_mode = native_afu_deactivate_mode,
@@ -1076,5 +1088,5 @@ const struct cxl_backend_ops cxl_native_ops = {
 	.afu_cr_write8 = native_afu_cr_write8,
 	.afu_cr_write16 = native_afu_cr_write16,
 	.afu_cr_write32 = native_afu_cr_write32,
-	.read_adapter_vpd = pci_read_adapter_vpd,
+	.read_adapter_vpd = cxl_pci_read_adapter_vpd,
 };

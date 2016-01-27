@@ -569,15 +569,15 @@ struct cxl {
 	bool perst_same_image;
 };
 
-int pci_alloc_one_irq(struct cxl *adapter);
-void pci_release_one_irq(struct cxl *adapter, int hwirq);
-int pci_alloc_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num);
-void pci_release_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter);
-int pci_setup_irq(struct cxl *adapter, unsigned int hwirq, unsigned int virq);
-int pci_update_image_control(struct cxl *adapter);
-int pci_reset(struct cxl *adapter);
-void pci_release_afu(struct device *dev);
-ssize_t pci_read_adapter_vpd(struct cxl *adapter, void *buf, size_t len);
+int cxl_pci_alloc_one_irq(struct cxl *adapter);
+void cxl_pci_release_one_irq(struct cxl *adapter, int hwirq);
+int cxl_pci_alloc_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num);
+void cxl_pci_release_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter);
+int cxl_pci_setup_irq(struct cxl *adapter, unsigned int hwirq, unsigned int virq);
+int cxl_update_image_control(struct cxl *adapter);
+int cxl_pci_reset(struct cxl *adapter);
+void cxl_pci_release_afu(struct device *dev);
+ssize_t cxl_pci_read_adapter_vpd(struct cxl *adapter, void *buf, size_t len);
 
 /* common == phyp + powernv */
 struct cxl_process_element_common {
@@ -677,7 +677,7 @@ static inline u64 cxl_p2n_read(struct cxl_afu *afu, cxl_p2n_reg_t reg)
 		return ~0ULL;
 }
 
-ssize_t pci_afu_read_err_buffer(struct cxl_afu *afu, char *buf,
+ssize_t cxl_pci_afu_read_err_buffer(struct cxl_afu *afu, char *buf,
 				loff_t off, size_t count);
 
 
@@ -719,12 +719,12 @@ struct cxl *cxl_alloc_adapter(void);
 struct cxl_afu *cxl_alloc_afu(struct cxl *adapter, int slice);
 int cxl_afu_select_best_mode(struct cxl_afu *afu);
 
-int native_register_psl_irq(struct cxl_afu *afu);
-void native_release_psl_irq(struct cxl_afu *afu);
-int native_register_psl_err_irq(struct cxl *adapter);
-void native_release_psl_err_irq(struct cxl *adapter);
-int native_register_serr_irq(struct cxl_afu *afu);
-void native_release_serr_irq(struct cxl_afu *afu);
+int cxl_native_register_psl_irq(struct cxl_afu *afu);
+void cxl_native_release_psl_irq(struct cxl_afu *afu);
+int cxl_native_register_psl_err_irq(struct cxl *adapter);
+void cxl_native_release_psl_err_irq(struct cxl *adapter);
+int cxl_native_register_serr_irq(struct cxl_afu *afu);
+void cxl_native_release_serr_irq(struct cxl_afu *afu);
 int afu_register_irqs(struct cxl_context *ctx, u32 count);
 void afu_release_irqs(struct cxl_context *ctx, void *cookie);
 void afu_irq_name_free(struct cxl_context *ctx);
@@ -813,19 +813,19 @@ unsigned int afu_poll(struct file *file, struct poll_table_struct *poll);
 ssize_t afu_read(struct file *file, char __user *buf, size_t count, loff_t *off);
 extern const struct file_operations afu_fops;
 
-struct cxl *guest_init_adapter(struct device_node *np, struct platform_device *dev);
-void guest_remove_adapter(struct cxl *adapter);
-int read_adapter_handle(struct cxl *adapter, struct device_node *np);
-int read_adapter_properties(struct cxl *adapter, struct device_node *np);
-ssize_t guest_collect_vpd_adapter(struct cxl *adapter, void *buf, size_t len);
-ssize_t guest_collect_vpd_afu(struct cxl_afu *afu, void *buf, size_t len);
-int guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_np);
-void guest_remove_afu(struct cxl_afu *afu);
-int read_afu_handle(struct cxl_afu *afu, struct device_node *afu_np);
-int read_afu_properties(struct cxl_afu *afu, struct device_node *afu_np);
-int guest_add_chardev(struct cxl *adapter);
-void guest_remove_chardev(struct cxl *adapter);
-void guest_reload_module(struct cxl *adapter);
+struct cxl *cxl_guest_init_adapter(struct device_node *np, struct platform_device *dev);
+void cxl_guest_remove_adapter(struct cxl *adapter);
+int cxl_of_read_adapter_handle(struct cxl *adapter, struct device_node *np);
+int cxl_of_read_adapter_properties(struct cxl *adapter, struct device_node *np);
+ssize_t cxl_guest_read_adapter_vpd(struct cxl *adapter, void *buf, size_t len);
+ssize_t cxl_guest_read_afu_vpd(struct cxl_afu *afu, void *buf, size_t len);
+int cxl_guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_np);
+void cxl_guest_remove_afu(struct cxl_afu *afu);
+int cxl_of_read_afu_handle(struct cxl_afu *afu, struct device_node *afu_np);
+int cxl_of_read_afu_properties(struct cxl_afu *afu, struct device_node *afu_np);
+int cxl_guest_add_chardev(struct cxl *adapter);
+void cxl_guest_remove_chardev(struct cxl *adapter);
+void cxl_guest_reload_module(struct cxl *adapter);
 int cxl_of_probe(struct platform_device *pdev);
 
 struct cxl_backend_ops {

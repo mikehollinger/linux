@@ -50,7 +50,7 @@ static void pci_error_handlers(struct cxl_afu *afu,
 	}
 }
 
-irqreturn_t guest_handle_psl_slice_error(struct cxl_context *ctx, u64 dsisr,
+static irqreturn_t guest_handle_psl_slice_error(struct cxl_context *ctx, u64 dsisr,
 					u64 errstat)
 {
 	pr_devel("in %s\n", __func__);
@@ -341,7 +341,7 @@ static void guest_release_irq_ranges(struct cxl_irq_ranges *irqs,
 	spin_unlock(&adapter->irq_alloc_lock);
 }
 
-int guest_register_serr_irq(struct cxl_afu *afu)
+static int guest_register_serr_irq(struct cxl_afu *afu)
 {
 	afu->err_irq_name = kasprintf(GFP_KERNEL, "cxl-%s-err",
 				      dev_name(&afu->dev));
@@ -358,7 +358,7 @@ int guest_register_serr_irq(struct cxl_afu *afu)
 	return 0;
 }
 
-void guest_release_serr_irq(struct cxl_afu *afu)
+static void guest_release_serr_irq(struct cxl_afu *afu)
 {
 	cxl_unmap_irq(afu->serr_virq, afu);
 	cxl_ops->release_one_irq(afu->adapter, afu->serr_hwirq);
@@ -605,7 +605,7 @@ static int attach_dedicated_process(struct cxl_context *ctx, u64 wed, u64 amr)
 	return -EPERM;
 }
 
-int guest_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
+static int guest_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
 {
 	int rc;
 
@@ -668,7 +668,7 @@ static void guest_release_afu(struct device *dev)
 	kfree(afu);
 }
 
-ssize_t guest_collect_vpd_afu(struct cxl_afu *afu, void *buf, size_t len)
+ssize_t cxl_guest_read_afu_vpd(struct cxl_afu *afu, void *buf, size_t len)
 {
 	return guest_collect_vpd(NULL, afu, buf, len);
 }
@@ -937,7 +937,7 @@ static int afu_properties_look_ok(struct cxl_afu *afu)
 	return 0;
 }
 
-int guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_np)
+int cxl_guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_np)
 {
 	struct cxl_afu *afu;
 	bool free = true;
@@ -954,7 +954,7 @@ int guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_np)
 
 	adapter->slices++;
 
-	if ((rc = read_afu_handle(afu, afu_np)))
+	if ((rc = cxl_of_read_afu_handle(afu, afu_np)))
 		goto err1;
 
 	if ((rc = cxl_ops->afu_reset(afu)))
@@ -963,7 +963,7 @@ int guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_np)
 	if ((rc = afu_read_error_state(afu)))
 		goto err1;
 
-	if ((rc = read_afu_properties(afu, afu_np)))
+	if ((rc = cxl_of_read_afu_properties(afu, afu_np)))
 		goto err1;
 
 	if ((rc = afu_properties_look_ok(afu)))
@@ -1025,7 +1025,7 @@ err1:
 	return rc;
 }
 
-void guest_remove_afu(struct cxl_afu *afu)
+void cxl_guest_remove_afu(struct cxl_afu *afu)
 {
 	pr_devel("in %s - AFU(%d)\n", __func__, afu->slice);
 
@@ -1081,18 +1081,18 @@ static int properties_look_ok(struct cxl *adapter)
 	return 0;
 }
 
-ssize_t guest_collect_vpd_adapter(struct cxl *adapter, void *buf, size_t len)
+ssize_t cxl_guest_read_adapter_vpd(struct cxl *adapter,	void *buf, size_t len)
 {
 	return guest_collect_vpd(adapter, NULL, buf, len);
 }
 
-void guest_remove_adapter(struct cxl *adapter)
+void cxl_guest_remove_adapter(struct cxl *adapter)
 {
 	pr_devel("in %s\n", __func__);
 
 	cxl_sysfs_adapter_remove(adapter);
 
-	guest_remove_chardev(adapter);
+	cxl_guest_remove_chardev(adapter);
 	device_unregister(&adapter->dev);
 }
 
@@ -1101,7 +1101,7 @@ static void release_adapter(struct device *dev)
 	free_adapter(to_cxl_adapter(dev));
 }
 
-struct cxl *guest_init_adapter(struct device_node *np, struct platform_device *pdev)
+struct cxl *cxl_guest_init_adapter(struct device_node *np, struct platform_device *pdev)
 {
 	struct cxl *adapter;
 	bool free = true;
@@ -1116,16 +1116,16 @@ struct cxl *guest_init_adapter(struct device_node *np, struct platform_device *p
 	adapter->dev.release = release_adapter;
 	dev_set_drvdata(&pdev->dev, adapter);
 
-	if ((rc = read_adapter_handle(adapter, np)))
+	if ((rc = cxl_of_read_adapter_handle(adapter, np)))
 		goto err1;
 
-	if ((rc = read_adapter_properties(adapter, np)))
+	if ((rc = cxl_of_read_adapter_properties(adapter, np)))
 		goto err1;
 
 	if ((rc = properties_look_ok(adapter)))
 		goto err1;
 
-	if ((rc = guest_add_chardev(adapter)))
+	if ((rc = cxl_guest_add_chardev(adapter)))
 		goto err1;
 
 	/*
@@ -1143,23 +1143,23 @@ struct cxl *guest_init_adapter(struct device_node *np, struct platform_device *p
 err_put1:
 	device_unregister(&adapter->dev);
 	free = false;
-	guest_remove_chardev(adapter);
+	cxl_guest_remove_chardev(adapter);
 err1:
 	if (free)
 		free_adapter(adapter);
 	return ERR_PTR(rc);
 }
 
-void guest_reload_module(struct cxl *adapter)
+void cxl_guest_reload_module(struct cxl *adapter)
 {
 	struct platform_device *pdev;
 	int afu;
 
 	for (afu = 0; afu < adapter->slices; afu++)
-		guest_remove_afu(adapter->afu[afu]);
+		cxl_guest_remove_afu(adapter->afu[afu]);
 
 	pdev = adapter->pdev;
-	guest_remove_adapter(adapter);
+	cxl_guest_remove_adapter(adapter);
 
 	cxl_of_probe(pdev);
 }
@@ -1192,5 +1192,5 @@ const struct cxl_backend_ops cxl_guest_ops = {
 	.afu_cr_write8 = guest_afu_cr_write8,
 	.afu_cr_write16 = guest_afu_cr_write16,
 	.afu_cr_write32 = guest_afu_cr_write32,
-	.read_adapter_vpd = guest_collect_vpd_adapter,
+	.read_adapter_vpd = cxl_guest_read_adapter_vpd,
 };

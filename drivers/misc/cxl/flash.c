@@ -473,7 +473,7 @@ static int device_close(struct inode *inode, struct file *file)
 
 	/* reload the module */
 	if (transfer)
-		guest_reload_module(adapter);
+		cxl_guest_reload_module(adapter);
 
 	transfer = 0;
 	return 0;
@@ -486,12 +486,12 @@ static const struct file_operations fops = {
 	.release	= device_close,
 };
 
-void guest_remove_chardev(struct cxl *adapter)
+void cxl_guest_remove_chardev(struct cxl *adapter)
 {
 	cdev_del(&adapter->cdev);
 }
 
-int guest_add_chardev(struct cxl *adapter)
+int cxl_guest_add_chardev(struct cxl *adapter)
 {
 	dev_t devt;
 	int rc;

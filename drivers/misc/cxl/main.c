@@ -162,18 +162,6 @@ int cxl_alloc_sst(struct cxl_context *ctx)
 	return 0;
 }
 
-void cxl_assign_psn_space(struct cxl_context *ctx)
-{
-	if (!ctx->afu->pp_size || ctx->master) {
-		ctx->psn_phys = ctx->afu->psn_phys;
-		ctx->psn_size = ctx->afu->adapter->ps_size;
-	} else {
-		ctx->psn_phys = ctx->afu->psn_phys +
-			(ctx->afu->pp_offset + ctx->afu->pp_size * ctx->pe);
-		ctx->psn_size = ctx->afu->pp_size;
-	}
-}
-
 /* Find a CXL adapter by it's number and increase it's refcount */
 struct cxl *get_cxl_adapter(int num)
 {

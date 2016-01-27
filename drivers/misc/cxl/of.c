@@ -123,9 +123,9 @@ static int read_vpd(struct cxl *adapter, struct cxl_afu *afu)
 	memset(vpd, 0, len);
 
 	if (adapter)
-		rc = guest_collect_vpd_adapter(adapter, vpd, len);
+		rc = cxl_guest_read_adapter_vpd(adapter, vpd, len);
 	else
-		rc = guest_collect_vpd_afu(afu, vpd, len);
+		rc = cxl_guest_read_afu_vpd(afu, vpd, len);
 
 	if (rc > 0) {
 		len = rc;
@@ -148,7 +148,7 @@ static int read_vpd(struct cxl *adapter, struct cxl_afu *afu)
 	return rc;
 }
 
-int read_afu_handle(struct cxl_afu *afu, struct device_node *afu_np)
+int cxl_of_read_afu_handle(struct cxl_afu *afu, struct device_node *afu_np)
 {
 	if (read_handle(afu_np, &afu->handle))
 		return -EINVAL;
@@ -157,7 +157,7 @@ int read_afu_handle(struct cxl_afu *afu, struct device_node *afu_np)
 	return 0;
 }
 
-int read_afu_properties(struct cxl_afu *afu, struct device_node *np)
+int cxl_of_read_afu_properties(struct cxl_afu *afu, struct device_node *np)
 {
 	int i, len, rc;
 	char *p;
@@ -355,7 +355,7 @@ err:
 	return -ENOMEM;
 }
 
-int read_adapter_handle(struct cxl *adapter, struct device_node *np)
+int cxl_of_read_adapter_handle(struct cxl *adapter, struct device_node *np)
 {
 	if (read_handle(np, &adapter->handle))
 		return -EINVAL;
@@ -364,7 +364,7 @@ int read_adapter_handle(struct cxl *adapter, struct device_node *np)
 	return 0;
 }
 
-int read_adapter_properties(struct cxl *adapter, struct device_node *np)
+int cxl_of_read_adapter_properties(struct cxl *adapter, struct device_node *np)
 {
 	int rc, len, naddr, i;
 	char *p;
@@ -461,9 +461,9 @@ static int cxl_of_remove(struct platform_device *pdev)
 
 	adapter = dev_get_drvdata(&pdev->dev);
 	for (afu = 0; afu < adapter->slices; afu++)
-		guest_remove_afu(adapter->afu[afu]);
+		cxl_guest_remove_afu(adapter->afu[afu]);
 
-	guest_remove_adapter(adapter);
+	cxl_guest_remove_adapter(adapter);
 	return 0;
 }
 
@@ -487,7 +487,7 @@ int cxl_of_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	/* init adapter */
-	adapter = guest_init_adapter(np, pdev);
+	adapter = cxl_guest_init_adapter(np, pdev);
 	if (IS_ERR(adapter)) {
 		dev_err(&pdev->dev, "guest_init_adapter failed: %li\n", PTR_ERR(adapter));
 		return PTR_ERR(adapter);
@@ -496,7 +496,7 @@ int cxl_of_probe(struct platform_device *pdev)
 	/* init afu */
 	slice_ok = 0;
 	for (afu_np = NULL, slice = 0; (afu_np = of_get_next_child(np, afu_np)); slice++) {
-		if ((ret = guest_init_afu(adapter, slice, afu_np)))
+		if ((ret = cxl_guest_init_afu(adapter, slice, afu_np)))
 			dev_err(&pdev->dev, "AFU %i failed to initialise: %i\n",
 				slice, ret);
 		else
