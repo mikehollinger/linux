@@ -100,12 +100,6 @@ Description:    read only
                 this this kernel supports.
 Users:		https://github.com/ibm-capi/libcxl
 
-What:           /sys/class/cxl/<afu>/procs_max
-Date:           January 2015
-Contact:        linuxppc-dev@lists.ozlabs.org
-Description:    read only
-                Decimal value of the maximum number of attached processes
-		supported by the AFU.
 
 AFU configuration records (eg. /sys/class/cxl/afu0.0/cr0):
 

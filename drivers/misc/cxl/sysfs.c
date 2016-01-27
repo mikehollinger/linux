@@ -185,15 +185,6 @@ static struct device_attribute afu_master_attrs[] = {
 
 
 /*********  AFU attributes  **************************************************/
-static ssize_t procs_max_show(struct device *device,
-			      struct device_attribute *attr,
-			      char *buf)
-{
-	struct cxl_afu *afu = to_cxl_afu(device);
-
-	return scnprintf(buf, PAGE_SIZE, "%i\n", afu->max_procs_virtualised);
-}
-
 static ssize_t mmio_size_show(struct device *device,
 			      struct device_attribute *attr,
 			      char *buf)
@@ -407,7 +398,6 @@ static ssize_t afu_eb_read(struct file *filp, struct kobject *kobj,
 }
 
 static struct device_attribute afu_attrs[] = {
-	__ATTR_RO(procs_max),
 	__ATTR_RO(mmio_size),
 	__ATTR_RO(irqs_min),
 	__ATTR_RW(irqs_max),
