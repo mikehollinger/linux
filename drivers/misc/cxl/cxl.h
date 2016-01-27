@@ -356,38 +356,38 @@ struct cxl_sste {
 #define to_cxl_adapter(d) container_of(d, struct cxl, dev)
 #define to_cxl_afu(d) container_of(d, struct cxl_afu, dev)
 
+struct cxl_afu_native {
+	void __iomem *p1n_mmio;
+	void __iomem *afu_desc_mmio;
+	irq_hw_number_t psl_hwirq;
+	unsigned int psl_virq;
+	struct mutex spa_mutex;
+	/*
+	 * Only the first part of the SPA is used for the process element
+	 * linked list. The only other part that software needs to worry about
+	 * is sw_command_status, which we store a separate pointer to.
+	 * Everything else in the SPA is only used by hardware
+	 */
+	struct cxl_process_element *spa;
+	__be64 *sw_command_status;
+	unsigned int spa_size;
+	int spa_order;
+	int spa_max_procs;
+	u64 pp_offset;
+};
+
+struct cxl_afu_guest {
+	u64 handle;
+	phys_addr_t p2n_phys;
+	u64 p2n_size;
+	int max_ints;
+	struct mutex recovery_lock;
+	int previous_state;
+};
+
 struct cxl_afu {
-	union {
-		struct { /* native */
-			void __iomem *p1n_mmio;
-			void __iomem *afu_desc_mmio;
-			irq_hw_number_t psl_hwirq;
-			unsigned int psl_virq;
-			struct mutex spa_mutex;
-			/*
-			 * Only the first part of the SPA is used for the process element
-			 * linked list. The only other part that software needs to worry about
-			 * is sw_command_status, which we store a separate pointer to.
-			 * Everything else in the SPA is only used by hardware
-			 */
-			struct cxl_process_element *spa;
-			__be64 *sw_command_status;
-			unsigned int spa_size;
-			int spa_order;
-			int spa_max_procs;
-			u64 pp_offset;
-		};
-		struct { /* guest */
-			u64 handle;
-			phys_addr_t p2n_phys;
-			u64 p2n_size;
-			atomic_t error_state;
-			struct work_struct errstate_work;
-			int paged_resolution_response;
-			int max_ints;
-			u32 vpd_size;
-		};
-	};
+	struct cxl_afu_native *native;
+	struct cxl_afu_guest *guest;
 	irq_hw_number_t serr_hwirq;
 	unsigned int serr_virq;
 	char *psl_irq_name;
@@ -520,32 +520,34 @@ struct cxl_context {
 	struct rcu_head rcu;
 };
 
+struct cxl_native {
+	u64 afu_desc_off;
+	u64 afu_desc_size;
+	void __iomem *p1_mmio;
+	void __iomem *p2_mmio;
+	irq_hw_number_t err_hwirq;
+	unsigned int err_virq;
+	u64 ps_off;
+};
+
+struct cxl_guest {
+	struct platform_device *pdev;
+	int irq_nranges;
+	struct cdev cdev;
+	irq_hw_number_t irq_base_offset;
+	struct irq_avail *irq_avail;
+	spinlock_t irq_alloc_lock;
+	u64 handle;
+	char *status;
+	u16 vendor;
+	u16 device;
+	u16 subsystem_vendor;
+	u16 subsystem;
+};
+
 struct cxl {
-	union {
-		struct { /* native */
-			u64 afu_desc_off;
-			u64 afu_desc_size;
-			void __iomem *p1_mmio;
-			void __iomem *p2_mmio;
-			irq_hw_number_t err_hwirq;
-			unsigned int err_virq;
-			u64 ps_off;
-		};
-		struct { /* guest */
-			struct platform_device *pdev;
-			int irq_nranges;
-			struct cdev cdev;
-			irq_hw_number_t irq_base_offset;
-			struct irq_avail *irq_avail;
-			spinlock_t irq_alloc_lock;
-			u64 handle;
-			char *status;
-			u16 vendor;
-			u16 device;
-			u16 subsystem_vendor;
-			u16 subsystem;
-		};
-	};
+	struct cxl_native *native;
+	struct cxl_guest *guest;
 	spinlock_t afu_list_lock;
 	struct cxl_afu *afu[CXL_MAX_SLICES];
 	struct device dev;
@@ -621,7 +623,7 @@ static inline bool cxl_adapter_link_ok(struct cxl *cxl, struct cxl_afu *afu)
 static inline void __iomem *_cxl_p1_addr(struct cxl *cxl, cxl_p1_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
-	return cxl->p1_mmio + cxl_reg_off(reg);
+	return cxl->native->p1_mmio + cxl_reg_off(reg);
 }
 
 static inline void cxl_p1_write(struct cxl *cxl, cxl_p1_reg_t reg, u64 val)
@@ -641,7 +643,7 @@ static inline u64 cxl_p1_read(struct cxl *cxl, cxl_p1_reg_t reg)
 static inline void __iomem *_cxl_p1n_addr(struct cxl_afu *afu, cxl_p1n_reg_t reg)
 {
 	WARN_ON(!cpu_has_feature(CPU_FTR_HVMODE));
-	return afu->p1n_mmio + cxl_reg_off(reg);
+	return afu->native->p1n_mmio + cxl_reg_off(reg);
 }
 
 static inline void cxl_p1n_write(struct cxl_afu *afu, cxl_p1n_reg_t reg, u64 val)

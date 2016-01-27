@@ -24,6 +24,9 @@ static void pci_error_handlers(struct cxl_afu *afu,
 {
 	struct pci_dev *afu_dev;
 
+	if (afu->phb == NULL)
+		return;
+
 	list_for_each_entry(afu_dev, &afu->phb->bus->devices, bus_list) {
 		if (!afu_dev->driver)
 			continue;
@@ -106,10 +109,10 @@ static ssize_t guest_collect_vpd(struct cxl *adapter, struct cxl_afu *afu,
 	}
 
 	if (adapter)
-		rc = cxl_h_collect_vpd_adapter(adapter->handle,
+		rc = cxl_h_collect_vpd_adapter(adapter->guest->handle,
 					virt_to_phys(le), entries, &out);
 	else
-		rc = cxl_h_collect_vpd(afu->handle, 0,
+		rc = cxl_h_collect_vpd(afu->guest->handle, 0,
 				virt_to_phys(le), entries, &out);
 	pr_devel("length of available (entries: %i), vpd: %#llx\n",
 		entries, out);
@@ -147,7 +150,7 @@ err1:
 
 static int guest_get_irq_info(struct cxl_context *ctx, struct cxl_irq_info *info)
 {
-	return cxl_h_collect_int_info(ctx->afu->handle, ctx->process_token, info);
+	return cxl_h_collect_int_info(ctx->afu->guest->handle, ctx->process_token, info);
 }
 
 static irqreturn_t guest_psl_irq(int irq, void *data)
@@ -167,18 +170,18 @@ static irqreturn_t guest_psl_irq(int irq, void *data)
 	return rc;
 }
 
-static int afu_read_error_state(struct cxl_afu *afu)
+static int afu_read_error_state(struct cxl_afu *afu, int *state_out)
 {
 	u64 state;
 	int rc = 0;
 
-	rc = cxl_h_read_error_state(afu->handle, &state);
+	rc = cxl_h_read_error_state(afu->guest->handle, &state);
 	if (!rc) {
 		WARN_ON(state != H_STATE_NORMAL &&
 			state != H_STATE_DISABLE &&
 			state != H_STATE_TEMP_UNAVAILABLE &&
 			state != H_STATE_PERM_UNAVAILABLE);
-		atomic_set(&afu->error_state, state);
+		*state_out = state & 0xffffffff;
 	}
 	return rc;
 }
@@ -190,26 +193,18 @@ static irqreturn_t guest_slice_irq_err(int irq, void *data)
 	u64 serr;
 
 	WARN(irq, "CXL SLICE ERROR interrupt %i\n", irq);
-	rc = cxl_h_get_fn_error_interrupt(afu->handle, &serr);
+	rc = cxl_h_get_fn_error_interrupt(afu->guest->handle, &serr);
 	if (rc) {
 		dev_crit(&afu->dev, "Couldn't read PSL_SERR_An: %d\n", rc);
 		return IRQ_HANDLED;
 	}
 	dev_crit(&afu->dev, "PSL_SERR_An: 0x%.16llx\n", serr);
 
-	rc = afu_read_error_state(afu);
-	if (rc)
-		dev_crit(&afu->dev, "Couldn't read error state: %d\n", rc);
-	else
-		dev_crit(&afu->dev, "AFU(%d) error state: %#x\n",
-			 afu->slice, atomic_read(&afu->error_state));
-
-	rc = cxl_h_ack_fn_error_interrupt(afu->handle, serr);
+	rc = cxl_h_ack_fn_error_interrupt(afu->guest->handle, serr);
 	if (rc)
 		dev_crit(&afu->dev, "Couldn't ack slice error interrupt: %d\n",
 			rc);
 
-	schedule_work(&afu->errstate_work);
 	return IRQ_HANDLED;
 }
 
@@ -219,8 +214,8 @@ static int irq_alloc_range(struct cxl *adapter, int len, int *irq)
 	int i, n;
 	struct irq_avail *cur;
 
-	for (i = 0; i < adapter->irq_nranges; i++) {
-		cur = &adapter->irq_avail[i];
+	for (i = 0; i < adapter->guest->irq_nranges; i++) {
+		cur = &adapter->guest->irq_avail[i];
 		n = bitmap_find_next_zero_area(cur->bitmap, cur->range,
 					0, len, 0);
 		if (n < cur->range) {
@@ -243,8 +238,8 @@ static int irq_free_range(struct cxl *adapter, int irq, int len)
 	if (len == 0)
 		return -ENOENT;
 
-	for (i = 0; i < adapter->irq_nranges; i++) {
-		cur = &adapter->irq_avail[i];
+	for (i = 0; i < adapter->guest->irq_nranges; i++) {
+		cur = &adapter->guest->irq_avail[i];
 		if (irq >= cur->offset &&
 			(irq + len) <= (cur->offset + cur->range)) {
 			n = irq - cur->offset;
@@ -259,21 +254,23 @@ static int irq_free_range(struct cxl *adapter, int irq, int len)
 
 static int guest_reset(struct cxl *adapter)
 {
-	struct cxl_afu *afu;
+	struct cxl_afu *afu = NULL;
 	int i, rc;
 
 	pr_devel("Adapter reset request\n");
-	rc = cxl_h_reset_adapter(adapter->handle);
-
 	for (i = 0; i < adapter->slices; i++) {
-		if ((afu = adapter->afu[i]))
-			pci_error_handlers(afu, CXL_SLOT_RESET_EVENT, 0);
+		if ((afu = adapter->afu[i])) {
+			pci_error_handlers(afu, CXL_ERROR_DETECTED_EVENT,
+					pci_channel_io_frozen);
+			cxl_context_detach_all(afu);
+		}
 	}
 
-	if (!rc) {
-		for (i = 0; i < adapter->slices; i++) {
-			if ((afu = adapter->afu[i]))
-				pci_error_handlers(afu, CXL_RESUME_EVENT, 0);
+	rc = cxl_h_reset_adapter(adapter->guest->handle);
+	for (i = 0; i < adapter->slices; i++) {
+		if (!rc && (afu = adapter->afu[i])) {
+			pci_error_handlers(afu, CXL_SLOT_RESET_EVENT, 0);
+			pci_error_handlers(afu, CXL_RESUME_EVENT, 0);
 		}
 	}
 	return rc;
@@ -283,18 +280,18 @@ static int guest_alloc_one_irq(struct cxl *adapter)
 {
 	int irq;
 
-	spin_lock(&adapter->irq_alloc_lock);
+	spin_lock(&adapter->guest->irq_alloc_lock);
 	if (irq_alloc_range(adapter, 1, &irq))
 		irq = -ENOSPC;
-	spin_unlock(&adapter->irq_alloc_lock);
+	spin_unlock(&adapter->guest->irq_alloc_lock);
 	return irq;
 }
 
 static void guest_release_one_irq(struct cxl *adapter, int irq)
 {
-	spin_lock(&adapter->irq_alloc_lock);
+	spin_lock(&adapter->guest->irq_alloc_lock);
 	irq_free_range(adapter, irq, 1);
-	spin_unlock(&adapter->irq_alloc_lock);
+	spin_unlock(&adapter->guest->irq_alloc_lock);
 }
 
 static int guest_alloc_irq_ranges(struct cxl_irq_ranges *irqs,
@@ -304,7 +301,7 @@ static int guest_alloc_irq_ranges(struct cxl_irq_ranges *irqs,
 
 	memset(irqs, 0, sizeof(struct cxl_irq_ranges));
 
-	spin_lock(&adapter->irq_alloc_lock);
+	spin_lock(&adapter->guest->irq_alloc_lock);
 	for (i = 0; i < CXL_IRQ_RANGES && num; i++) {
 		try = num;
 		while (try) {
@@ -320,13 +317,13 @@ static int guest_alloc_irq_ranges(struct cxl_irq_ranges *irqs,
 	}
 	if (num)
 		goto error;
-	spin_unlock(&adapter->irq_alloc_lock);
+	spin_unlock(&adapter->guest->irq_alloc_lock);
 	return 0;
 
 error:
 	for (i = 0; i < CXL_IRQ_RANGES; i++)
 		irq_free_range(adapter, irqs->offset[i], irqs->range[i]);
-	spin_unlock(&adapter->irq_alloc_lock);
+	spin_unlock(&adapter->guest->irq_alloc_lock);
 	return -ENOSPC;
 }
 
@@ -335,10 +332,10 @@ static void guest_release_irq_ranges(struct cxl_irq_ranges *irqs,
 {
 	int i;
 
-	spin_lock(&adapter->irq_alloc_lock);
+	spin_lock(&adapter->guest->irq_alloc_lock);
 	for (i = 0; i < CXL_IRQ_RANGES; i++)
 		irq_free_range(adapter, irqs->offset[i], irqs->range[i]);
-	spin_unlock(&adapter->irq_alloc_lock);
+	spin_unlock(&adapter->guest->irq_alloc_lock);
 }
 
 static int guest_register_serr_irq(struct cxl_afu *afu)
@@ -367,7 +364,7 @@ static void guest_release_serr_irq(struct cxl_afu *afu)
 
 static int guest_ack_irq(struct cxl_context *ctx, u64 tfc, u64 psl_reset_mask)
 {
-	return cxl_h_control_faults(ctx->afu->handle, ctx->process_token,
+	return cxl_h_control_faults(ctx->afu->guest->handle, ctx->process_token,
 				tfc >> 32, (psl_reset_mask != 0));
 }
 
@@ -420,7 +417,7 @@ static int _guest_afu_cr_readXX(int sz, struct cxl_afu *afu, int cr_idx,
 	if (!cr)
 		return -ENOMEM;
 
-	rc = cxl_h_get_config(afu->handle, cr_idx, offset,
+	rc = cxl_h_get_config(afu->guest->handle, cr_idx, offset,
 			virt_to_phys((void *)cr), sz);
 	if (rc)
 		goto err;
@@ -556,7 +553,7 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 			if (r == 0 && i == 0) {
 				elem->pslVirtualIsn = cpu_to_be32(ctx->irqs.offset[0]);
 			} else {
-				idx = ctx->irqs.offset[r] + i - adapter->irq_base_offset;
+				idx = ctx->irqs.offset[r] + i - adapter->guest->irq_base_offset;
 				elem->applicationVirtualIsnBitmap[idx / 8] |= 0x80 >> (idx % 8);
 			}
 		}
@@ -566,8 +563,8 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 
 	disable_afu_irqs(ctx);
 
-	rc = cxl_h_attach_process(ctx->afu->handle, elem, &ctx->process_token,
-				&mmio_addr, &mmio_size);
+	rc = cxl_h_attach_process(ctx->afu->guest->handle, elem, 
+				&ctx->process_token, &mmio_addr, &mmio_size);
 	if (rc == H_SUCCESS) {
 		if (ctx->master || !ctx->afu->pp_psa) {
 			ctx->psn_phys = ctx->afu->psn_phys;
@@ -607,29 +604,26 @@ static int attach_dedicated_process(struct cxl_context *ctx, u64 wed, u64 amr)
 
 static int guest_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
 {
-	int rc;
+	pr_devel("in %s\n", __func__);
 
-	rc = afu_read_error_state(ctx->afu);
-	if (!rc) {
-		if (atomic_read(&ctx->afu->error_state) != H_STATE_NORMAL)
-			return -EPERM;
+	if (!cxl_ops->link_ok(ctx->afu->adapter, ctx->afu))
+		return -EIO;
 
-		ctx->kernel = kernel;
-		if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
-			return attach_afu_directed(ctx, wed, amr);
+	ctx->kernel = kernel;
+	if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
+		return attach_afu_directed(ctx, wed, amr);
 
-		if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
-			return attach_dedicated_process(ctx, wed, amr);
-	}
+	if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
+		return attach_dedicated_process(ctx, wed, amr);
 
-	return rc;
+	return -EINVAL;
 }
 
 static int detach_afu_directed(struct cxl_context *ctx)
 {
 	if (!ctx->pe_inserted)
 		return 0;
-	if (cxl_h_detach_process(ctx->afu->handle, ctx->process_token))
+	if (cxl_h_detach_process(ctx->afu->guest->handle, ctx->process_token))
 		return -1;
 	return 0;
 }
@@ -641,18 +635,17 @@ static int detach_dedicated_process(struct cxl_context *ctx)
 
 static int guest_detach_process(struct cxl_context *ctx)
 {
-	int rc;
-
+	pr_devel("in %s\n", __func__);
 	trace_cxl_detach(ctx);
 
-	rc = afu_read_error_state(ctx->afu);
-	if (!rc) {
-		if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
-			return detach_afu_directed(ctx);
+	if (!cxl_ops->link_ok(ctx->afu->adapter, ctx->afu))
+		return -EIO;
 
-		if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
-			return detach_dedicated_process(ctx);
-	}
+	if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
+		return detach_afu_directed(ctx);
+
+	if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
+		return detach_dedicated_process(ctx);
 
 	return -EINVAL;
 }
@@ -684,7 +677,7 @@ static ssize_t guest_afu_read_err_buffer(struct cxl_afu *afu, char *buf,
 	if (!tbuf)
 		return -ENOMEM;
 
-	rc = cxl_h_get_afu_err(afu->handle,
+	rc = cxl_h_get_afu_err(afu->guest->handle,
 			       off & 0x7,
 			       virt_to_phys(tbuf),
 			       count);
@@ -712,35 +705,6 @@ static bool guest_support_attributes(const char *attr_name)
 		(strcmp(attr_name, "perst_reloads_same_image") == 0) ||
 		(strcmp(attr_name, "image_loaded") == 0))
 		return false;
-
-	return true;
-}
-
-static inline bool guest_link_ok(struct cxl *cxl, struct cxl_afu *afu)
-{
-	int rc = 0;
-
-	if (afu) {
-		if (( rc = afu_read_error_state(afu)))
-			return false;
-
-		if (atomic_read(&afu->error_state) == H_STATE_DISABLE) {
-			if ((rc = cxl_ops->afu_reset(afu))) {
-				pr_devel("reset hcall failed %d\n", rc);
-				return false;
-			}
-			if ((rc = afu_read_error_state(afu))) {
-				pr_devel("read hcall failed %d\n", rc);
-				return false;
-			}
-		}
-		if (atomic_read(&afu->error_state) != H_STATE_NORMAL) {
-			/* This puts a job in the kernel-global 
-			 * workqueue if it was not already queued */
-			schedule_work(&afu->errstate_work);
-			return false;
-		}
-	}
 
 	return true;
 }
@@ -840,12 +804,12 @@ static int guest_afu_deactivate_mode(struct cxl_afu *afu, int mode)
 static int guest_afu_reset(struct cxl_afu *afu)
 {
 	pr_devel("AFU(%d) reset request\n", afu->slice);
-	return cxl_h_reset_afu(afu->handle);
+	return cxl_h_reset_afu(afu->guest->handle);
 }
 
 static int guest_map_slice_regs(struct cxl_afu *afu)
 {
-	if (!(afu->p2n_mmio = ioremap(afu->p2n_phys, afu->p2n_size))) {
+	if (!(afu->p2n_mmio = ioremap(afu->guest->p2n_phys, afu->guest->p2n_size))) {
 		dev_err(&afu->dev, "Error mapping AFU(%d) MMIO regions\n",
 			afu->slice);
 		return -ENOMEM;
@@ -859,62 +823,95 @@ static void guest_unmap_slice_regs(struct cxl_afu *afu)
 		iounmap(afu->p2n_mmio);
 }
 
-static int afu_check_state(struct cxl_afu *afu)
+static int afu_update_state(struct cxl_afu *afu)
 {
-	int rc = 0;
-	int state;
+	int rc, cur_state;
 
-	state = atomic_read(&afu->error_state);
-	pr_devel("AFU(%d) check state: %#x\n", afu->slice, state);
+	rc = afu_read_error_state(afu, &cur_state);
+	if (rc)
+		return rc;
 
-	switch (state) {
+	if (afu->guest->previous_state == cur_state)
+		return 0;
+
+	pr_devel("AFU(%d) update state to %#x\n", afu->slice, cur_state);
+
+	switch (cur_state) {
 	case H_STATE_NORMAL:
-		/* nothing to do */
+		afu->guest->previous_state = cur_state;
+		rc = 1;
 		break;
+
 	case H_STATE_DISABLE:
+		pci_error_handlers(afu, CXL_ERROR_DETECTED_EVENT,
+				pci_channel_io_frozen);
+
+		cxl_context_detach_all(afu);
 		if ((rc = cxl_ops->afu_reset(afu))) {
 			pr_devel("reset hcall failed %d\n", rc);
-			return 0;
 		}
-		if ((rc = afu_read_error_state(afu))) {
-			pr_devel("read hcall failed %d\n", rc);
-			return 0;
+		rc = afu_read_error_state(afu, &cur_state);
+		if (!rc && cur_state == H_STATE_NORMAL) {
+			pci_error_handlers(afu, CXL_SLOT_RESET_EVENT, 0);
+			pci_error_handlers(afu, CXL_RESUME_EVENT, 0);
+			rc = 1;
 		}
-		state = atomic_read(&afu->error_state);
+		afu->guest->previous_state = 0;
 		break;
+
 	case H_STATE_TEMP_UNAVAILABLE:
-		return -EAGAIN;
+		afu->guest->previous_state = cur_state;
+		break;
+
 	case H_STATE_PERM_UNAVAILABLE:
-		pr_err("Bad AFU(%d) error state: %#x\n", afu->slice, state);
-		pci_error_handlers(afu, CXL_ERROR_DETECTED_EVENT, 
-				   pci_channel_io_perm_failure);
-		return -EINVAL;
+		dev_err(&afu->dev, "AFU is in permanent error state\n");
+		pci_error_handlers(afu, CXL_ERROR_DETECTED_EVENT,
+				pci_channel_io_perm_failure);
+		afu->guest->previous_state = cur_state;
+		break;
+
 	default:
 		pr_err("Unexpected AFU(%d) error state: %#x\n",
-		       afu->slice, state);
+		       afu->slice, cur_state);
 		return -EINVAL;
+	}
+
+	return rc;
+}
+
+static int afu_do_recovery(struct cxl_afu *afu)
+{
+	int rc;
+
+	/* many threads can arrive here, in case of detach_all for example.
+	 * Only one needs to drive the recovery
+	 */
+	if (mutex_trylock(&afu->guest->recovery_lock)) {
+		rc = afu_update_state(afu);
+		mutex_unlock(&afu->guest->recovery_lock);
+		return rc;
 	}
 	return 0;
 }
 
-static void afu_handle_errstate(struct work_struct *errstate_work)
+static bool guest_link_ok(struct cxl *cxl, struct cxl_afu *afu)
 {
-	struct cxl_afu *afu =
-		container_of(errstate_work, struct cxl_afu, errstate_work);
-	int rc = 0, rc_err_state = 0;
+	int state;
 
-	pr_devel("in %s\n", __func__);
-	cxl_context_detach_all(afu);
+	if (afu) {
+		if (afu_read_error_state(afu, &state) ||
+			state != H_STATE_NORMAL) {
+			if (afu_do_recovery(afu) > 0) {
+				/* check again in case we've just fixed it */
+				if (!afu_read_error_state(afu, &state) && 
+					state == H_STATE_NORMAL)
+					return true;
+			}
+			return false;
+		}
+	}
 
-	do {
-		if (!rc_err_state)
-			rc = afu_check_state(afu);
-		rc_err_state = afu_read_error_state(afu);
-		if (atomic_read(&afu->error_state) == H_STATE_NORMAL)
-			break;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(10000));
-	} while (rc == -EAGAIN);
+	return true;
 }
 
 static int afu_properties_look_ok(struct cxl_afu *afu)
@@ -947,6 +944,13 @@ int cxl_guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_n
 	if (!(afu = cxl_alloc_afu(adapter, slice)))
 		return -ENOMEM;
 
+	if (!(afu->guest = kzalloc(sizeof(struct cxl_afu_guest), GFP_KERNEL))) {
+		kfree(afu);
+		return -ENOMEM;
+	}
+
+	mutex_init(&afu->guest->recovery_lock);
+
 	if ((rc = dev_set_name(&afu->dev, "afu%i.%i",
 					  adapter->adapter_num,
 					  slice)))
@@ -958,9 +962,6 @@ int cxl_guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_n
 		goto err1;
 
 	if ((rc = cxl_ops->afu_reset(afu)))
-		goto err1;
-
-	if ((rc = afu_read_error_state(afu)))
 		goto err1;
 
 	if ((rc = cxl_of_read_afu_properties(afu, afu_np)))
@@ -1001,7 +1002,6 @@ int cxl_guest_init_afu(struct cxl *adapter, int slice, struct device_node *afu_n
 	if ((rc = cxl_afu_select_best_mode(afu)))
 		goto err_put2;
 
-	INIT_WORK(&afu->errstate_work, afu_handle_errstate);
 	adapter->afu[afu->slice] = afu;
 
 	afu->enabled = true;
@@ -1032,9 +1032,6 @@ void cxl_guest_remove_afu(struct cxl_afu *afu)
 	if (!afu)
 		return;
 
-	flush_work(&afu->errstate_work);
-	destroy_work_on_stack(&afu->errstate_work);
-
 	cxl_pci_vphb_remove(afu);
 	cxl_sysfs_afu_remove(afu);
 
@@ -1055,14 +1052,14 @@ static void free_adapter(struct cxl *adapter)
 	struct irq_avail *cur;
 	int i;
 
-	if (adapter->irq_avail) {
-		for (i = 0; i < adapter->irq_nranges; i++) {
-			cur = &adapter->irq_avail[i];
+	if (adapter->guest->irq_avail) {
+		for (i = 0; i < adapter->guest->irq_nranges; i++) {
+			cur = &adapter->guest->irq_avail[i];
 			kfree(cur->bitmap);
 		}
-		kfree(adapter->irq_avail);
+		kfree(adapter->guest->irq_avail);
 	}
-	kfree(adapter->status);
+	kfree(adapter->guest->status);
 	cxl_remove_adapter_nr(adapter);
 	kfree(adapter);
 }
@@ -1072,8 +1069,8 @@ static int properties_look_ok(struct cxl *adapter)
 	/* The absence of this property means that the operational
 	 * status is unknown or okay
 	 */
-	if (strlen(adapter->status) &&
-	    strcmp(adapter->status, "okay")) {
+	if (strlen(adapter->guest->status) &&
+	    strcmp(adapter->guest->status, "okay")) {
 		pr_err("ABORTING:Bad operational status of the device\n");
 		return -EINVAL;
 	}
@@ -1110,8 +1107,13 @@ struct cxl *cxl_guest_init_adapter(struct device_node *np, struct platform_devic
 	if (!(adapter = cxl_alloc_adapter()))
 		return ERR_PTR(-ENOMEM);
 
+	if (!(adapter->guest = kzalloc(sizeof(struct cxl_guest), GFP_KERNEL))) {
+		free_adapter(adapter);
+		return ERR_PTR(-ENOMEM);
+	}
+
 	adapter->slices = 0;
-	adapter->pdev = pdev;
+	adapter->guest->pdev = pdev;
 	adapter->dev.parent = &pdev->dev;
 	adapter->dev.release = release_adapter;
 	dev_set_drvdata(&pdev->dev, adapter);
@@ -1158,7 +1160,7 @@ void cxl_guest_reload_module(struct cxl *adapter)
 	for (afu = 0; afu < adapter->slices; afu++)
 		cxl_guest_remove_afu(adapter->afu[afu]);
 
-	pdev = adapter->pdev;
+	pdev = adapter->guest->pdev;
 	cxl_guest_remove_adapter(adapter);
 
 	cxl_of_probe(pdev);

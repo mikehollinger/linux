@@ -165,7 +165,7 @@ static ssize_t pp_mmio_off_show(struct device *device,
 {
 	struct cxl_afu *afu = to_afu_chardev_m(device);
 
-	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->pp_offset);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", afu->native->pp_offset);
 }
 
 static ssize_t pp_mmio_len_show(struct device *device,
@@ -266,7 +266,7 @@ static ssize_t irqs_max_store(struct device *device,
 			return -EINVAL;
 	} else {
 		/* pHyp sets a per-AFU limit */
-		if (irqs_max > afu->max_ints)
+		if (irqs_max > afu->guest->max_ints)
 			return -EINVAL;
 	}
 
