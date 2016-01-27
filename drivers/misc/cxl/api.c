@@ -51,7 +51,8 @@ struct cxl_context *cxl_dev_context_init(struct pci_dev *dev)
 	if (rc)
 		goto err_mapping;
 
-	cxl_assign_psn_space(ctx);
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		cxl_assign_psn_space(ctx);
 
 	return ctx;
 
@@ -228,7 +229,8 @@ EXPORT_SYMBOL_GPL(cxl_stop_context);
 void cxl_set_master(struct cxl_context *ctx)
 {
 	ctx->master = true;
-	cxl_assign_psn_space(ctx);
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		cxl_assign_psn_space(ctx);
 }
 EXPORT_SYMBOL_GPL(cxl_set_master);
 
