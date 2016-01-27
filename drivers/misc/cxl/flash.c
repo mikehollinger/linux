@@ -191,7 +191,7 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 	memset(buf, 0, RTAS_DATA_BUF_SIZE);
 
 	unwa = (struct update_nodes_workarea *)&buf[0];
-	unwa->unit_address = cpu_to_be64(adapter->handle);
+	unwa->unit_address = cpu_to_be64(adapter->guest->handle);
 	do {
 		rc = rcall(token, buf, scope);
 		if (rc && rc != 1)
@@ -244,10 +244,10 @@ static int handle_image(struct cxl *adapter,
 		if (!header)
 			return -ENOMEM;
 		header->version = cpu_to_be16(1);
-		header->vendor = cpu_to_be16(adapter->vendor);
-		header->device = cpu_to_be16(adapter->device);
-		header->subsystem_vendor = cpu_to_be16(adapter->subsystem_vendor);
-		header->subsystem = cpu_to_be16(adapter->subsystem);
+		header->vendor = cpu_to_be16(adapter->guest->vendor);
+		header->device = cpu_to_be16(adapter->guest->device);
+		header->subsystem_vendor = cpu_to_be16(adapter->guest->subsystem_vendor);
+		header->subsystem = cpu_to_be16(adapter->guest->subsystem);
 		header->image_offset = cpu_to_be64(ADAPTER_IMAGE_HEADER_SIZE);
 		header->image_length = cpu_to_be64(ai->len_image);
 	}
@@ -311,7 +311,7 @@ static int handle_image(struct cxl *adapter,
 	 * download/validate the adapter image to the coherent
 	 * platform facility
 	 */
-	rc = fct(adapter->handle, virt_to_phys(le), entries, &token);
+	rc = fct(adapter->guest->handle, virt_to_phys(le), entries, &token);
 	if (rc == 0) /* success of download/validation operation */
 		token = 0;
 
@@ -331,7 +331,7 @@ static int transfer_image(struct cxl *adapter,
 		rc = handle_image(adapter, &cxl_h_download_adapter_image, ai);
 		if (rc < 0) {
 			pr_devel("resetting adapter\n");
-			cxl_h_reset_adapter(adapter->handle);
+			cxl_h_reset_adapter(adapter->guest->handle);
 		}
 		return rc;
 
@@ -339,12 +339,12 @@ static int transfer_image(struct cxl *adapter,
 		rc = handle_image(adapter, &cxl_h_validate_adapter_image, ai);
 		if (rc < 0) {
 			pr_devel("resetting adapter\n");
-			cxl_h_reset_adapter(adapter->handle);
+			cxl_h_reset_adapter(adapter->guest->handle);
 			return rc;
 		}
 		if (rc == 0) {
 			pr_devel("resetting adapter\n");
-			cxl_h_reset_adapter(adapter->handle);
+			cxl_h_reset_adapter(adapter->guest->handle);
 
 			/* The entire image has now been
 			 * downloaded and the validation has
@@ -488,7 +488,7 @@ static const struct file_operations fops = {
 
 void cxl_guest_remove_chardev(struct cxl *adapter)
 {
-	cdev_del(&adapter->cdev);
+	cdev_del(&adapter->guest->cdev);
 }
 
 int cxl_guest_add_chardev(struct cxl *adapter)
@@ -497,8 +497,8 @@ int cxl_guest_add_chardev(struct cxl *adapter)
 	int rc;
 
 	devt = MKDEV(MAJOR(cxl_get_dev()), CXL_CARD_MINOR(adapter));
-	cdev_init(&adapter->cdev, &fops);
-	if ((rc = cdev_add(&adapter->cdev, devt, 1))) {
+	cdev_init(&adapter->guest->cdev, &fops);
+	if ((rc = cdev_add(&adapter->guest->cdev, devt, 1))) {
 		dev_err(&adapter->dev, "Unable to add chardev on adapter (card%i): %i\n",
 					adapter->adapter_num, rc);
 		goto err;

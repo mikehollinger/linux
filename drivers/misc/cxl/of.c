@@ -89,11 +89,11 @@ static int read_phys_addr(struct device_node *np, char *prop_name,
 			size = of_read_number(&prop[naddr], nsize);
 			switch (type) {
 			case 0: /* unit address */
-				afu->handle = addr;
+				afu->guest->handle = addr;
 				break;
 			case 1: /* p2 area */
-				afu->p2n_phys += addr;
-				afu->p2n_size = size;
+				afu->guest->p2n_phys += addr;
+				afu->guest->p2n_size = size;
 				break;
 			case 2: /* problem state area */
 				afu->psn_phys += addr;
@@ -150,9 +150,9 @@ static int read_vpd(struct cxl *adapter, struct cxl_afu *afu)
 
 int cxl_of_read_afu_handle(struct cxl_afu *afu, struct device_node *afu_np)
 {
-	if (read_handle(afu_np, &afu->handle))
+	if (read_handle(afu_np, &afu->guest->handle))
 		return -EINVAL;
-	pr_devel("AFU handle: 0x%.16llx\n", afu->handle);
+	pr_devel("AFU handle: 0x%.16llx\n", afu->guest->handle);
 
 	return 0;
 }
@@ -207,8 +207,8 @@ int cxl_of_read_afu_properties(struct cxl_afu *afu, struct device_node *np)
 		read_vpd(NULL, afu);
 	}
 
-	read_prop_dword(np, "ibm,max-ints-per-process", &afu->max_ints);
-	afu->irqs_max = afu->max_ints;
+	read_prop_dword(np, "ibm,max-ints-per-process", &afu->guest->max_ints);
+	afu->irqs_max = afu->guest->max_ints;
 
 	prop = read_prop_dword(np, "ibm,min-ints-per-process", &afu->pp_irqs);
 	if (prop) {
@@ -219,10 +219,10 @@ int cxl_of_read_afu_properties(struct cxl_afu *afu, struct device_node *np)
 		afu->pp_irqs--;
 	}
 
-	if (cxl_verbose)
+	if (cxl_verbose) {
 		read_prop_dword(np, "ibm,max-ints", &val);
-
-	read_prop_dword(np, "ibm,vpd-size", &afu->vpd_size);
+		read_prop_dword(np, "ibm,vpd-size", &val);
+	}
 
 	read_prop64_dword(np, "ibm,error-buffer-size", &afu->eb_len);
 	afu->eb_offset = 0;
@@ -279,18 +279,16 @@ int cxl_of_read_afu_properties(struct cxl_afu *afu, struct device_node *np)
 	if (cxl_verbose) {
 		read_prop_dword(np, "ibm,supports-aur", &val);
 		read_prop_dword(np, "ibm,supports-csrp", &val);
+		read_prop_dword(np, "ibm,supports-prr", &val);
 	}
-
-	read_prop_dword(np, "ibm,supports-prr",
-			&afu->paged_resolution_response);
 
 	prop = read_prop_dword(np, "ibm,function-error-interrupt", &val);
 	if (prop)
 		afu->serr_hwirq = val;
 
-	pr_devel("AFU handle: %#llx\n", afu->handle);
+	pr_devel("AFU handle: %#llx\n", afu->guest->handle);
 	pr_devel("p2n_phys: %#llx (size %#llx)\n",
-		afu->p2n_phys, afu->p2n_size);
+		afu->guest->p2n_phys, afu->guest->p2n_size);
 	pr_devel("psn_phys: %#llx (size %#llx)\n",
 		afu->psn_phys, afu->adapter->ps_size);
 	pr_devel("Max number of processes virtualised=%i\n",
@@ -320,46 +318,46 @@ static int read_adapter_irq_config(struct cxl *adapter, struct device_node *np)
 	if (nranges == 0 || (nranges * 2 * sizeof(int)) != len)
 		return -EINVAL;
 
-	adapter->irq_avail = kzalloc(nranges * sizeof(struct irq_avail),
-				GFP_KERNEL);
-	if (adapter->irq_avail == NULL)
+	adapter->guest->irq_avail = kzalloc(nranges * sizeof(struct irq_avail),
+					    GFP_KERNEL);
+	if (adapter->guest->irq_avail == NULL)
 		return -ENOMEM;
 
-	adapter->irq_base_offset = be32_to_cpu(ranges[0]);
+	adapter->guest->irq_base_offset = be32_to_cpu(ranges[0]);
 	for (i = 0; i < nranges; i++) {
-		cur = &adapter->irq_avail[i];
+		cur = &adapter->guest->irq_avail[i];
 		cur->offset = be32_to_cpu(ranges[i * 2]);
 		cur->range  = be32_to_cpu(ranges[i * 2 + 1]);
 		cur->bitmap = kcalloc(BITS_TO_LONGS(cur->range),
 				sizeof(*cur->bitmap), GFP_KERNEL);
 		if (cur->bitmap == NULL)
 			goto err;
-		if (cur->offset < adapter->irq_base_offset)
-			adapter->irq_base_offset = cur->offset;
+		if (cur->offset < adapter->guest->irq_base_offset)
+			adapter->guest->irq_base_offset = cur->offset;
 		if (cxl_verbose)
 			pr_info("available IRQ range: %#lx-%#lx (%lu)\n",
 				cur->offset, cur->offset + cur->range - 1,
 				cur->range);
 	}
-	adapter->irq_nranges = nranges;
-	spin_lock_init(&adapter->irq_alloc_lock);
+	adapter->guest->irq_nranges = nranges;
+	spin_lock_init(&adapter->guest->irq_alloc_lock);
 
 	return 0;
 err:
 	for (i--; i >= 0; i--) {
-		cur = &adapter->irq_avail[i];
+		cur = &adapter->guest->irq_avail[i];
 		kfree(cur->bitmap);
 	}
-	kfree(adapter->irq_avail);
-	adapter->irq_avail = NULL;
+	kfree(adapter->guest->irq_avail);
+	adapter->guest->irq_avail = NULL;
 	return -ENOMEM;
 }
 
 int cxl_of_read_adapter_handle(struct cxl *adapter, struct device_node *np)
 {
-	if (read_handle(np, &adapter->handle))
+	if (read_handle(np, &adapter->guest->handle))
 		return -EINVAL;
-	pr_devel("Adapter handle: 0x%.16llx\n", adapter->handle);
+	pr_devel("Adapter handle: 0x%.16llx\n", adapter->guest->handle);
 
 	return 0;
 }
@@ -421,18 +419,18 @@ int cxl_of_read_adapter_properties(struct cxl *adapter, struct device_node *np)
 
 	prop = read_prop_string(np, "status");
 	if (prop) {
-		adapter->status = kasprintf(GFP_KERNEL, "%s", (char *) prop);
-		if (adapter->status == NULL)
+		adapter->guest->status = kasprintf(GFP_KERNEL, "%s", (char *) prop);
+		if (adapter->guest->status == NULL)
 			return -ENOMEM;
 	}
 
 	prop = read_prop_dword(np, "vendor-id", &val);
 	if (prop)
-		adapter->vendor = val;
+		adapter->guest->vendor = val;
 
 	prop = read_prop_dword(np, "device-id", &val);
 	if (prop)
-		adapter->device = val;
+		adapter->guest->device = val;
 
 	if (cxl_verbose) {
 		read_prop_dword(np, "ibm,privileged-facility", &val);
@@ -442,11 +440,11 @@ int cxl_of_read_adapter_properties(struct cxl *adapter, struct device_node *np)
 
 	prop = read_prop_dword(np, "subsystem-vendor-id", &val);
 	if (prop)
-		adapter->subsystem_vendor = val;
+		adapter->guest->subsystem_vendor = val;
 
 	prop = read_prop_dword(np, "subsystem-id", &val);
 	if (prop)
-		adapter->subsystem = val;
+		adapter->guest->subsystem = val;
 
 	if (cxl_verbose)
 		read_vpd(adapter, NULL);
