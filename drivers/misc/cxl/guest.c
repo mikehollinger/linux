@@ -597,11 +597,6 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 	return rc;
 }
 
-static int attach_dedicated_process(struct cxl_context *ctx, u64 wed, u64 amr)
-{
-	return -EPERM;
-}
-
 static int guest_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u64 amr)
 {
 	pr_devel("in %s\n", __func__);
@@ -610,8 +605,7 @@ static int guest_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u
 	if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
 		return attach_afu_directed(ctx, wed, amr);
 
-	if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
-		return attach_dedicated_process(ctx, wed, amr);
+	/* dedicated mode not supported on FW840 */
 
 	return -EINVAL;
 }
@@ -625,11 +619,6 @@ static int detach_afu_directed(struct cxl_context *ctx)
 	return 0;
 }
 
-static int detach_dedicated_process(struct cxl_context *ctx)
-{
-	return -EPERM;
-}
-
 static int guest_detach_process(struct cxl_context *ctx)
 {
 	pr_devel("in %s\n", __func__);
@@ -640,9 +629,6 @@ static int guest_detach_process(struct cxl_context *ctx)
 
 	if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
 		return detach_afu_directed(ctx);
-
-	if (ctx->afu->current_mode == CXL_MODE_DEDICATED)
-		return detach_dedicated_process(ctx);
 
 	return -EINVAL;
 }
@@ -733,16 +719,7 @@ err:
 	return rc;
 }
 
-static int activate_dedicated_process(struct cxl_afu *afu)
-{
-	dev_info(&afu->dev, "Activating dedicated process mode\n");
-	afu->current_mode = CXL_MODE_DEDICATED;
-	afu->num_procs = 1;
-
-	return cxl_chardev_d_afu_add(afu);
-}
-
-static int guest_activate_afu_mode(struct cxl_afu *afu, int mode)
+static int guest_afu_activate_mode(struct cxl_afu *afu, int mode)
 {
 	if (!mode)
 		return 0;
@@ -751,8 +728,9 @@ static int guest_activate_afu_mode(struct cxl_afu *afu, int mode)
 
 	if (mode == CXL_MODE_DIRECTED)
 		return activate_afu_directed(afu);
+
 	if (mode == CXL_MODE_DEDICATED)
-		return activate_dedicated_process(afu);
+		dev_err(&afu->dev, "Dedicated mode not supported\n");
 
 	return -EINVAL;
 }
@@ -772,18 +750,6 @@ static int deactivate_afu_directed(struct cxl_afu *afu)
 	return 0;
 }
 
-static int deactivate_dedicated_process(struct cxl_afu *afu)
-{
-	dev_info(&afu->dev, "Deactivating dedicated process mode\n");
-
-	afu->current_mode = 0;
-	afu->num_procs = 0;
-
-	cxl_chardev_afu_remove(afu);
-
-	return 0;
-}
-
 static int guest_afu_deactivate_mode(struct cxl_afu *afu, int mode)
 {
 	if (!mode)
@@ -793,8 +759,6 @@ static int guest_afu_deactivate_mode(struct cxl_afu *afu, int mode)
 
 	if (mode == CXL_MODE_DIRECTED)
 		return deactivate_afu_directed(afu);
-	if (mode == CXL_MODE_DEDICATED)
-		return deactivate_dedicated_process(afu);
 	return 0;
 }
 
@@ -1181,7 +1145,7 @@ const struct cxl_backend_ops cxl_guest_ops = {
 	.release_afu = guest_release_afu,
 	.afu_read_err_buffer = guest_afu_read_err_buffer,
 	.afu_check_and_enable = guest_afu_check_and_enable,
-	.afu_activate_mode = guest_activate_afu_mode,
+	.afu_activate_mode = guest_afu_activate_mode,
 	.afu_deactivate_mode = guest_afu_deactivate_mode,
 	.afu_reset = guest_afu_reset,
 	.afu_cr_read8 = guest_afu_cr_read8,
