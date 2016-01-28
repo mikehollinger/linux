@@ -185,6 +185,7 @@ static struct device_attribute afu_master_attrs[] = {
 
 
 /*********  AFU attributes  **************************************************/
+
 static ssize_t mmio_size_show(struct device *device,
 			      struct device_attribute *attr,
 			      char *buf)
