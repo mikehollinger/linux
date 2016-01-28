@@ -432,6 +432,7 @@ struct cxl_afu {
 /* AFU refcount management */
 static inline struct cxl_afu *cxl_afu_get(struct cxl_afu *afu)
 {
+
 	return (get_device(&afu->dev) == NULL) ? NULL : afu;
 }
 

@@ -875,7 +875,7 @@ err_free:
 
 static void cxl_pci_remove_afu(struct cxl_afu *afu)
 {
-	pr_devel("cxl_remove_afu\n");
+	pr_devel("%s\n");
 
 	if (!afu)
 		return;
