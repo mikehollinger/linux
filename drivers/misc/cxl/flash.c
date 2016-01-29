@@ -13,6 +13,7 @@
 #define MAX_CHUNK_SIZE (SG_BUFFER_SIZE * SG_MAX_ENTRIES)
 #define DOWNLOAD_IMAGE 1
 #define VALIDATE_IMAGE 2
+#define INITIAL_VERSION 1
 
 struct ai_header {
 	u16 version;
@@ -160,7 +161,7 @@ static int update_node(__be32 phandle, s32 scope)
 			if ((vd != 0x00000000) && (vd != 0x80000000)) {
 				ret = update_property(dn, prop_name, vd, prop_data);
 				if (ret)
-					pr_err("Could not update property %s - %i\n",
+					pr_err("cxl: Could not update property %s - %i\n",
 					       prop_name, ret);
 
 				prop_data += vd;
@@ -373,6 +374,10 @@ static long ioctl_transfer_image(struct cxl *adapter,
 	if (copy_from_user(&ai, uai, sizeof(struct cxl_adapter_image)))
 		return -EFAULT;
 
+	if (ai.version > INITIAL_VERSION) {
+		pr_err("cxl: Version not supported: %d\n", ai.version);
+		return -EINVAL;
+	}
 	return transfer_image(adapter, &ai);
 }
 

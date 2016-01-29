@@ -329,6 +329,7 @@ static const cxl_p2n_reg_t CXL_PSL_WED_An     = {0x0A0};
 #define CXL_DEVT_ADAPTER(dev) (MINOR(dev) / CXL_DEV_MINORS)
 
 struct cxl_adapter_image {
+	__u32 version;
 	__u8 *data;
 	__u64 len_data;
 	__u64 len_image;
