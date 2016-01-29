@@ -1082,6 +1082,7 @@ static void cxl_release_adapter(struct device *dev)
 
 	cxl_remove_adapter_nr(adapter);
 
+	kfree(adapter->native);
 	kfree(adapter);
 }
 
