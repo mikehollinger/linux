@@ -256,11 +256,10 @@ int afu_allocate_irqs(struct cxl_context *ctx, u32 count)
 	 * and is the first interrupt from range 0. It still needs to be
 	 * allocated, so bump the count by one.
 	 */
-	if (cpu_has_feature(CPU_FTR_HVMODE)) {
+	if (cpu_has_feature(CPU_FTR_HVMODE))
 		alloc_count = count;
-	} else {
+	else
 		alloc_count = count + 1;
-	}
 
 	/* Initialize the list head to hold irq names */
 	INIT_LIST_HEAD(&ctx->irq_names);

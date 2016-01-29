@@ -217,7 +217,8 @@ static void attach_spa(struct cxl_afu *afu)
 	spap |= ((afu->native->spa_size >> (12 - CXL_PSL_SPAP_Size_Shift)) - 1) & CXL_PSL_SPAP_Size;
 	spap |= CXL_PSL_SPAP_V;
 	pr_devel("cxl: SPA allocated at 0x%p. Max processes: %i, sw_command_status: 0x%p CXL_PSL_SPAP_An=0x%016llx\n",
-	         afu->native->spa, afu->native->spa_max_procs, afu->native->sw_command_status, spap);
+		afu->native->spa, afu->native->spa_max_procs,
+		afu->native->sw_command_status, spap);
 	cxl_p1n_write(afu, CXL_PSL_SPAP_An, spap);
 }
 
@@ -229,7 +230,8 @@ static inline void detach_spa(struct cxl_afu *afu)
 void cxl_release_spa(struct cxl_afu *afu)
 {
 	if (afu->native->spa) {
-		free_pages((unsigned long) afu->native->spa, afu->native->spa_order);
+		free_pages((unsigned long) afu->native->spa,
+			afu->native->spa_order);
 		afu->native->spa = NULL;
 	}
 }

@@ -15,9 +15,10 @@
 #include "hcalls.h"
 #include "trace.h"
 
-#define CXL_ERROR_DETECTED_EVENT 1
-#define CXL_SLOT_RESET_EVENT 	 2
-#define CXL_RESUME_EVENT 	 3
+#define CXL_ERROR_DETECTED_EVENT	1
+#define CXL_SLOT_RESET_EVENT		2
+#define CXL_RESUME_EVENT		3
+
 static void pci_error_handlers(struct cxl_afu *afu,
 				int bus_error_event,
 				pci_channel_state_t state)
@@ -563,7 +564,7 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 
 	disable_afu_irqs(ctx);
 
-	rc = cxl_h_attach_process(ctx->afu->guest->handle, elem, 
+	rc = cxl_h_attach_process(ctx->afu->guest->handle, elem,
 				&ctx->process_token, &mmio_addr, &mmio_size);
 	if (rc == H_SUCCESS) {
 		if (ctx->master || !ctx->afu->pp_psa) {
@@ -808,9 +809,9 @@ static int afu_update_state(struct cxl_afu *afu)
 				pci_channel_io_frozen);
 
 		cxl_context_detach_all(afu);
-		if ((rc = cxl_ops->afu_reset(afu))) {
+		if ((rc = cxl_ops->afu_reset(afu)))
 			pr_devel("reset hcall failed %d\n", rc);
-		}
+
 		rc = afu_read_error_state(afu, &cur_state);
 		if (!rc && cur_state == H_STATE_NORMAL) {
 			pci_error_handlers(afu, CXL_SLOT_RESET_EVENT, 0);
@@ -864,7 +865,7 @@ static bool guest_link_ok(struct cxl *cxl, struct cxl_afu *afu)
 			state != H_STATE_NORMAL) {
 			if (afu_do_recovery(afu) > 0) {
 				/* check again in case we've just fixed it */
-				if (!afu_read_error_state(afu, &state) && 
+				if (!afu_read_error_state(afu, &state) &&
 					state == H_STATE_NORMAL)
 					return true;
 			}

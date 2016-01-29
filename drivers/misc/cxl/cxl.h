@@ -508,8 +508,21 @@ struct cxl_context {
 
 	struct cxl_process_element *elem;
 
-	int pe; /* process element handle */
-	atomic_t external_pe; /* pe shown outside of cxl. Only useful for guest */
+	/*
+	 * pe is the process element handle, assigned by this driver when the
+	 * context is initialized.
+	 *
+	 * external_pe is the PE shown outside of cxl.
+	 * On bare-metal, pe=external_pe, because we decide what the handle is.
+	 * In a guest, we only find out about the pe used by pHyp when the
+	 * context is attached, and that's the value we want to report outside
+	 * of cxl.
+	 * Since it's defined after the init, it could be read/written
+	 * simultaneously, hence we declare it as an atomic.
+	 */
+	int pe;
+	atomic_t external_pe;
+
 	u32 irq_count;
 	bool pe_inserted;
 	bool master;
@@ -788,7 +801,6 @@ struct cxl_irq_info {
 };
 
 void cxl_assign_psn_space(struct cxl_context *ctx);
-
 irqreturn_t cxl_irq(int irq, struct cxl_context *ctx, struct cxl_irq_info *irq_info);
 int cxl_register_one_irq(struct cxl *adapter, irq_handler_t handler,
 			void *cookie, irq_hw_number_t *dest_hwirq,

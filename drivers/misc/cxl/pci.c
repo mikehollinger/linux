@@ -1001,7 +1001,7 @@ static int cxl_read_vsec(struct cxl *adapter, struct pci_dev *dev)
 	adapter->native->ps_off = ps_off * 64 * 1024;
 	adapter->ps_size = ps_size * 64 * 1024;
 	adapter->native->afu_desc_off = afu_desc_off * 64 * 1024;
-	adapter->native->afu_desc_size = afu_desc_size *64 * 1024;
+	adapter->native->afu_desc_size = afu_desc_size * 64 * 1024;
 
 	/* Total IRQs - 1 PSL ERROR - #AFU*(1 slice error + 1 DSI) */
 	adapter->user_irqs = pnv_cxl_get_irq_count(dev) - 1 - 2*adapter->slices;
