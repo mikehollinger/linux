@@ -597,6 +597,7 @@ void cxl_pci_release_afu(struct device *dev)
 	idr_destroy(&afu->contexts_idr);
 	cxl_release_spa(afu);
 
+	kfree(afu->native);
 	kfree(afu);
 }
 
@@ -868,6 +869,7 @@ err_put1:
 	return rc;
 
 err_free:
+	kfree(afu->native);
 	kfree(afu);
 	return rc;
 

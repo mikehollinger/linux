@@ -641,6 +641,7 @@ static void guest_release_afu(struct device *dev)
 
 	idr_destroy(&afu->contexts_idr);
 
+	kfree(afu->guest);
 	kfree(afu);
 }
 
@@ -981,8 +982,10 @@ err_put1:
 err2:
 	guest_unmap_slice_regs(afu);
 err1:
-	if (free)
+	if (free) {
+		kfree(afu->guest);
 		kfree(afu);
+	}
 	return rc;
 }
 
@@ -1022,6 +1025,7 @@ static void free_adapter(struct cxl *adapter)
 	}
 	kfree(adapter->guest->status);
 	cxl_remove_adapter_nr(adapter);
+	kfree(adapter->guest);
 	kfree(adapter);
 }
 
