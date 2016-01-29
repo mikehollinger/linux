@@ -403,7 +403,8 @@ CXL_IOCTL_TRANSFER_IMAGE:
         Describes the version of the structure.
 
     data:
-        Pointer to a buffer with the image to write to the card.
+        Pointer to a buffer with part of the image to write to the
+        card.
 
     len_data:
         Size of the buffer pointed to by data.
