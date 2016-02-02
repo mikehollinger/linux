@@ -122,10 +122,11 @@ long cxl_h_attach_process(u64 unit_address,
 	int i;
 
 	CXL_H_WAIT_UNTIL_DONE(rc, retbuf, H_ATTACH_CA_PROCESS, unit_address, virt_to_phys(element));
-	_PRINT_MSG(rc, "cxl_h_attach_process(%#.16llx, %#.16lx): %li\ntoken: 0x%.8lx mmio_addr: 0x%lx mmio_size: 0x%lx\nProcess Element Structure:\n",
-		unit_address, virt_to_phys(element), rc,
-		retbuf[0], retbuf[1], retbuf[2]);
+	_PRINT_MSG(rc, "cxl_h_attach_process(%#.16llx, %#.16lx): %li\n",
+		unit_address, virt_to_phys(element), rc);
 
+	pr_devel("token: 0x%.8lx mmio_addr: 0x%lx mmio_size: 0x%lx\nProcess Element Structure:\n",
+		retbuf[0], retbuf[1], retbuf[2]);
 	buf = (u32 *) element;
 	for (i = 0; i*4 < sizeof(struct cxl_process_element_hcall); i += 4) {
 		if ((i+3)*4 < sizeof(struct cxl_process_element_hcall))
