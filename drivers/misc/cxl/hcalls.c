@@ -104,6 +104,13 @@
 #define CXL_H_WAIT_UNTIL_DONE(...)  _CXL_LOOP_HCALL(plpar_hcall, __VA_ARGS__)
 #define CXL_H9_WAIT_UNTIL_DONE(...) _CXL_LOOP_HCALL(plpar_hcall9, __VA_ARGS__)
 
+#define _PRINT_MSG(rc, format, ...)					\
+	{								\
+		if ((rc != H_SUCCESS) && (rc != H_CONTINUE))		\
+			pr_err(format, __VA_ARGS__);			\
+		else							\
+			pr_devel(format, __VA_ARGS__);			\
+	}								\
 
 long cxl_h_attach_process(u64 unit_address,
 			struct cxl_process_element_hcall *element,
@@ -115,7 +122,7 @@ long cxl_h_attach_process(u64 unit_address,
 	int i;
 
 	CXL_H_WAIT_UNTIL_DONE(rc, retbuf, H_ATTACH_CA_PROCESS, unit_address, virt_to_phys(element));
-	pr_devel("cxl_h_attach_process(%#.16llx, %#.16lx): %li\ntoken: 0x%.8lx mmio_addr: 0x%lx mmio_size: 0x%lx\nProcess Element Structure:\n",
+	_PRINT_MSG(rc, "cxl_h_attach_process(%#.16llx, %#.16lx): %li\ntoken: 0x%.8lx mmio_addr: 0x%lx mmio_size: 0x%lx\nProcess Element Structure:\n",
 		unit_address, virt_to_phys(element), rc,
 		retbuf[0], retbuf[1], retbuf[2]);
 
@@ -164,7 +171,7 @@ long cxl_h_detach_process(u64 unit_address, u64 process_token)
 	long rc;
 
 	CXL_H_WAIT_UNTIL_DONE(rc, retbuf, H_DETACH_CA_PROCESS, unit_address, process_token);
-	pr_devel("cxl_h_detach_process(%#.16llx, 0x%.8llx): %li\n", unit_address, process_token, rc);
+	_PRINT_MSG(rc, "cxl_h_detach_process(%#.16llx, 0x%.8llx): %li\n", unit_address, process_token, rc);
 
 	switch (rc) {
 	case H_SUCCESS:       /* The process was detached from the coherent platform function */
@@ -195,7 +202,7 @@ static long cxl_h_control_function(u64 unit_address, u64 op,
 	long rc;
 
 	CXL_H9_WAIT_UNTIL_DONE(rc, retbuf, H_CONTROL_CA_FUNCTION, unit_address, op, p1, p2, p3, p4);
-	pr_devel("cxl_h_control_function(%#.16llx, %s(%#llx, %#llx, %#llx, %#llx, R4: %#lx)): %li\n",
+	_PRINT_MSG(rc, "cxl_h_control_function(%#.16llx, %s(%#llx, %#llx, %#llx, %#llx, R4: %#lx)): %li\n",
 		unit_address, OP_STR_AFU(op), p1, p2, p3, p4, retbuf[0], rc);
 
 	switch (rc) {
@@ -388,7 +395,7 @@ long cxl_h_collect_int_info(u64 unit_address, u64 process_token,
 
 	rc = plpar_hcall9(H_COLLECT_CA_INT_INFO, (unsigned long *) info,
 			unit_address, process_token);
-	pr_devel("cxl_h_collect_int_info(%#.16llx, 0x%llx): %li\n",
+	_PRINT_MSG(rc, "cxl_h_collect_int_info(%#.16llx, 0x%llx): %li\n",
 		unit_address, process_token, rc);
 
 	switch (rc) {
@@ -430,7 +437,7 @@ long cxl_h_control_faults(u64 unit_address, u64 process_token,
 	rc = plpar_hcall(H_CONTROL_CA_FAULTS, retbuf, unit_address,
 			H_CONTROL_CA_FAULTS_RESPOND_PSL, process_token,
 			control_mask, reset_mask);
-	pr_devel("cxl_h_control_faults(%#.16llx, 0x%llx, %#llx, %#llx): %li (%#lx)\n",
+	_PRINT_MSG(rc, "cxl_h_control_faults(%#.16llx, 0x%llx, %#llx, %#llx): %li (%#lx)\n",
 		unit_address, process_token, control_mask, reset_mask,
 		rc, retbuf[0]);
 
@@ -464,7 +471,7 @@ static long cxl_h_control_facility(u64 unit_address, u64 op,
 	long rc;
 
 	CXL_H9_WAIT_UNTIL_DONE(rc, retbuf, H_CONTROL_CA_FACILITY, unit_address, op, p1, p2, p3, p4);
-	pr_devel("cxl_h_control_facility(%#.16llx, %s(%#llx, %#llx, %#llx, %#llx, R4: %#lx)): %li\n",
+	_PRINT_MSG(rc, "cxl_h_control_facility(%#.16llx, %s(%#llx, %#llx, %#llx, %#llx, R4: %#lx)): %li\n",
 		unit_address, OP_STR_CONTROL_ADAPTER(op), p1, p2, p3, p4, retbuf[0], rc);
 
 	switch (rc) {
@@ -570,7 +577,7 @@ static long cxl_h_download_facility(u64 unit_address, u64 op,
 			msleep(delay);
 		}
 	}
-	pr_devel("cxl_h_download_facility(%#.16llx, %s(%#llx, %#llx), %#lx): %li\n",
+	_PRINT_MSG(rc, "cxl_h_download_facility(%#.16llx, %s(%#llx, %#llx), %#lx): %li\n",
 		 unit_address, OP_STR_DOWNLOAD_ADAPTER(op), list_address, num, retbuf[0], rc);
 
 	switch (rc) {
