@@ -590,9 +590,9 @@ static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)
 			ctx->afu->pp_size = mmio_size;
 		}
 		/* from PAPR: process element is bytes 4-7 of process token */
-		atomic_set(&ctx->external_pe, ctx->process_token & 0xFFFFFFFF);
+		ctx->external_pe = ctx->process_token & 0xFFFFFFFF;
 		pr_devel("CXL pe=%i is known as %i for pHyp, mmio_size=%#llx",
-			ctx->pe, atomic_read(&ctx->external_pe), ctx->psn_size);
+			ctx->pe, ctx->external_pe, ctx->psn_size);
 		ctx->pe_inserted = true;
 		enable_afu_irqs(ctx);
 	}

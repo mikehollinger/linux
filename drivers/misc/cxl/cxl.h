@@ -518,11 +518,9 @@ struct cxl_context {
 	 * In a guest, we only find out about the pe used by pHyp when the
 	 * context is attached, and that's the value we want to report outside
 	 * of cxl.
-	 * Since it's defined after the init, it could be read/written
-	 * simultaneously, hence we declare it as an atomic.
 	 */
 	int pe;
-	atomic_t external_pe;
+	int external_pe;
 
 	u32 irq_count;
 	bool pe_inserted;
