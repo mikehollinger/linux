@@ -99,7 +99,7 @@ int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master,
 		ctx->elem = &ctx->afu->native->spa[i];
 		ctx->external_pe = ctx->pe;
 	} else {
-		ctx->external_pe= -1; /* assigned when attaching */
+		ctx->external_pe = -1; /* assigned when attaching */
 	}
 	ctx->pe_inserted = false;
 

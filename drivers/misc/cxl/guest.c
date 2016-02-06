@@ -273,7 +273,7 @@ static int guest_reset(struct cxl *adapter)
 	for (i = 0; i < adapter->slices; i++) {
 		if (!rc && (afu = adapter->afu[i])) {
 			pci_error_handlers(afu, CXL_SLOT_RESET_EVENT,
-					   pci_channel_io_normal);
+					pci_channel_io_normal);
 			pci_error_handlers(afu, CXL_RESUME_EVENT, 0);
 		}
 	}
@@ -818,8 +818,8 @@ static int afu_update_state(struct cxl_afu *afu)
 
 		rc = afu_read_error_state(afu, &cur_state);
 		if (!rc && cur_state == H_STATE_NORMAL) {
-			pci_error_handlers(afu, CXL_SLOT_RESET_EVENT, 
-					   pci_channel_io_normal);
+			pci_error_handlers(afu, CXL_SLOT_RESET_EVENT,
+					pci_channel_io_normal);
 			pci_error_handlers(afu, CXL_RESUME_EVENT, 0);
 			rc = 1;
 		}

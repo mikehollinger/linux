@@ -446,7 +446,7 @@ long cxl_h_control_faults(u64 unit_address, u64 process_token,
 	_PRINT_MSG(rc, "cxl_h_control_faults(%#.16llx, 0x%llx, %#llx, %#llx): %li (%#lx)\n",
 		unit_address, process_token, control_mask, reset_mask,
 		rc, retbuf[0]);
-	trace_cxl_hcall_control_faults(unit_address, process_token, 
+	trace_cxl_hcall_control_faults(unit_address, process_token,
 				control_mask, reset_mask, retbuf[0], rc);
 
 	switch (rc) {
