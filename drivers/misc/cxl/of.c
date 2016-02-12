@@ -115,8 +115,6 @@ static int read_phys_addr(struct device_node *np, char *prop_name,
 static int read_vpd(struct cxl *adapter, struct cxl_afu *afu)
 {
 	char vpd[256];
-	u32 *buf;
-	int i;
 	int rc;
 	size_t len = sizeof(vpd);
 
@@ -128,21 +126,7 @@ static int read_vpd(struct cxl *adapter, struct cxl_afu *afu)
 		rc = cxl_guest_read_afu_vpd(afu, vpd, len);
 
 	if (rc > 0) {
-		len = rc;
-		buf = (u32 *) vpd;
-		for (i = 0; i*4 < len; i += 4) {
-			if ((i+3)*4 < len)
-				pr_devel("%.8x %.8x %.8x %.8x\n",
-				buf[i], buf[i + 1], buf[i + 2], buf[i + 3]);
-			else if ((i+2)*4 < len)
-				pr_devel("%.8x %.8x %.8x\n",
-				buf[i], buf[i + 1], buf[i + 2]);
-			else if ((i+1)*4 < len)
-				pr_devel("%.8x %.8x\n",
-				buf[i], buf[i + 1]);
-			else
-				pr_devel("%.8x\n", buf[i]);
-		}
+		cxl_dump_debug_buffer(vpd, rc);
 		rc = 0;
 	}
 	return rc;

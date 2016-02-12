@@ -41,39 +41,15 @@
 #define H_CONTROL_CA_FUNCTION_ACK_FUNCTION_ERR_INT   12 /* acknowledge function-wide error data based on an interrupt */
 #define H_CONTROL_CA_FUNCTION_GET_ERROR_LOG          13 /* retrieve the Platform Log ID (PLID) of an error log */
 
-#define H_CONTROL_CA_FAULTS_RESPOND_PSL    1
-#define H_CONTROL_CA_FAULTS_RESPOND_AFU    2
+#define H_CONTROL_CA_FAULTS_RESPOND_PSL         1
+#define H_CONTROL_CA_FAULTS_RESPOND_AFU         2
 
-#define OP_STR_AFU(x)							\
-	(x == H_CONTROL_CA_FUNCTION_RESET ? "RESET" :			\
-		x == H_CONTROL_CA_FUNCTION_RESUME_PROCESS ? "PROCESS" :	\
-		x == H_CONTROL_CA_FUNCTION_RESUME_PROCESS ? "RESUME" :	\
-		x == H_CONTROL_CA_FUNCTION_READ_ERR_STATE ? "READ_ERR_STATE" : \
-		x == H_CONTROL_CA_FUNCTION_GET_AFU_ERR ? "GET_AFU_ERR" : \
-		x == H_CONTROL_CA_FUNCTION_GET_CONFIG ? "GET_CONFIG" :	\
-		x == H_CONTROL_CA_FUNCTION_GET_DOWNLOAD_STATE ? "DOWNLOAD_STATE" : \
-		x == H_CONTROL_CA_FUNCTION_TERMINATE_PROCESS ? "TERMINATE_PROC" : \
-		x == H_CONTROL_CA_FUNCTION_COLLECT_VPD ? "COLLECT_VPD" :	\
-		x == H_CONTROL_CA_FUNCTION_GET_FUNCTION_ERR_INT ? "GET_ERR_INTERRUPT" :	\
-		x == H_CONTROL_CA_FUNCTION_ACK_FUNCTION_ERR_INT ? "ACK_ERR_INTERRUPT" :	\
-		x == H_CONTROL_CA_FUNCTION_GET_ERROR_LOG ? "GET_ERROR_LOG" : \
-		"UNKNOWN OP")
+#define H_CONTROL_CA_FACILITY_RESET             1 /* perform a reset */
+#define H_CONTROL_CA_FACILITY_COLLECT_VPD       2 /* collect VPD */
 
-#define H_CONTROL_CA_FACILITY_RESET                   1 /* perform a reset */
-#define H_CONTROL_CA_FACILITY_COLLECT_VPD             2 /* collect VPD */
+#define H_DOWNLOAD_CA_FACILITY_DOWNLOAD         1 /* download adapter image */
+#define H_DOWNLOAD_CA_FACILITY_VALIDATE         2 /* validate adapter image */
 
-#define OP_STR_CONTROL_ADAPTER(x)					\
-	(x == H_CONTROL_CA_FACILITY_RESET ? "RESET" :			\
-		x == H_CONTROL_CA_FACILITY_COLLECT_VPD ? "COLLECT_VPD" : \
-		"UNKNOWN OP")
-
-#define H_CONTROL_CA_FACILITY_DOWNLOAD                1 /* download adapter image */
-#define H_CONTROL_CA_FACILITY_VALIDATE                2 /* validate adapter image */
-
-#define OP_STR_DOWNLOAD_ADAPTER(x)					\
-	(x == H_CONTROL_CA_FACILITY_DOWNLOAD ? "DOWNLOAD" :		\
-		x == H_CONTROL_CA_FACILITY_VALIDATE ? "VALIDATE" :	\
-		"UNKNOWN OP")
 
 #define _CXL_LOOP_HCALL(call, rc, retbuf, fn, ...)			\
 	{								\
@@ -113,14 +89,56 @@
 			pr_devel(format, __VA_ARGS__);			\
 	}								\
 
+
+static char *afu_op_names[] = {
+	"UNKNOWN_OP",		/* 0 undefined */
+	"RESET",		/* 1 */
+	"SUSPEND_PROCESS",	/* 2 */
+	"RESUME_PROCESS",	/* 3 */
+	"READ_ERR_STATE",	/* 4 */
+	"GET_AFU_ERR",		/* 5 */
+	"GET_CONFIG",		/* 6 */
+	"GET_DOWNLOAD_STATE",	/* 7 */
+	"TERMINATE_PROCESS",	/* 8 */
+	"COLLECT_VPD",		/* 9 */
+	"UNKNOWN_OP",		/* 10 undefined */
+	"GET_FUNCTION_ERR_INT",	/* 11 */
+	"ACK_FUNCTION_ERR_INT",	/* 12 */
+	"GET_ERROR_LOG",	/* 13 */
+};
+
+static char *control_adapter_op_names[] = {
+	"UNKNOWN_OP",		/* 0 undefined */
+	"RESET",		/* 1 */
+	"COLLECT_VPD",		/* 2 */
+};
+
+static char *download_op_names[] = {
+	"UNKNOWN_OP",		/* 0 undefined */
+	"DOWNLOAD",		/* 1 */
+	"VALIDATE",		/* 2 */
+};
+
+static char *op_str(unsigned int op, char *name_array[], int array_len)
+{
+	if (op >= array_len)
+		return "UNKNOWN_OP";
+	return name_array[op];
+}
+
+#define OP_STR(op, name_array)      op_str(op, name_array, ARRAY_SIZE(name_array))
+
+#define OP_STR_AFU(op)              OP_STR(op, afu_op_names)
+#define OP_STR_CONTROL_ADAPTER(op)  OP_STR(op, control_adapter_op_names)
+#define OP_STR_DOWNLOAD_ADAPTER(op) OP_STR(op, download_op_names)
+
+
 long cxl_h_attach_process(u64 unit_address,
 			struct cxl_process_element_hcall *element,
 			u64 *process_token, u64 *mmio_addr, u64 *mmio_size)
 {
 	unsigned long retbuf[PLPAR_HCALL_BUFSIZE];
-	u32 *buf;
 	long rc;
-	int i;
 
 	CXL_H_WAIT_UNTIL_DONE(rc, retbuf, H_ATTACH_CA_PROCESS, unit_address, virt_to_phys(element));
 	_PRINT_MSG(rc, "cxl_h_attach_process(%#.16llx, %#.16lx): %li\n",
@@ -129,17 +147,7 @@ long cxl_h_attach_process(u64 unit_address,
 
 	pr_devel("token: 0x%.8lx mmio_addr: 0x%lx mmio_size: 0x%lx\nProcess Element Structure:\n",
 		retbuf[0], retbuf[1], retbuf[2]);
-	buf = (u32 *) element;
-	for (i = 0; i*4 < sizeof(struct cxl_process_element_hcall); i += 4) {
-		if ((i+3)*4 < sizeof(struct cxl_process_element_hcall))
-			pr_devel("%.8x %.8x %.8x %.8x\n", buf[i], buf[i + 1], buf[i + 2], buf[i + 3]);
-		else if ((i+2)*4 < sizeof(struct cxl_process_element_hcall))
-			pr_devel("%.8x %.8x %.8x\n", buf[i], buf[i + 1], buf[i + 2]);
-		else if ((i+1)*4 < sizeof(struct cxl_process_element_hcall))
-			pr_devel("%.8x %.8x\n", buf[i], buf[i + 1]);
-		else
-			pr_devel("%.8x\n", buf[i]);
-	}
+	cxl_dump_debug_buffer(element, sizeof(*element));
 
 	switch (rc) {
 	case H_SUCCESS:       /* The process info is attached to the coherent platform function */
@@ -622,7 +630,7 @@ long cxl_h_download_adapter_image(u64 unit_address,
 				  u64 *out)
 {
 	return cxl_h_download_facility(unit_address,
-				       H_CONTROL_CA_FACILITY_DOWNLOAD,
+				       H_DOWNLOAD_CA_FACILITY_DOWNLOAD,
 				       list_address, num, out);
 }
 
@@ -635,6 +643,6 @@ long cxl_h_validate_adapter_image(u64 unit_address,
 				  u64 *out)
 {
 	return cxl_h_download_facility(unit_address,
-				       H_CONTROL_CA_FACILITY_VALIDATE,
+				       H_DOWNLOAD_CA_FACILITY_VALIDATE,
 				       list_address, num, out);
 }

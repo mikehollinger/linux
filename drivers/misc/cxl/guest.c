@@ -493,19 +493,19 @@ static int guest_afu_cr_read64(struct cxl_afu *afu, int cr_idx,	u64 offset,
 static int guest_afu_cr_write32(struct cxl_afu *afu, int cr, u64 off, u32 in)
 {
 	/* config record is not writable from guest */
-	return -EIO;
+	return -EPERM;
 }
 
 static int guest_afu_cr_write16(struct cxl_afu *afu, int cr, u64 off, u16 in)
 {
 	/* config record is not writable from guest */
-	return -EIO;
+	return -EPERM;
 }
 
 static int guest_afu_cr_write8(struct cxl_afu *afu, int cr, u64 off, u8 in)
 {
 	/* config record is not writable from guest */
-	return -EIO;
+	return -EPERM;
 }
 
 static int attach_afu_directed(struct cxl_context *ctx, u64 wed, u64 amr)

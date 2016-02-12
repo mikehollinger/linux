@@ -820,7 +820,7 @@ static void pci_deconfigure_afu(struct cxl_afu *afu)
 static int pci_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 {
 	struct cxl_afu *afu;
-	int rc;
+	int rc = -ENOMEM;
 
 	afu = cxl_alloc_afu(adapter, slice);
 	if (!afu)
@@ -828,19 +828,18 @@ static int pci_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 
 	afu->native = kzalloc(sizeof(struct cxl_afu_native), GFP_KERNEL);
 	if (!afu->native) {
-		kfree(afu);
-		return -ENOMEM;
+		goto err_free_afu;
 	}
 
 	mutex_init(&afu->native->spa_mutex);
 
 	rc = dev_set_name(&afu->dev, "afu%i.%i", adapter->adapter_num, slice);
 	if (rc)
-		goto err_free;
+		goto err_free_native;
 
 	rc = pci_configure_afu(afu, adapter, dev);
 	if (rc)
-		goto err_free;
+		goto err_free_native;
 
 	/* Don't care if this fails */
 	cxl_debugfs_afu_add(afu);
@@ -868,8 +867,9 @@ err_put1:
 	device_unregister(&afu->dev);
 	return rc;
 
-err_free:
+err_free_native:
 	kfree(afu->native);
+err_free_afu:
 	kfree(afu);
 	return rc;
 
@@ -1181,9 +1181,8 @@ static struct cxl *cxl_pci_init_adapter(struct pci_dev *dev)
 
 	adapter->native = kzalloc(sizeof(struct cxl_native), GFP_KERNEL);
 	if (!adapter->native) {
-		pci_disable_device(dev);
-		cxl_release_adapter(&adapter->dev);
-		return ERR_PTR(-ENOMEM);
+		rc = -ENOMEM;
+		goto err_release;
 	}
 
 	/* Set defaults for parameters which need to persist over
@@ -1195,8 +1194,7 @@ static struct cxl *cxl_pci_init_adapter(struct pci_dev *dev)
 	rc = cxl_configure_adapter(adapter, dev);
 	if (rc) {
 		pci_disable_device(dev);
-		cxl_release_adapter(&adapter->dev);
-		return ERR_PTR(rc);
+		goto err_release;
 	}
 
 	/* Don't care if this one fails: */
@@ -1221,6 +1219,10 @@ err_put1:
 	cxl_debugfs_adapter_remove(adapter);
 	cxl_deconfigure_adapter(adapter);
 	device_unregister(&adapter->dev);
+	return ERR_PTR(rc);
+
+err_release:
+	cxl_release_adapter(&adapter->dev);
 	return ERR_PTR(rc);
 }
 

@@ -756,6 +756,7 @@ void cxl_prefault(struct cxl_context *ctx, u64 wed);
 
 struct cxl *get_cxl_adapter(int num);
 int cxl_alloc_sst(struct cxl_context *ctx);
+void cxl_dump_debug_buffer(void *addr, size_t size);
 
 void init_cxl_native(void);
 

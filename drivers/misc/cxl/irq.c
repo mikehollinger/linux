@@ -130,15 +130,15 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 
 	/*
 	 * Look for the interrupt number.
-	 * On bare-metal, we know the range 0 only contains the PSL
-	 * interrupt so, we could start counting at range 1 and initialize
+	 * On bare-metal, we know range 0 only contains the PSL
+	 * interrupt so we could start counting at range 1 and initialize
 	 * afu_irq at 1.
 	 * In a guest, range 0 also contains AFU interrupts, so it must
-	 * be counted for, but we initialize afu_irq at 0 to take into
+	 * be counted for. Therefore we initialize afu_irq at 0 to take into
 	 * account the PSL interrupt.
 	 *
 	 * For code-readability, it just seems easier to go over all
-	 * the ranges.
+	 * the ranges. The end result is the same.
 	 */
 	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		irq_off = hwirq - ctx->irqs.offset[r];
@@ -323,7 +323,16 @@ static void afu_register_hwirqs(struct cxl_context *ctx)
 		hwirq = ctx->irqs.offset[r];
 		for (i = 0; i < ctx->irqs.range[r]; hwirq++, i++) {
 			if (r == 0 && i == 0)
-				/* PSL interrupt, only for guest */
+				/*
+				 * The very first interrupt of range 0 is
+				 * always the PSL interrupt, but we only
+				 * need to connect a handler for guests,
+				 * because there's one PSL interrupt per
+				 * context.
+				 * On bare-metal, the PSL interrupt is
+				 * multiplexed and was setup when the AFU
+				 * was configured.
+				 */
 				handler = cxl_ops->psl_interrupt;
 			else
 				handler = cxl_irq_afu;
