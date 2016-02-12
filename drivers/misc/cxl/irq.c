@@ -138,7 +138,7 @@ static irqreturn_t cxl_irq_afu(int irq, void *data)
 	 * account the PSL interrupt.
 	 *
 	 * For code-readability, it just seems easier to go over all
-	 * the ranges. The end result is the same.
+	 * the ranges on bare-metal and guest. The end result is the same.
 	 */
 	for (r = 0; r < CXL_IRQ_RANGES; r++) {
 		irq_off = hwirq - ctx->irqs.offset[r];

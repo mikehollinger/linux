@@ -165,9 +165,9 @@ int cxl_alloc_sst(struct cxl_context *ctx)
 /* print buffer content as integers when debugging */
 void cxl_dump_debug_buffer(void *buf, size_t buf_len)
 {
+#ifdef DEBUG
 	int i, *ptr;
 
-#ifdef DEBUG
 	/*
 	 * We want to regroup up to 4 integers per line, which means they
 	 * need to be in the same pr_devel() statement
