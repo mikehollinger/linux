@@ -56,10 +56,13 @@ struct cxl_afu_id {
 };
 
 /* ioctl numbers */
+/* AFU devices */
 #define CXL_MAGIC 0xCA
 #define CXL_IOCTL_START_WORK		_IOW(CXL_MAGIC, 0x00, struct cxl_ioctl_start_work)
 #define CXL_IOCTL_GET_PROCESS_ELEMENT	_IOR(CXL_MAGIC, 0x01, __u32)
 #define CXL_IOCTL_GET_AFU_ID            _IOR(CXL_MAGIC, 0x02, struct cxl_afu_id)
+/* adapter devices */
+#define CXL_IOCTL_TRANSFER_IMAGE        _IOW(CXL_MAGIC, 0x0A, struct cxl_adapter_image)
 
 #define CXL_READ_MIN_SIZE 0x1000 /* 4K */
 

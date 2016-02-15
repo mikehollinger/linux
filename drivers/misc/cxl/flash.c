@@ -8,7 +8,6 @@
 #include "cxl.h"
 #include "hcalls.h"
 
-#define CXL_IOCTL_TRANSFER_IMAGE _IOR(CXL_MAGIC, 0x10, struct cxl_adapter_image)
 #define ADAPTER_IMAGE_HEADER_SIZE 128
 #define MAX_CHUNK_SIZE (SG_BUFFER_SIZE * SG_MAX_ENTRIES)
 #define DOWNLOAD_IMAGE 1
@@ -457,6 +456,12 @@ static long device_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		return -EINVAL;
 }
 
+static long device_compat_ioctl(struct file *file, unsigned int cmd,
+				unsigned long arg)
+{
+	return device_ioctl(file, cmd, arg);
+}
+
 static int device_close(struct inode *inode, struct file *file)
 {
 	struct cxl *adapter = file->private_data;
@@ -488,6 +493,7 @@ static const struct file_operations fops = {
 	.owner		= THIS_MODULE,
 	.open		= device_open,
 	.unlocked_ioctl	= device_ioctl,
+	.compat_ioctl	= device_compat_ioctl,
 	.release	= device_close,
 };
 
