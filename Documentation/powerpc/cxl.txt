@@ -382,7 +382,8 @@ open
 ioctl
 -----
 
-CXL_IOCTL_TRANSFER_IMAGE:
+CXL_IOCTL_DOWNLOAD_IMAGE:
+CXL_IOCTL_VALIDATE_IMAGE:
     Starts and controls flashing a new FPGA image. Partial
     reconfiguration is not supported (yet), so the image must contain
     a copy of the PSL and AFU(s). Since an image can be quite large,
@@ -390,17 +391,20 @@ CXL_IOCTL_TRANSFER_IMAGE:
     chunks.
 
     Takes a pointer to a struct cxl_adapter_image:
-	struct cxl_adapter_image {
-		__u32 version;
-		__u8 *data;
-		__u64 len_data;
-		__u64 len_image;
-		__u32 need_header;
-		__u32 op;
-	};
+        struct cxl_adapter_image {
+            __u64 flags;
+            __u64 *data;
+            __u64 len_data;
+            __u64 len_image;
+            __u64 reserved2;
+            __u64 reserved3;
+            __u64 reserved4;
+            __u64 reserved5;
+        };
 
-    version:
-        Describes the version of the structure.
+    flags:
+        These flags indicate which optional fields are present in
+        this struct. Currently all fields are mandatory.
 
     data:
         Pointer to a buffer with part of the image to write to the
@@ -410,16 +414,7 @@ CXL_IOCTL_TRANSFER_IMAGE:
         Size of the buffer pointed to by data.
 
     len_image:
-	Full size of the image.
-
-    need_header:
-        Specifies if a header must be inserted in front of the image
-        before calling the hypervisor.
-
-    op:
-        Operation requested. After it is written, an image must be
-        verified.
-
+        Full size of the image.
 
 
 Sysfs Class

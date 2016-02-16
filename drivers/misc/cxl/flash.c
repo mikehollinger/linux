@@ -8,29 +8,25 @@
 #include "cxl.h"
 #include "hcalls.h"
 
-#define ADAPTER_IMAGE_HEADER_SIZE 128
-#define MAX_CHUNK_SIZE (SG_BUFFER_SIZE * SG_MAX_ENTRIES)
 #define DOWNLOAD_IMAGE 1
 #define VALIDATE_IMAGE 2
-#define INITIAL_VERSION 1
 
 struct ai_header {
 	u16 version;
-	u8  reserverd0[6];
+	u8  reserved0[6];
 	u16 vendor;
 	u16 device;
 	u16 subsystem_vendor;
 	u16 subsystem;
 	u64 image_offset;
 	u64 image_length;
-	u8  reserverd1[96];
+	u8  reserved1[96];
 };
 
-
 static struct semaphore sem;
-unsigned long *buffer[SG_MAX_ENTRIES];
+unsigned long *buffer[CXL_AI_MAX_ENTRIES];
 struct sg_list *le;
-static u64 token;
+static u64 continue_token;
 static unsigned int transfer;
 
 struct update_props_workarea {
@@ -229,6 +225,7 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 }
 
 static int handle_image(struct cxl *adapter,
+			int operation,
 			long (*fct)(u64, u64, u64, u64 *),
 			struct cxl_adapter_image *ai)
 {
@@ -236,10 +233,11 @@ static int handle_image(struct cxl *adapter,
 	struct ai_header *header = NULL;
 	unsigned int entries = 0, i;
 	void *dest, *from;
-	int rc = 0;
+	int rc = 0, need_header;
 
 	/* base adapter image header */
-	if (ai->need_header) {
+	need_header = (ai->flags & CXL_AI_NEED_HEADER);
+	if (need_header) {
 		header = kzalloc(sizeof(struct ai_header), GFP_KERNEL);
 		if (!header)
 			return -ENOMEM;
@@ -248,21 +246,21 @@ static int handle_image(struct cxl *adapter,
 		header->device = cpu_to_be16(adapter->guest->device);
 		header->subsystem_vendor = cpu_to_be16(adapter->guest->subsystem_vendor);
 		header->subsystem = cpu_to_be16(adapter->guest->subsystem);
-		header->image_offset = cpu_to_be64(ADAPTER_IMAGE_HEADER_SIZE);
+		header->image_offset = cpu_to_be64(CXL_AI_HEADER_SIZE);
 		header->image_length = cpu_to_be64(ai->len_image);
 	}
 
 	/* number of entries in the list */
 	len_chunk = ai->len_data;
-	if (ai->need_header)
-		len_chunk += ADAPTER_IMAGE_HEADER_SIZE;
+	if (need_header)
+		len_chunk += CXL_AI_HEADER_SIZE;
 
-	entries = len_chunk / SG_BUFFER_SIZE;
-	mod = len_chunk % SG_BUFFER_SIZE;
+	entries = len_chunk / CXL_AI_BUFFER_SIZE;
+	mod = len_chunk % CXL_AI_BUFFER_SIZE;
 	if (mod)
 		entries++;
 
-	if (entries > SG_MAX_ENTRIES) {
+	if (entries > CXL_AI_MAX_ENTRIES) {
 		rc = -EINVAL;
 		goto err;
 	}
@@ -282,13 +280,13 @@ static int handle_image(struct cxl *adapter,
 	from = ai->data;
 	for (i = 0; i < entries; i++) {
 		dest = buffer[i];
-		s_copy = SG_BUFFER_SIZE;
+		s_copy = CXL_AI_BUFFER_SIZE;
 
-		if ((ai->need_header) && (i == 0)) {
+		if ((need_header) && (i == 0)) {
 			/* add adapter image header */
 			memcpy(buffer[i], header, sizeof(struct ai_header));
-			s_copy = SG_BUFFER_SIZE - ADAPTER_IMAGE_HEADER_SIZE;
-			dest += ADAPTER_IMAGE_HEADER_SIZE; /* image offset */
+			s_copy = CXL_AI_BUFFER_SIZE - CXL_AI_HEADER_SIZE;
+			dest += CXL_AI_HEADER_SIZE; /* image offset */
 		}
 		if ((i == (entries - 1)) && mod)
 			s_copy = mod;
@@ -299,21 +297,21 @@ static int handle_image(struct cxl *adapter,
 
 		/* fill in the list */
 		le[i].phys_addr = cpu_to_be64(virt_to_phys(buffer[i]));
-		le[i].len = cpu_to_be64(SG_BUFFER_SIZE);
+		le[i].len = cpu_to_be64(CXL_AI_BUFFER_SIZE);
 		if ((i == (entries - 1)) && mod)
 			le[i].len = cpu_to_be64(mod);
 		from += s_copy;
 	}
 	pr_devel("%s (op: %i, need header: %i, entries: %i, token: %#llx)\n",
-		 __func__, ai->op, ai->need_header, entries, token);
+		 __func__, operation, need_header, entries, continue_token);
 
 	/*
 	 * download/validate the adapter image to the coherent
 	 * platform facility
 	 */
-	rc = fct(adapter->guest->handle, virt_to_phys(le), entries, &token);
+	rc = fct(adapter->guest->handle, virt_to_phys(le), entries, &continue_token);
 	if (rc == 0) /* success of download/validation operation */
-		token = 0;
+		continue_token = 0;
 
 err:
 	kfree(header);
@@ -322,13 +320,14 @@ err:
 }
 
 static int transfer_image(struct cxl *adapter,
-			 struct cxl_adapter_image *ai)
+			  int operation,
+			  struct cxl_adapter_image *ai)
 {
 	int rc = 0;
 
-	switch (ai->op) {
+	switch (operation) {
 	case DOWNLOAD_IMAGE:
-		rc = handle_image(adapter, &cxl_h_download_adapter_image, ai);
+		rc = handle_image(adapter, operation, &cxl_h_download_adapter_image, ai);
 		if (rc < 0) {
 			pr_devel("resetting adapter\n");
 			cxl_h_reset_adapter(adapter->guest->handle);
@@ -336,7 +335,7 @@ static int transfer_image(struct cxl *adapter,
 		return rc;
 
 	case VALIDATE_IMAGE:
-		rc = handle_image(adapter, &cxl_h_validate_adapter_image, ai);
+		rc = handle_image(adapter, operation, &cxl_h_validate_adapter_image, ai);
 		if (rc < 0) {
 			pr_devel("resetting adapter\n");
 			cxl_h_reset_adapter(adapter->guest->handle);
@@ -364,6 +363,7 @@ static int transfer_image(struct cxl *adapter,
 }
 
 static long ioctl_transfer_image(struct cxl *adapter,
+				 int operation,
 				 struct cxl_adapter_image __user *uai)
 {
 	struct cxl_adapter_image ai;
@@ -373,11 +373,7 @@ static long ioctl_transfer_image(struct cxl *adapter,
 	if (copy_from_user(&ai, uai, sizeof(struct cxl_adapter_image)))
 		return -EFAULT;
 
-	if (ai.version > INITIAL_VERSION) {
-		pr_err("cxl: Version not supported: %d\n", ai.version);
-		return -EINVAL;
-	}
-	return transfer_image(adapter, &ai);
+	return transfer_image(adapter, operation, &ai);
 }
 
 static int device_open(struct inode *inode, struct file *file)
@@ -388,7 +384,7 @@ static int device_open(struct inode *inode, struct file *file)
 
 	pr_devel("in %s\n", __func__);
 
-	BUG_ON(sizeof(struct ai_header) != ADAPTER_IMAGE_HEADER_SIZE);
+	BUG_ON(sizeof(struct ai_header) != CXL_AI_HEADER_SIZE);
 
 	/* Allows one process to open the device by using a semaphore */
 	if (down_interruptible(&sem) != 0)
@@ -398,10 +394,10 @@ static int device_open(struct inode *inode, struct file *file)
 		return -ENODEV;
 
 	file->private_data = adapter;
-	token = 0;
+	continue_token = 0;
 	transfer = 0;
 
-	for (i = 0; i < SG_MAX_ENTRIES; i++)
+	for (i = 0; i < CXL_AI_MAX_ENTRIES; i++)
 		buffer[i] = NULL;
 
 	/* aligned buffer containing list entries which describes up to
@@ -419,7 +415,7 @@ static int device_open(struct inode *inode, struct file *file)
 		goto err;
 	}
 
-	for (i = 0; i < SG_MAX_ENTRIES; i++) {
+	for (i = 0; i < CXL_AI_MAX_ENTRIES; i++) {
 		buffer[i] = (unsigned long *)get_zeroed_page(GFP_KERNEL);
 		if (!buffer[i]) {
 			rc = -ENOMEM;
@@ -430,7 +426,7 @@ static int device_open(struct inode *inode, struct file *file)
 	return 0;
 
 err1:
-	for (i = 0; i < SG_MAX_ENTRIES; i++) {
+	for (i = 0; i < CXL_AI_MAX_ENTRIES; i++) {
 		if (buffer[i])
 			free_page((unsigned long) buffer[i]);
 	}
@@ -449,8 +445,13 @@ static long device_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	pr_devel("in %s\n", __func__);
 
-	if (cmd == CXL_IOCTL_TRANSFER_IMAGE)
+	if (cmd == CXL_IOCTL_DOWNLOAD_IMAGE)
 		return ioctl_transfer_image(adapter,
+					    DOWNLOAD_IMAGE,
+					    (struct cxl_adapter_image __user *)arg);
+	else if (cmd == CXL_IOCTL_VALIDATE_IMAGE)
+		return ioctl_transfer_image(adapter,
+					    VALIDATE_IMAGE,
 					    (struct cxl_adapter_image __user *)arg);
 	else
 		return -EINVAL;
@@ -469,7 +470,7 @@ static int device_close(struct inode *inode, struct file *file)
 
 	pr_devel("in %s\n", __func__);
 
-	for (i = 0; i < SG_MAX_ENTRIES; i++) {
+	for (i = 0; i < CXL_AI_MAX_ENTRIES; i++) {
 		if (buffer[i])
 			free_page((unsigned long) buffer[i]);
 	}
@@ -479,11 +480,15 @@ static int device_close(struct inode *inode, struct file *file)
 
 	up(&sem);
 	put_device(&adapter->dev);
-	token = 0;
+	continue_token = 0;
 
 	/* reload the module */
 	if (transfer)
 		cxl_guest_reload_module(adapter);
+	else {
+		pr_devel("resetting adapter\n");
+		cxl_h_reset_adapter(adapter->guest->handle);
+	}
 
 	transfer = 0;
 	return 0;
