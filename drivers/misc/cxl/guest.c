@@ -1125,10 +1125,6 @@ err1:
 void cxl_guest_reload_module(struct cxl *adapter)
 {
 	struct platform_device *pdev;
-	int afu;
-
-	for (afu = 0; afu < adapter->slices; afu++)
-		cxl_guest_remove_afu(adapter->afu[afu]);
 
 	pdev = adapter->guest->pdev;
 	cxl_guest_remove_adapter(adapter);

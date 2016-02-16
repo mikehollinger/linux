@@ -342,6 +342,11 @@ static int transfer_image(struct cxl *adapter,
 			return rc;
 		}
 		if (rc == 0) {
+			int afu;
+			pr_devel("remove curent afu\n");
+			for (afu = 0; afu < adapter->slices; afu++)
+				cxl_guest_remove_afu(adapter->afu[afu]);
+
 			pr_devel("resetting adapter\n");
 			cxl_h_reset_adapter(adapter->guest->handle);
 
