@@ -57,6 +57,7 @@ struct cxl_afu_id {
 
 /* base adapter image header is included in the image */
 #define CXL_AI_NEED_HEADER	0x0000000000000001ULL
+#define CXL_AI_ALL		CXL_AI_NEED_HEADER
 
 #define CXL_AI_HEADER_SIZE 128
 #define CXL_AI_BUFFER_SIZE 4096
@@ -68,10 +69,10 @@ struct cxl_adapter_image {
 	__u64 *data;
 	__u64 len_data;
 	__u64 len_image;
+	__u64 reserved1;
 	__u64 reserved2;
 	__u64 reserved3;
 	__u64 reserved4;
-	__u64 reserved5;
 };
 
 /* ioctl numbers */

@@ -378,6 +378,13 @@ static long ioctl_transfer_image(struct cxl *adapter,
 	if (copy_from_user(&ai, uai, sizeof(struct cxl_adapter_image)))
 		return -EFAULT;
 
+	/*
+	 * Make sure reserved fields and bits are set to 0
+	 */
+	if (ai.reserved1 || ai.reserved2 || ai.reserved3 || ai.reserved4 ||
+		(ai.flags & ~CXL_AI_ALL))
+		return -EINVAL;
+
 	return transfer_image(adapter, operation, &ai);
 }
 
