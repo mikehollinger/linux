@@ -827,9 +827,8 @@ static int pci_init_afu(struct cxl *adapter, int slice, struct pci_dev *dev)
 		return -ENOMEM;
 
 	afu->native = kzalloc(sizeof(struct cxl_afu_native), GFP_KERNEL);
-	if (!afu->native) {
+	if (!afu->native)
 		goto err_free_afu;
-	}
 
 	mutex_init(&afu->native->spa_mutex);
 

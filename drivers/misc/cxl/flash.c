@@ -324,6 +324,7 @@ static int transfer_image(struct cxl *adapter,
 			  struct cxl_adapter_image *ai)
 {
 	int rc = 0;
+	int afu;
 
 	switch (operation) {
 	case DOWNLOAD_IMAGE:
@@ -342,7 +343,6 @@ static int transfer_image(struct cxl *adapter,
 			return rc;
 		}
 		if (rc == 0) {
-			int afu;
 			pr_devel("remove curent afu\n");
 			for (afu = 0; afu < adapter->slices; afu++)
 				cxl_guest_remove_afu(adapter->afu[afu]);

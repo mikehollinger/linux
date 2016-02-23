@@ -622,8 +622,8 @@ static long cxl_h_download_facility(u64 unit_address, u64 op,
 }
 
 /**
- * cxl_h_download_adapter_image - Download the base image in the coherent
- *                                platoform facility.
+ * cxl_h_download_adapter_image - Download the base image to the coherent
+ *                                platform facility.
  */
 long cxl_h_download_adapter_image(u64 unit_address,
 				  u64 list_address, u64 num,
@@ -636,7 +636,7 @@ long cxl_h_download_adapter_image(u64 unit_address,
 
 /**
  * cxl_h_validate_adapter_image - Validate the base image in the coherent
- *                                platoform facility.
+ *                                platform facility.
  */
 long cxl_h_validate_adapter_image(u64 unit_address,
 				  u64 list_address, u64 num,
