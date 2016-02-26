@@ -120,7 +120,6 @@ static int update_node(__be32 phandle, s32 scope)
 	buf = kzalloc(RTAS_DATA_BUF_SIZE, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
-	memset(buf, 0, RTAS_DATA_BUF_SIZE);
 
 	dn = of_find_node_by_phandle(be32_to_cpu(phandle));
 	if (!dn) {
@@ -184,7 +183,6 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 	buf = kzalloc(RTAS_DATA_BUF_SIZE, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
-	memset(buf, 0, RTAS_DATA_BUF_SIZE);
 
 	unwa = (struct update_nodes_workarea *)&buf[0];
 	unwa->unit_address = cpu_to_be64(adapter->guest->handle);
