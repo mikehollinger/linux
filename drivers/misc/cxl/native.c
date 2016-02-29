@@ -967,7 +967,8 @@ int cxl_check_error(struct cxl_afu *afu)
 	return (cxl_p1n_read(afu, CXL_PSL_SCNTL_An) == ~0ULL);
 }
 
-static bool native_support_attributes(const char *attr_name)
+static bool native_support_attributes(const char *attr_name,
+				      enum cxl_attrs type)
 {
 	return true;
 }
