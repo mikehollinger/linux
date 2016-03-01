@@ -228,11 +228,6 @@ int cxl_pci_vphb_add(struct cxl_afu *afu)
 	if (!phb)
 		return -ENODEV;
 
-	if (!cpu_has_feature(CPU_FTR_HVMODE)) {
-		eeh_add_device_tree_early(phb->pci_data);
-		printk("eeh_add_device_tree_early\n");
-	}
-
 	/* Setup parent in sysfs */
 	phb->parent = parent;
 
