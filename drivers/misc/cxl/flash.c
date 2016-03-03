@@ -153,7 +153,8 @@ static int update_node(__be32 phandle, s32 scope)
 			prop_data += sizeof(vd);
 
 			if ((vd != 0x00000000) && (vd != 0x80000000)) {
-				ret = update_property(dn, prop_name, vd, prop_data);
+				ret = update_property(dn, prop_name, vd,
+						prop_data);
 				if (ret)
 					pr_err("cxl: Could not update property %s - %i\n",
 					       prop_name, ret);
@@ -210,7 +211,7 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 					update_node(phandle, scope);
 					break;
 				case OPCODE_ADD:
-					/* nothing to do, just move the pointer */
+					/* nothing to do, just move pointer */
 					drc_index = *data++;
 					break;
 				}
@@ -222,8 +223,7 @@ static int update_devicetree(struct cxl *adapter, s32 scope)
 	return 0;
 }
 
-static int handle_image(struct cxl *adapter,
-			int operation,
+static int handle_image(struct cxl *adapter, int operation,
 			long (*fct)(u64, u64, u64, u64 *),
 			struct cxl_adapter_image *ai)
 {
@@ -275,7 +275,7 @@ static int handle_image(struct cxl *adapter,
 	 *          | data                                             |
 	 *          ----------------------------------------------------
 	 */
-	from = ai->data;
+	from = (void *) ai->data;
 	for (i = 0; i < entries; i++) {
 		dest = buffer[i];
 		s_copy = CXL_AI_BUFFER_SIZE;
@@ -307,7 +307,8 @@ static int handle_image(struct cxl *adapter,
 	 * download/validate the adapter image to the coherent
 	 * platform facility
 	 */
-	rc = fct(adapter->guest->handle, virt_to_phys(le), entries, &continue_token);
+	rc = fct(adapter->guest->handle, virt_to_phys(le), entries,
+		&continue_token);
 	if (rc == 0) /* success of download/validation operation */
 		continue_token = 0;
 
@@ -317,16 +318,16 @@ err:
 	return rc;
 }
 
-static int transfer_image(struct cxl *adapter,
-			  int operation,
-			  struct cxl_adapter_image *ai)
+static int transfer_image(struct cxl *adapter, int operation,
+			struct cxl_adapter_image *ai)
 {
 	int rc = 0;
 	int afu;
 
 	switch (operation) {
 	case DOWNLOAD_IMAGE:
-		rc = handle_image(adapter, operation, &cxl_h_download_adapter_image, ai);
+		rc = handle_image(adapter, operation,
+				&cxl_h_download_adapter_image, ai);
 		if (rc < 0) {
 			pr_devel("resetting adapter\n");
 			cxl_h_reset_adapter(adapter->guest->handle);
@@ -334,7 +335,8 @@ static int transfer_image(struct cxl *adapter,
 		return rc;
 
 	case VALIDATE_IMAGE:
-		rc = handle_image(adapter, operation, &cxl_h_validate_adapter_image, ai);
+		rc = handle_image(adapter, operation,
+				&cxl_h_validate_adapter_image, ai);
 		if (rc < 0) {
 			pr_devel("resetting adapter\n");
 			cxl_h_reset_adapter(adapter->guest->handle);
@@ -365,9 +367,8 @@ static int transfer_image(struct cxl *adapter,
 	return -EINVAL;
 }
 
-static long ioctl_transfer_image(struct cxl *adapter,
-				 int operation,
-				 struct cxl_adapter_image __user *uai)
+static long ioctl_transfer_image(struct cxl *adapter, int operation,
+				struct cxl_adapter_image __user *uai)
 {
 	struct cxl_adapter_image ai;
 
@@ -457,12 +458,12 @@ static long device_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	if (cmd == CXL_IOCTL_DOWNLOAD_IMAGE)
 		return ioctl_transfer_image(adapter,
-					    DOWNLOAD_IMAGE,
-					    (struct cxl_adapter_image __user *)arg);
+					DOWNLOAD_IMAGE,
+					(struct cxl_adapter_image __user *)arg);
 	else if (cmd == CXL_IOCTL_VALIDATE_IMAGE)
 		return ioctl_transfer_image(adapter,
-					    VALIDATE_IMAGE,
-					    (struct cxl_adapter_image __user *)arg);
+					VALIDATE_IMAGE,
+					(struct cxl_adapter_image __user *)arg);
 	else
 		return -EINVAL;
 }
@@ -525,8 +526,9 @@ int cxl_guest_add_chardev(struct cxl *adapter)
 	devt = MKDEV(MAJOR(cxl_get_dev()), CXL_CARD_MINOR(adapter));
 	cdev_init(&adapter->guest->cdev, &fops);
 	if ((rc = cdev_add(&adapter->guest->cdev, devt, 1))) {
-		dev_err(&adapter->dev, "Unable to add chardev on adapter (card%i): %i\n",
-					adapter->adapter_num, rc);
+		dev_err(&adapter->dev,
+			"Unable to add chardev on adapter (card%i): %i\n",
+			adapter->adapter_num, rc);
 		goto err;
 	}
 	adapter->dev.devt = devt;

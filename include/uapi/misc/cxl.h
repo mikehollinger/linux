@@ -66,7 +66,7 @@ struct cxl_afu_id {
 
 struct cxl_adapter_image {
 	__u64 flags;
-	__u64 *data;
+	__u64 data;
 	__u64 len_data;
 	__u64 len_image;
 	__u64 reserved1;
