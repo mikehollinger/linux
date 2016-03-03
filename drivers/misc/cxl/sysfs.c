@@ -604,7 +604,7 @@ void cxl_sysfs_afu_remove(struct cxl_afu *afu)
 	for (i = 0; i < ARRAY_SIZE(afu_attrs); i++) {
 		dev_attr = &afu_attrs[i];
 		if (cxl_ops->support_attributes(dev_attr->attr.name,
-						CXL_AFU_ATTRS)) 
+						CXL_AFU_ATTRS))
 			device_remove_file(&afu->dev, &afu_attrs[i]);
 	}
 
@@ -670,7 +670,7 @@ err:
 	for (i--; i >= 0; i--) {
 		dev_attr = &afu_attrs[i];
 		if (cxl_ops->support_attributes(dev_attr->attr.name,
-						CXL_AFU_ATTRS)) 
+						CXL_AFU_ATTRS))
 		device_remove_file(&afu->dev, &afu_attrs[i]);
 	}
 	return rc;
