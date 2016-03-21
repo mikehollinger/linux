@@ -108,8 +108,48 @@ static inline void cxl_slbia_core(struct mm_struct *mm)
 	spin_unlock(&adapter_idr_lock);
 }
 
+static inline int cxl_eeh_failure_core(unsigned long addr)
+{
+	struct cxl *adapter;
+	struct cxl_afu *afu;
+	int card, slice, rc = 0;
+
+
+	if (cpu_has_feature(CPU_FTR_HVMODE))
+		return 0;
+
+	pr_devel("%s called - addr: %lx\n", __func__, addr);
+	rc = -EFAULT;
+
+	spin_lock(&adapter_idr_lock);
+	idr_for_each_entry(&cxl_adapter_idr, adapter, card) {
+		spin_lock(&adapter->afu_list_lock);
+		for (slice = 0; slice < adapter->slices; slice++) {
+			afu = adapter->afu[slice];
+			if (!afu || !afu->enabled)
+				continue;
+			pr_devel("%s called - psn_phys:%llx, pp_size:%llx, ps_size: %llx, p2n_phys:%llx, p2n_size:%llx, \n",
+				 __func__,
+				 afu->psn_phys, afu->pp_size, afu->adapter->ps_size,
+				 afu->guest->p2n_phys, afu->guest->p2n_size);
+			if ((addr >= afu->psn_phys) &&
+			    (addr <= (afu->psn_phys + afu->adapter->ps_size))) {
+			    rc = 0;
+			    if (!cxl_ops->link_ok(afu->adapter, afu))
+				rc = -EIO;
+			    break;
+			}
+		}
+		spin_unlock(&adapter->afu_list_lock);
+	}
+	spin_unlock(&adapter_idr_lock);
+
+	return rc;
+}
+
 static struct cxl_calls cxl_calls = {
 	.cxl_slbia = cxl_slbia_core,
+	.cxl_eeh_failure = cxl_eeh_failure_core,
 	.owner = THIS_MODULE,
 };
 
@@ -281,6 +321,18 @@ int cxl_afu_select_best_mode(struct cxl_afu *afu)
 	return 0;
 }
 
+static inline void cxl_eeh_enable(void)
+{
+	if (!cpu_has_feature(CPU_FTR_HVMODE))
+		eeh_add_flag(EEH_CXL_ENABLED);
+}
+
+static inline void cxl_eeh_disable(void)
+{
+	if (!cpu_has_feature(CPU_FTR_HVMODE))
+		eeh_clear_flag(EEH_CXL_ENABLED);
+}
+
 static int __init init_cxl(void)
 {
 	int rc = 0;
@@ -299,6 +351,8 @@ static int __init init_cxl(void)
 	} else {
 		cxl_ops = &cxl_guest_ops;
 		rc = platform_driver_register(&cxl_of_driver);
+		if (!rc)
+			cxl_eeh_enable();
 	}
 	if (rc)
 		goto err1;
@@ -317,8 +371,10 @@ static void exit_cxl(void)
 {
 	if (cpu_has_feature(CPU_FTR_HVMODE))
 		pci_unregister_driver(&cxl_pci_driver);
-	else
+	else {
+		cxl_eeh_disable();
 		platform_driver_unregister(&cxl_of_driver);
+	}
 
 	cxl_debugfs_exit();
 	cxl_file_exit();

@@ -18,6 +18,9 @@
 #define CXL_ERROR_DETECTED_EVENT	1
 #define CXL_SLOT_RESET_EVENT		2
 #define CXL_RESUME_EVENT		3
+#define CXL_KTHREAD 			"cxl_kthread"
+
+static DECLARE_WAIT_QUEUE_HEAD(wq);
 
 static void pci_error_handlers(struct cxl_afu *afu,
 				int bus_error_event,
@@ -177,6 +180,9 @@ static int afu_read_error_state(struct cxl_afu *afu, int *state_out)
 {
 	u64 state;
 	int rc = 0;
+
+	if(!afu)
+		return -EIO;
 
 	rc = cxl_h_read_error_state(afu->guest->handle, &state);
 	if (!rc) {
@@ -643,6 +649,8 @@ static void guest_release_afu(struct device *dev)
 
 	pr_devel("%s\n", __func__);
 
+	if (afu->guest->kthread_tsk && !IS_ERR(afu->guest->kthread_tsk))
+		kthread_stop(afu->guest->kthread_tsk);
 	idr_destroy(&afu->contexts_idr);
 
 	kfree(afu->guest);
@@ -859,19 +867,74 @@ static int afu_update_state(struct cxl_afu *afu)
 	return rc;
 }
 
+static int handle_state_thread(void *data)
+{
+	struct cxl_afu *afu;
+	int state;
+	int rc = 0;
+
+	pr_devel("in %s\n", __func__);
+
+	afu = (struct cxl_afu*)data;
+	do {
+		set_current_state(TASK_INTERRUPTIBLE);
+
+		if ((afu) && !(rc = afu_update_state(afu))) {
+			if (!afu_read_error_state(afu, &state) &&
+			    ((state == H_STATE_NORMAL) ||
+			     (state == H_STATE_PERM_UNAVAILABLE)))
+				goto out;
+		} else
+			goto out;
+		schedule_timeout(msecs_to_jiffies(3000));
+	} while(!kthread_should_stop());
+
+out:
+	/* wake up all processes */
+	afu->guest->event_flag = 1;
+	wake_up_interruptible_all(&wq);
+	afu->guest->kthread_tsk = NULL;
+	return rc;
+}
+
 static int afu_do_recovery(struct cxl_afu *afu)
 {
-	int rc;
+	int state;
+	int rc = 0;
+
+	pr_devel("in %s (%s)\n", __func__, current->comm);
+	if (current->comm && strcmp(current->comm, CXL_KTHREAD) == 0)
+		return 0;
 
 	/* many threads can arrive here, in case of detach_all for example.
 	 * Only one needs to drive the recovery
 	 */
 	if (mutex_trylock(&afu->guest->recovery_lock)) {
-		rc = afu_update_state(afu);
+		if (afu->guest->kthread_tsk == NULL) {
+			afu->guest->event_flag = 0;
+
+			/* start kernel thread to handle the state of the afu */
+			afu->guest->kthread_tsk = kthread_run(&handle_state_thread,
+						  (void *)afu, CXL_KTHREAD);
+			if (IS_ERR(afu->guest->kthread_tsk)) {
+				pr_devel("cannot start state kthread\n");
+				rc = PTR_ERR(afu->guest->kthread_tsk);
+				afu->guest->kthread_tsk = NULL;
+			}
+		}
 		mutex_unlock(&afu->guest->recovery_lock);
-		return rc;
+		if (rc)
+			goto out;
 	}
-	return 0;
+
+	/* The process must sleep until the state changes */
+	if (!afu_read_error_state(afu, &state) &&
+	   (state == H_STATE_DISABLE))
+		wait_event_interruptible_timeout(wq,
+						(afu->guest->event_flag != 0),
+						msecs_to_jiffies(8000));
+out:
+	return rc;
 }
 
 static bool guest_link_ok(struct cxl *cxl, struct cxl_afu *afu)

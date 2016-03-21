@@ -38,10 +38,13 @@ static inline void cxl_ctx_put(void)
 
 void cxl_slbia(struct mm_struct *mm);
 
+int cxl_check_eeh_failure(unsigned long addr);
+
 #else /* CONFIG_CXL_BASE */
 
 static inline bool cxl_ctx_in_use(void) { return false; }
 static inline void cxl_slbia(struct mm_struct *mm) {}
+static inline int cxl_check_eeh_failure(unsigned long addr) {}
 
 #endif /* CONFIG_CXL_BASE */
 

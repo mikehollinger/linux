@@ -45,7 +45,7 @@
 #include <asm/machdep.h>
 #include <asm/ppc-pci.h>
 #include <asm/rtas.h>
-
+#include <misc/cxl-base.h>
 
 /** Overview:
  *  EEH, or "Extended Error Handling" is a PCI bridge technology for
@@ -598,11 +598,20 @@ int eeh_check_failure(const volatile void __iomem *token)
 {
 	unsigned long addr;
 	struct eeh_dev *edev;
+	int rc;
 
 	/* Finding the phys addr + pci device; this is pretty quick. */
 	addr = eeh_token_to_phys((unsigned long __force) token);
 	edev = eeh_addr_cache_get_dev(addr);
 	if (!edev) {
+#ifdef CONFIG_CXL_BASE
+		if (eeh_has_flag(EEH_CXL_ENABLED)) {
+			rc = cxl_check_eeh_failure(addr);
+			if (rc == -EFAULT)
+				eeh_stats.no_device++;
+			return rc;
+		}
+#endif
 		eeh_stats.no_device++;
 		return 0;
 	}

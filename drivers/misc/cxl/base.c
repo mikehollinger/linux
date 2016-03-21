@@ -68,6 +68,22 @@ void cxl_slbia(struct mm_struct *mm)
 	cxl_calls_put(calls);
 }
 
+int cxl_check_eeh_failure(unsigned long addr)
+{
+	struct cxl_calls *calls;
+	int rc = 0;
+
+	calls = cxl_calls_get();
+	if (!calls)
+		return 0;
+
+	if (cxl_ctx_in_use())
+		rc = calls->cxl_eeh_failure(addr);
+
+	cxl_calls_put(calls);
+	return rc;
+}
+
 int register_cxl_calls(struct cxl_calls *calls)
 {
 	if (cxl_calls)

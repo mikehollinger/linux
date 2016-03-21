@@ -43,6 +43,7 @@ struct pci_dn;
 #define EEH_VALID_PE_ZERO	0x10	/* PE#0 is valid	*/
 #define EEH_ENABLE_IO_FOR_LOG	0x20	/* Enable IO for log	*/
 #define EEH_EARLY_DUMP_LOG	0x40	/* Dump log immediately	*/
+#define EEH_CXL_ENABLED		0x80	/* EEH for CXL		*/
 
 /*
  * Delay for PE reset, all in ms
@@ -236,7 +237,8 @@ static inline bool eeh_has_flag(int flag)
 static inline bool eeh_enabled(void)
 {
 	if (eeh_has_flag(EEH_FORCE_DISABLED) ||
-	    !eeh_has_flag(EEH_ENABLED))
+	    !(eeh_has_flag(EEH_ENABLED)	||
+		eeh_has_flag(EEH_CXL_ENABLED)))
 		return false;
 
 	return true;

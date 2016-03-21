@@ -19,6 +19,7 @@
 #include <linux/io.h>
 #include <linux/pci.h>
 #include <linux/fs.h>
+#include <linux/kthread.h>
 #include <asm/cputable.h>
 #include <asm/mmu.h>
 #include <asm/reg.h>
@@ -380,6 +381,8 @@ struct cxl_afu_guest {
 	u64 p2n_size;
 	int max_ints;
 	struct mutex recovery_lock;
+	struct task_struct *kthread_tsk;
+	int event_flag;
 	int previous_state;
 };
 
@@ -695,6 +698,7 @@ ssize_t cxl_pci_afu_read_err_buffer(struct cxl_afu *afu, char *buf,
 
 struct cxl_calls {
 	void (*cxl_slbia)(struct mm_struct *mm);
+	int (*cxl_eeh_failure)(unsigned long addr);
 	struct module *owner;
 };
 int register_cxl_calls(struct cxl_calls *calls);
