@@ -79,11 +79,12 @@
 #define WWPN_BUF_LEN	(WWPN_LEN + 1)
 
 enum undo_level {
-	UNDO_NOOP = 0,
+	RELEASE_CONTEXT = 0,
 	FREE_IRQ,
 	UNMAP_ONE,
 	UNMAP_TWO,
-	UNMAP_THREE
+	UNMAP_THREE,
+	UNDO_START
 };
 
 struct dev_dependent_vals {
