@@ -208,20 +208,15 @@ static struct pci_controller_ops cxl_pci_controller_ops =
 
 int cxl_pci_vphb_add(struct cxl_afu *afu)
 {
-	struct pci_dev *phys_dev;
-	struct pci_controller *phb, *phys_phb;
+	struct pci_controller *phb;
 	struct device_node *vphb_dn;
 	struct device *parent;
 
-	if (cpu_has_feature(CPU_FTR_HVMODE)) {
-		phys_dev = to_pci_dev(afu->adapter->dev.parent);
-		phys_phb = pci_bus_to_host(phys_dev->bus);
-		vphb_dn = phys_phb->dn;
-		parent = &phys_dev->dev;
-	} else {
-		vphb_dn = afu->adapter->dev.parent->of_node;
-		parent = afu->adapter->dev.parent;
-	}
+	/* make the cxl card the parent of the vphb, to easily indentify
+	 * potential devices attached to the card
+	 */
+	parent = afu->adapter->dev.parent;
+	vphb_dn = parent->of_node;
 
 	/* Alloc and setup PHB data structure */
 	phb = pcibios_alloc_controller(vphb_dn);
