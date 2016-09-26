@@ -181,6 +181,7 @@ struct afu {
 	u64 *hrrq_curr;
 	bool toggle;
 	bool read_room;
+	atomic_t cmds_active;	/* Number of currently active AFU commands */
 	atomic64_t room;
 	u64 hb;
 	u32 internal_lun;	/* User-desired LUN mode for this AFU */
