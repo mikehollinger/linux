@@ -89,7 +89,6 @@ enum undo_level {
 struct dev_dependent_vals {
 	u64 max_sectors;
 	u64 flags;
-#define CXLFLASH_NOTIFY_SHUTDOWN   0x0000000000000001ULL
 };
 
 struct asyc_intr_info {
