@@ -709,13 +709,14 @@ int cxlflash_disk_release(struct scsi_device *sdev,
  * @cfg:	Internal structure associated with the host.
  * @ctxi:	Context to release.
  *
- * This routine is safe to be called with a a non-initialized context.
- * Also note that the routine conditionally checks for the existence
- * of the context control map before clearing the RHT registers and
- * context capabilities because it is possible to destroy a context
- * while the context is in the error state (previous mapping was
- * removed [so there is no need to worry about clearing] and context
- * is waiting for a new mapping).
+ * This routine is safe to be called with a a non-initialized context
+ * and is tolerant of being called with the context's mutex held (it
+ * will be unlocked if necessary before freeing). Also note that the
+ * routine conditionally checks for the existence of the context control
+ * map before clearing the RHT registers and context capabilities because
+ * it is possible to destroy a context while the context is in the error
+ * state (previous mapping was removed [so there is no need to worry about
+ * clearing] and context is waiting for a new mapping).
  */
 static void destroy_context(struct cxlflash_cfg *cfg,
 			    struct ctx_info *ctxi)
@@ -731,6 +732,9 @@ static void destroy_context(struct cxlflash_cfg *cfg,
 			writeq_be(0, &ctxi->ctrl_map->rht_cnt_id);
 			writeq_be(0, &ctxi->ctrl_map->ctx_cap);
 		}
+
+		if (mutex_is_locked(&ctxi->mutex))
+			mutex_unlock(&ctxi->mutex);
 	}
 
 	/* Free memory associated with context */
@@ -791,6 +795,9 @@ err:
  * @adap_fd:	Previously obtained adapter fd associated with CXL context.
  * @file:	Previously obtained file associated with CXL context.
  * @perms:	User-specified permissions.
+ *
+ * Upon return, the context is marked as initialized and the context's mutex
+ * is locked.
  */
 static void init_context(struct ctx_info *ctxi, struct cxlflash_cfg *cfg,
 			 struct cxl_context *ctx, int ctxid, int adap_fd,
@@ -809,6 +816,8 @@ static void init_context(struct ctx_info *ctxi, struct cxlflash_cfg *cfg,
 	mutex_init(&ctxi->mutex);
 	INIT_LIST_HEAD(&ctxi->luns);
 	INIT_LIST_HEAD(&ctxi->list); /* initialize for list_empty() */
+
+	mutex_lock(&ctxi->mutex);
 }
 
 /**
@@ -1436,6 +1445,7 @@ static int cxlflash_disk_attach(struct scsi_device *sdev,
 	 * knows about us yet; we can be the only one holding our mutex.
 	 */
 	list_add(&lun_access->list, &ctxi->luns);
+	mutex_unlock(&ctxi->mutex);
 	mutex_lock(&cfg->ctx_tbl_list_mutex);
 	mutex_lock(&ctxi->mutex);
 	cfg->ctx_tbl[ctxid] = ctxi;
@@ -1484,7 +1494,7 @@ err:
 		file = NULL;
 	}
 
-	/* Cleanup our context */
+	/* Cleanup our context; safe to call even with mutex locked */
 	if (ctxi) {
 		destroy_context(cfg, ctxi);
 		ctxi = NULL;
