@@ -912,8 +912,7 @@ static int _cxlflash_disk_detach(struct scsi_device *sdev,
 	 * Release the context reference and the sdev reference that
 	 * bound this LUN to the context.
 	 */
-	if (kref_put(&ctxi->kref, remove_context))
-		put_ctx = false;
+	put_ctx = !kref_put(&ctxi->kref, remove_context);
 	scsi_device_put(sdev);
 out:
 	if (put_ctx)
