@@ -100,6 +100,7 @@ struct ctx_info {
 
 	struct cxl_ioctl_start_work work;
 	u64 ctxid;
+	int lfd;
 	pid_t pid;
 	bool initialized;
 	bool unavail;
