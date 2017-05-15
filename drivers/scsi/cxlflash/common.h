@@ -134,6 +134,7 @@ struct afu_cmd {
 	struct sisl_ioasa sa;	/* IOASA must follow IOARCB */
 	spinlock_t slock;
 	struct completion cevent;
+	char *buf;		/* per command buffer */
 	struct afu *parent;
 	int slot;
 	atomic_t free;
