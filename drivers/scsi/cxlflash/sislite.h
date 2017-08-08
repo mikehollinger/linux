@@ -479,7 +479,7 @@ struct sisl_rht_entry_f1 {
 
 #define PORT0  0x01U
 #define PORT1  0x02U
-#define PORT_MASK(_n)	((1 << (_n)) - 1)
+#define BOTH_PORTS    (PORT0 | PORT1)
 
 /* AFU Sync Mode byte */
 #define AFU_LW_SYNC 0x0U
