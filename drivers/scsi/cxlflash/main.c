@@ -2847,7 +2847,6 @@ static struct pci_driver cxlflash_driver = {
  */
 static int __init init_cxlflash(void)
 {
-	check_sizes();
 	cxlflash_list_init();
 
 	return pci_register_driver(&cxlflash_driver);
