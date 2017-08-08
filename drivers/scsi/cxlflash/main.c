@@ -1155,18 +1155,19 @@ cxlflash_sync_err_irq_exit:
 }
 
 /**
- * process_hrrq() - process the read-response queue
- * @afu:	AFU associated with the host.
+ * cxlflash_rrq_irq() - interrupt handler for read-response queue (normal path)
+ * @irq:	Interrupt number.
+ * @data:	Private data provided at interrupt registration, the AFU.
  *
- * Return: The number of entries processed.
+ * Return: Always return IRQ_HANDLED.
  */
-static int process_hrrq(struct afu *afu)
+static irqreturn_t cxlflash_rrq_irq(int irq, void *data)
 {
+	struct afu *afu = (struct afu *)data;
 	struct afu_cmd *cmd;
 	struct sisl_ioasa *ioasa;
 	struct sisl_ioarcb *ioarcb;
 	bool toggle = afu->toggle;
-	int num_hrrq = 0;
 	u64 entry,
 	    *hrrq_start = afu->hrrq_start,
 	    *hrrq_end = afu->hrrq_end,
@@ -1200,27 +1201,11 @@ static int process_hrrq(struct afu *afu)
 		}
 
 		atomic_inc(&afu->hsq_credits);
-		num_hrrq++;
 	}
 
 	afu->hrrq_curr = hrrq_curr;
 	afu->toggle = toggle;
 
-	return num_hrrq;
-}
-
-/**
- * cxlflash_rrq_irq() - interrupt handler for read-response queue (normal path)
- * @irq:	Interrupt number.
- * @data:	Private data provided at interrupt registration, the AFU.
- *
- * Return: Always return IRQ_HANDLED.
- */
-static irqreturn_t cxlflash_rrq_irq(int irq, void *data)
-{
-	struct afu *afu = (struct afu *)data;
-
-	process_hrrq(afu);
 	return IRQ_HANDLED;
 }
 
