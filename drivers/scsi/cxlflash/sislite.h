@@ -367,7 +367,6 @@ struct sisl_global_regs {
 #define SISL_INTVER_CAP_RESERVED_CMD_MODE_B	0x100000000000ULL
 };
 
-#define CXLFLASH_MAX_FC_PORTS   2
 #define CXLFLASH_NUM_FC_PORTS   2
 #define CXLFLASH_MAX_CONTEXT  512	/* how many contexts per afu */
 #define CXLFLASH_NUM_VLUNS    512

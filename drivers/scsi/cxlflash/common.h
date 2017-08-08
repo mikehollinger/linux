@@ -25,9 +25,7 @@
 
 extern const struct file_operations cxlflash_cxl_fops;
 
-#define MAX_CONTEXT	CXLFLASH_MAX_CONTEXT	/* num contexts per afu */
-#define NUM_FC_PORTS	CXLFLASH_NUM_FC_PORTS	/* ports per AFU */
-#define MAX_FC_PORTS	CXLFLASH_MAX_FC_PORTS	/* ports per AFU */
+#define MAX_CONTEXT  CXLFLASH_MAX_CONTEXT       /* num contexts per afu */
 
 #define CXLFLASH_BLOCK_SIZE	4096	/* 4K blocks */
 #define CXLFLASH_MAX_XFER_SIZE	16777216	/* 16MB transfer */
@@ -100,7 +98,6 @@ struct cxlflash_cfg {
 	struct pci_dev *dev;
 	struct pci_device_id *dev_id;
 	struct Scsi_Host *host;
-	int num_fc_ports;
 
 	ulong cxlflash_regs_pci;
 
@@ -121,7 +118,7 @@ struct cxlflash_cfg {
 	struct file_operations cxl_fops;
 
 	/* Parameters that are LUN table related */
-	int last_lun_index[MAX_FC_PORTS];
+	int last_lun_index[CXLFLASH_NUM_FC_PORTS];
 	int promote_lun_index;
 	struct list_head lluns; /* list of llun_info structs */
 
