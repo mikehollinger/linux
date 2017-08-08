@@ -2058,16 +2058,13 @@ static int cxlflash_change_queue_depth(struct scsi_device *sdev, int qdepth)
 /**
  * cxlflash_show_port_status() - queries and presents the current port status
  * @port:	Desired port for status reporting.
- * @cfg:	Internal structure associated with the host.
+ * @afu:	AFU owning the specified port.
  * @buf:	Buffer of length PAGE_SIZE to report back port status in ASCII.
  *
  * Return: The size of the ASCII string returned in @buf.
  */
-static ssize_t cxlflash_show_port_status(u32 port,
-					 struct cxlflash_cfg *cfg,
-					 char *buf)
+static ssize_t cxlflash_show_port_status(u32 port, struct afu *afu, char *buf)
 {
-	struct afu *afu = cfg->afu;
 	char *disp_status;
 	u64 status;
 	__be64 __iomem *fc_regs;
@@ -2102,8 +2099,9 @@ static ssize_t port0_show(struct device *dev,
 			  char *buf)
 {
 	struct cxlflash_cfg *cfg = shost_priv(class_to_shost(dev));
+	struct afu *afu = cfg->afu;
 
-	return cxlflash_show_port_status(0, cfg, buf);
+	return cxlflash_show_port_status(0, afu, buf);
 }
 
 /**
@@ -2119,8 +2117,9 @@ static ssize_t port1_show(struct device *dev,
 			  char *buf)
 {
 	struct cxlflash_cfg *cfg = shost_priv(class_to_shost(dev));
+	struct afu *afu = cfg->afu;
 
-	return cxlflash_show_port_status(1, cfg, buf);
+	return cxlflash_show_port_status(1, afu, buf);
 }
 
 /**
@@ -2209,16 +2208,15 @@ static ssize_t ioctl_version_show(struct device *dev,
 /**
  * cxlflash_show_port_lun_table() - queries and presents the port LUN table
  * @port:	Desired port for status reporting.
- * @cfg:	Internal structure associated with the host.
+ * @afu:	AFU owning the specified port.
  * @buf:	Buffer of length PAGE_SIZE to report back port status in ASCII.
  *
  * Return: The size of the ASCII string returned in @buf.
  */
 static ssize_t cxlflash_show_port_lun_table(u32 port,
-					    struct cxlflash_cfg *cfg,
+					    struct afu *afu,
 					    char *buf)
 {
-	struct afu *afu = cfg->afu;
 	int i;
 	ssize_t bytes = 0;
 	__be64 __iomem *fc_port;
@@ -2247,8 +2245,9 @@ static ssize_t port0_lun_table_show(struct device *dev,
 				    char *buf)
 {
 	struct cxlflash_cfg *cfg = shost_priv(class_to_shost(dev));
+	struct afu *afu = cfg->afu;
 
-	return cxlflash_show_port_lun_table(0, cfg, buf);
+	return cxlflash_show_port_lun_table(0, afu, buf);
 }
 
 /**
@@ -2264,8 +2263,9 @@ static ssize_t port1_lun_table_show(struct device *dev,
 				    char *buf)
 {
 	struct cxlflash_cfg *cfg = shost_priv(class_to_shost(dev));
+	struct afu *afu = cfg->afu;
 
-	return cxlflash_show_port_lun_table(1, cfg, buf);
+	return cxlflash_show_port_lun_table(1, afu, buf);
 }
 
 /**
