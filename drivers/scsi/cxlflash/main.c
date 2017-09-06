@@ -2022,7 +2022,8 @@ err1:
  * going away).
  *
  * Return:
- *	0 on success, -errno on failure
+ *	0 on success
+ *	-1 on failure
  */
 int cxlflash_afu_sync(struct afu *afu, ctx_hndl_t ctx_hndl_u,
 		      res_hndl_t res_hndl_u, u8 mode)
@@ -2046,7 +2047,7 @@ int cxlflash_afu_sync(struct afu *afu, ctx_hndl_t ctx_hndl_u,
 	buf = kzalloc(sizeof(*cmd) + __alignof__(*cmd) - 1, GFP_KERNEL);
 	if (unlikely(!buf)) {
 		dev_err(dev, "%s: no memory for command\n", __func__);
-		rc = -ENOMEM;
+		rc = -1;
 		goto out;
 	}
 
@@ -2070,14 +2071,12 @@ int cxlflash_afu_sync(struct afu *afu, ctx_hndl_t ctx_hndl_u,
 	*((__be32 *)&cmd->rcb.cdb[4]) = cpu_to_be32(res_hndl_u);
 
 	rc = afu->send_cmd(afu, cmd);
-	if (unlikely(rc)) {
-		rc = -ENOBUFS;
+	if (unlikely(rc))
 		goto out;
-	}
 
 	rc = wait_resp(afu, cmd);
 	if (unlikely(rc))
-		rc = -EIO;
+		rc = -1;
 out:
 	atomic_dec(&afu->cmds_active);
 	mutex_unlock(&sync_active);
