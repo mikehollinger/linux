@@ -923,6 +923,7 @@ static void cxlflash_put_minor(int minor)
  */
 static void cxlflash_release_chrdev(struct cxlflash_cfg *cfg)
 {
+	put_device(cfg->chardev);
 	device_unregister(cfg->chardev);
 	cfg->chardev = NULL;
 	cdev_del(&cfg->cdev);
